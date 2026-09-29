@@ -1,0 +1,34 @@
+{
+	"schemaVersion": 1,
+	"id": "harbortrade",
+	"version": "${version}",
+	"name": "Harbor Trade",
+	"description": "Medieval port-city economy game for multiplayer.",
+	"authors": [
+		"SeungHyeon"
+	],
+	"license": "All-Rights-Reserved",
+	"icon": "assets/harbortrade/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.seunghyeon.harbortrade.HarborTrade"
+		],
+		"client": [
+			"com.seunghyeon.harbortrade.client.HarborTradeClient"
+		]
+	},
+	"mixins": [
+		"harbortrade.mixins.json",
+		{
+			"config": "harbortrade.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
