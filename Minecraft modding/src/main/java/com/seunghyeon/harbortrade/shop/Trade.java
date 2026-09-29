@@ -12,6 +12,9 @@ import net.minecraft.world.item.ItemStack;
 
 /** Buying from and selling to a shop. Money always goes through the bank account. */
 public final class Trade {
+	/** Pass as the count to sell every sellable one the player has. */
+	public static final int ALL = -1;
+
 	private Trade() {
 	}
 
@@ -36,7 +39,7 @@ public final class Trade {
 		}
 
 		player.getInventory().add(new ItemStack(offer.item(), count));
-		player.sendSystemMessage(Component.literal(offer.item().getDescription().getString() + " " + count + "개를 "
+		player.sendSystemMessage(Component.empty().append(offer.item().getDescription()).append(" " + count + "개를 "
 				+ format(cost) + "에 구매했습니다. 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
 	}
 
@@ -45,9 +48,12 @@ public final class Trade {
 		if (isClosedGem(server, player, offer)) {
 			return;
 		}
-		if (!offer.playerCanSell()) {
-			player.sendSystemMessage(Component.literal("이 상점은 이 물건을 사들이지 않습니다."));
-			return;
+		if (count == ALL) {
+			count = countSellable(player, offer);
+			if (count == 0) {
+				player.sendSystemMessage(Component.literal("판매할 물건이 없습니다. (손상된 물건은 팔 수 없습니다)"));
+				return;
+			}
 		}
 		if (countSellable(player, offer) < count) {
 			player.sendSystemMessage(Component.literal("판매할 물건이 부족합니다. (손상된 물건은 팔 수 없습니다)"));
@@ -57,7 +63,7 @@ public final class Trade {
 		removeSellable(player, offer, count);
 		long income = offer.sellPrice(server) * count;
 		Bank.deposit(server, player.getUUID(), income);
-		player.sendSystemMessage(Component.literal(offer.item().getDescription().getString() + " " + count + "개를 "
+		player.sendSystemMessage(Component.empty().append(offer.item().getDescription()).append(" " + count + "개를 "
 				+ format(income) + "에 판매했습니다. 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
 	}
 

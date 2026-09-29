@@ -47,7 +47,7 @@ public class HarborTrade implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			MoneyCommand.register(dispatcher);
 			PriceCommand.register(dispatcher);
-			ShopCommand.register(dispatcher);
+			ShopCommand.register(dispatcher, registryAccess);
 			RoundCommand.register(dispatcher);
 		});
 

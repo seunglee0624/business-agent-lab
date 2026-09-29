@@ -20,7 +20,8 @@ import net.minecraft.world.item.component.ItemLore;
 
 /**
  * A chest-style shop screen that needs no client code. The top rows show the offers; clicking them trades
- * instead of moving items: left click buys 1, shift+left buys 16, right click sells 1, shift+right sells 16.
+ * instead of moving items. Regular items (sell only): left click sells 1, shift+left sells 16, right click sells all.
+ * Gems: left click buys 1, shift+left buys 16, right click sells 1, shift+right sells 16.
  */
 public class ShopMenu extends ChestMenu {
 	private static final int BULK = 16;
@@ -55,10 +56,16 @@ public class ShopMenu extends ChestMenu {
 		var server = merchant.level().getServer();
 		List<Component> lore = new ArrayList<>();
 		Style plain = Style.EMPTY.withItalic(false);
-		lore.add(Component.literal(offer.playerCanBuy() ? "구매가: " + format(offer.buyPrice(server)) : "구매 불가").withStyle(plain.withColor(0x55FF55)));
-		lore.add(Component.literal(offer.playerCanSell() ? "판매가: " + format(offer.sellPrice(server)) : "판매 불가").withStyle(plain.withColor(0xFFAA00)));
-		lore.add(Component.literal("좌클릭: 1개 구매 / 쉬프트+좌클릭: " + BULK + "개 구매").withStyle(plain.withColor(0xAAAAAA)));
-		lore.add(Component.literal("우클릭: 1개 판매 / 쉬프트+우클릭: " + BULK + "개 판매").withStyle(plain.withColor(0xAAAAAA)));
+		if (offer.playerCanBuy()) {
+			lore.add(Component.literal("구매가: " + format(offer.buyPrice(server))).withStyle(plain.withColor(0x55FF55)));
+			lore.add(Component.literal("판매가: " + format(offer.sellPrice(server))).withStyle(plain.withColor(0xFFAA00)));
+			lore.add(Component.literal("좌클릭: 1개 구매 / 쉬프트+좌클릭: " + BULK + "개 구매").withStyle(plain.withColor(0xAAAAAA)));
+			lore.add(Component.literal("우클릭: 1개 판매 / 쉬프트+우클릭: " + BULK + "개 판매").withStyle(plain.withColor(0xAAAAAA)));
+		} else {
+			lore.add(Component.literal("판매가: " + format(offer.sellPrice(server))).withStyle(plain.withColor(0xFFAA00)));
+			lore.add(Component.literal("좌클릭: 1개 판매 / 쉬프트+좌클릭: " + BULK + "개 판매").withStyle(plain.withColor(0xAAAAAA)));
+			lore.add(Component.literal("우클릭: 전부 판매").withStyle(plain.withColor(0xAAAAAA)));
+		}
 
 		ItemStack stack = new ItemStack(offer.item());
 		stack.set(DataComponents.LORE, new ItemLore(lore));
@@ -76,10 +83,16 @@ public class ShopMenu extends ChestMenu {
 				&& (clickType == ClickType.PICKUP || clickType == ClickType.QUICK_MOVE)) {
 			Offer offer = offers.get(slotId);
 			int count = clickType == ClickType.QUICK_MOVE ? BULK : 1;
-			if (button == 0) {
-				Trade.buy(serverPlayer, offer, count);
-			} else if (button == 1) {
+			if (offer.playerCanBuy()) {
+				if (button == 0) {
+					Trade.buy(serverPlayer, offer, count);
+				} else if (button == 1) {
+					Trade.sell(serverPlayer, offer, count);
+				}
+			} else if (button == 0) {
 				Trade.sell(serverPlayer, offer, count);
+			} else if (button == 1) {
+				Trade.sell(serverPlayer, offer, Trade.ALL);
 			}
 		}
 

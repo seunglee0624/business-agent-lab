@@ -6,27 +6,30 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 
 /**
- * One item a shop trades. Regular items have a fixed price and the shop pays half of it when buying back;
+ * One item a shop trades. Regular shops only buy from players, at a fixed price;
  * gems trade both ways at the current market price.
  */
-public record Offer(Item item, Gem gem, long price, boolean playerCanBuy, boolean playerCanSell) {
-	public static final int SELL_PERCENT = 50;
-
-	public static Offer fixed(Item item, long price, boolean playerCanBuy, boolean playerCanSell) {
-		return new Offer(item, null, price, playerCanBuy, playerCanSell);
+public record Offer(Item item, Gem gem, long price) {
+	public static Offer fixed(Item item, long price) {
+		return new Offer(item, null, price);
 	}
 
 	public static Offer gem(Gem gem) {
-		return new Offer(gem.item(), gem, 0, true, true);
+		return new Offer(gem.item(), gem, 0);
 	}
 
-	/** What the player pays for one. */
+	/** Only gems can be bought from a shop. */
+	public boolean playerCanBuy() {
+		return gem != null;
+	}
+
+	/** What the player pays for one gem. */
 	public long buyPrice(MinecraftServer server) {
-		return gem != null ? GemMarket.price(server, gem) : price;
+		return GemMarket.price(server, gem);
 	}
 
 	/** What the player receives for one. */
 	public long sellPrice(MinecraftServer server) {
-		return gem != null ? GemMarket.price(server, gem) : price * SELL_PERCENT / 100;
+		return gem != null ? GemMarket.price(server, gem) : price;
 	}
 }
