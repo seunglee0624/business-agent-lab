@@ -3,6 +3,7 @@ package com.seunghyeon.harbortrade.shop;
 import static com.seunghyeon.harbortrade.bank.MoneyFormat.format;
 
 import com.seunghyeon.harbortrade.bank.Bank;
+import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -20,6 +21,10 @@ public final class Trade {
 
 	public static void buy(ServerPlayer player, Offer offer, int count) {
 		MinecraftServer server = player.server;
+		if (offer.isFame()) {
+			buyFame(player, count);
+			return;
+		}
 		if (isClosedGem(server, player, offer)) {
 			return;
 		}
@@ -65,6 +70,24 @@ public final class Trade {
 		Bank.deposit(server, player.getUUID(), income);
 		player.sendSystemMessage(Component.empty().append(offer.item().getDescription()).append(" " + count + "개를 "
 				+ format(income) + "에 판매했습니다. 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+	}
+
+	/** Fame is a score, not an item: pay from the bank and add points. Sold only during a round. */
+	private static void buyFame(ServerPlayer player, int count) {
+		MinecraftServer server = player.server;
+		if (!RoundManager.isActive(server)) {
+			player.sendSystemMessage(Component.literal("명성상점이 문을 닫았습니다."));
+			return;
+		}
+		long cost = Fame.price() * count;
+		if (!Bank.withdraw(server, player.getUUID(), cost)) {
+			player.sendSystemMessage(Component.literal("잔액이 부족합니다. 필요 금액: " + format(cost)
+					+ ", 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+			return;
+		}
+		Fame.add(server, player, count);
+		player.sendSystemMessage(Component.literal("명성 " + count + "을(를) " + format(cost) + "에 구매했습니다. 내 명성: "
+				+ Fame.get(server, player.getUUID()) + ", 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
 	}
 
 	/** Gems trade only while the jeweler is open; covers a shop screen left open past closing time. */

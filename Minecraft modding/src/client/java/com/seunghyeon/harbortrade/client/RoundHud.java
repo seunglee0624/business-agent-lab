@@ -12,13 +12,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
-/** Top-right HUD: round number, round clock, and bank balance, as last sent by the server. */
+/** Top-right HUD: round number, round clock, bank balance, and fame, as last sent by the server. */
 public final class RoundHud {
 	private static final int MARGIN = 4;
 	private static final int PADDING = 3;
 	private static final int BACKGROUND = 0x80000000;
 	private static final int WHITE = 0xFFFFFF;
 	private static final int GOLD = 0xFFD700;
+	private static final int PURPLE = 0xD9A6FF;
 
 	private static HudPayload state;
 
@@ -42,8 +43,9 @@ public final class RoundHud {
 				? RoundManager.formatTime(state.elapsedMillis()) + " / " + RoundManager.formatTime(state.roundMillis())
 				: "-";
 		String money = format(state.balance());
-		String[] lines = {round, time, money};
-		int[] colors = {WHITE, WHITE, GOLD};
+		String fame = "명성 " + state.fame();
+		String[] lines = {round, time, money, fame};
+		int[] colors = {WHITE, WHITE, GOLD, PURPLE};
 
 		Font font = client.font;
 		int width = 0;

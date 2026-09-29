@@ -1,9 +1,11 @@
 package com.seunghyeon.harbortrade;
 
+import com.seunghyeon.harbortrade.command.FameCommand;
 import com.seunghyeon.harbortrade.command.MoneyCommand;
 import com.seunghyeon.harbortrade.command.PriceCommand;
 import com.seunghyeon.harbortrade.command.RoundCommand;
 import com.seunghyeon.harbortrade.command.ShopCommand;
+import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemItems;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
@@ -40,6 +42,7 @@ public class HarborTrade implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			try {
 				LOGGER.info("Loaded {} shop offers", ShopConfig.load());
+				Fame.load();
 			} catch (IOException | RuntimeException e) {
 				LOGGER.error("Failed to load shops.json", e);
 			}
@@ -49,6 +52,7 @@ public class HarborTrade implements ModInitializer {
 			PriceCommand.register(dispatcher);
 			ShopCommand.register(dispatcher, registryAccess);
 			RoundCommand.register(dispatcher);
+			FameCommand.register(dispatcher);
 		});
 
 		LOGGER.info("Harbor Trade initialized");

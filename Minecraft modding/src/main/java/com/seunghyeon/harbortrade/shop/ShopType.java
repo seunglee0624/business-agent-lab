@@ -1,11 +1,15 @@
 package com.seunghyeon.harbortrade.shop;
 
-/** The kinds of merchant. Item lists come from shops.json, except the jeweler which trades gems at market price. */
+/**
+ * The kinds of merchant. Regular shops take their item lists from shops.json; the jeweler trades gems at market
+ * price and the fame shop sells fame points.
+ */
 public enum ShopType {
 	GROCER("grocer", "식료품상"),
 	BLACKSMITH("blacksmith", "대장장이"),
 	FISHER("fisher", "어부"),
-	JEWELER("jeweler", "보석상");
+	JEWELER("jeweler", "보석상"),
+	FAME("fame", "명성상점");
 
 	private final String id;
 	private final String displayName;
@@ -21,6 +25,11 @@ public enum ShopType {
 
 	public String displayName() {
 		return displayName;
+	}
+
+	/** Regular shops sell from the shops.json item list. */
+	public boolean usesItemList() {
+		return this != JEWELER && this != FAME;
 	}
 
 	public static ShopType byId(String id) {

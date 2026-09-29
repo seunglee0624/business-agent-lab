@@ -43,12 +43,12 @@ public final class ShopCommand {
 			place.then(Commands.literal(type.displayName()).executes(ctx -> place(ctx.getSource(), type)));
 		}
 
-		// /상점 상품 추가|제거|목록 <상점> ... — regular shops only; the jeweler's gems come from the market.
+		// /상점 상품 추가|제거|목록 <상점> ... — regular shops only.
 		LiteralArgumentBuilder<CommandSourceStack> add = Commands.literal("추가");
 		LiteralArgumentBuilder<CommandSourceStack> remove = Commands.literal("제거");
 		LiteralArgumentBuilder<CommandSourceStack> list = Commands.literal("목록");
 		for (ShopType type : ShopType.values()) {
-			if (type == ShopType.JEWELER) {
+			if (!type.usesItemList()) {
 				continue;
 			}
 			add.then(Commands.literal(type.displayName())

@@ -25,6 +25,7 @@ import net.minecraft.world.item.component.ItemLore;
  */
 public class ShopMenu extends ChestMenu {
 	private static final int BULK = 16;
+	private static final int FAME_BULK = 10;
 	private static final MenuType<?>[] TYPES = {MenuType.GENERIC_9x1, MenuType.GENERIC_9x2, MenuType.GENERIC_9x3,
 			MenuType.GENERIC_9x4, MenuType.GENERIC_9x5, MenuType.GENERIC_9x6};
 
@@ -56,7 +57,10 @@ public class ShopMenu extends ChestMenu {
 		var server = merchant.level().getServer();
 		List<Component> lore = new ArrayList<>();
 		Style plain = Style.EMPTY.withItalic(false);
-		if (offer.playerCanBuy()) {
+		if (offer.isFame()) {
+			lore.add(Component.literal("명성 1 = " + format(offer.buyPrice(server))).withStyle(plain.withColor(0x55FF55)));
+			lore.add(Component.literal("좌클릭: 명성 1 구매 / 쉬프트+좌클릭: 명성 " + FAME_BULK + " 구매").withStyle(plain.withColor(0xAAAAAA)));
+		} else if (offer.playerCanBuy()) {
 			lore.add(Component.literal("구매가: " + format(offer.buyPrice(server))).withStyle(plain.withColor(0x55FF55)));
 			lore.add(Component.literal("판매가: " + format(offer.sellPrice(server))).withStyle(plain.withColor(0xFFAA00)));
 			lore.add(Component.literal("좌클릭: 1개 구매 / 쉬프트+좌클릭: " + BULK + "개 구매").withStyle(plain.withColor(0xAAAAAA)));
@@ -83,7 +87,11 @@ public class ShopMenu extends ChestMenu {
 				&& (clickType == ClickType.PICKUP || clickType == ClickType.QUICK_MOVE)) {
 			Offer offer = offers.get(slotId);
 			int count = clickType == ClickType.QUICK_MOVE ? BULK : 1;
-			if (offer.playerCanBuy()) {
+			if (offer.isFame()) {
+				if (button == 0) {
+					Trade.buy(serverPlayer, offer, clickType == ClickType.QUICK_MOVE ? FAME_BULK : 1);
+				}
+			} else if (offer.playerCanBuy()) {
 				if (button == 0) {
 					Trade.buy(serverPlayer, offer, count);
 				} else if (button == 1) {

@@ -49,6 +49,9 @@ public final class ShopConfig {
 			}
 			return gems;
 		}
+		if (type == ShopType.FAME) {
+			return List.of(Offer.fame());
+		}
 		return OFFERS.getOrDefault(type, List.of());
 	}
 
@@ -71,7 +74,7 @@ public final class ShopConfig {
 		Map<ShopType, List<Offer>> loaded = new EnumMap<>(ShopType.class);
 		int count = 0;
 		for (ShopType type : ShopType.values()) {
-			if (type == ShopType.JEWELER || !root.has(type.id())) {
+			if (!type.usesItemList() || !root.has(type.id())) {
 				continue;
 			}
 			List<Offer> offers = new ArrayList<>();
@@ -128,7 +131,7 @@ public final class ShopConfig {
 	private static void save() throws IOException {
 		JsonObject root = new JsonObject();
 		for (ShopType type : ShopType.values()) {
-			if (type == ShopType.JEWELER) {
+			if (!type.usesItemList()) {
 				continue;
 			}
 			JsonArray array = new JsonArray();

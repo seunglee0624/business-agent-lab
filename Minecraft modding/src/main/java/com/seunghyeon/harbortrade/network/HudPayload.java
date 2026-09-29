@@ -7,8 +7,8 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
-/** Server → client: what the top-right HUD shows (round, round clock, bank balance). */
-public record HudPayload(int round, boolean active, long elapsedMillis, long roundMillis, long balance) implements CustomPacketPayload {
+/** Server → client: what the top-right HUD shows (round, round clock, bank balance, fame). */
+public record HudPayload(int round, boolean active, long elapsedMillis, long roundMillis, long balance, long fame) implements CustomPacketPayload {
 	public static final Type<HudPayload> TYPE = new Type<>(HarborTrade.id("hud"));
 	public static final StreamCodec<RegistryFriendlyByteBuf, HudPayload> CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, HudPayload::round,
@@ -16,6 +16,7 @@ public record HudPayload(int round, boolean active, long elapsedMillis, long rou
 			ByteBufCodecs.VAR_LONG, HudPayload::elapsedMillis,
 			ByteBufCodecs.VAR_LONG, HudPayload::roundMillis,
 			ByteBufCodecs.VAR_LONG, HudPayload::balance,
+			ByteBufCodecs.VAR_LONG, HudPayload::fame,
 			HudPayload::new);
 
 	public static void register() {

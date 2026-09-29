@@ -37,6 +37,10 @@ public class MerchantEntity extends PathfinderMob {
 				serverPlayer.sendSystemMessage(Component.literal("보석상은 지금 영업하지 않습니다. (회차 시작 30분 후부터 회차 종료까지)"));
 				return InteractionResult.SUCCESS;
 			}
+			if (shopType == ShopType.FAME && !RoundManager.isActive(serverPlayer.server)) {
+				serverPlayer.sendSystemMessage(Component.literal("명성상점은 회차가 진행 중일 때만 영업합니다."));
+				return InteractionResult.SUCCESS;
+			}
 			var offers = ShopConfig.offers(shopType);
 			serverPlayer.openMenu(new SimpleMenuProvider(
 					(containerId, inventory, p) -> ShopMenu.create(containerId, inventory, this, offers),

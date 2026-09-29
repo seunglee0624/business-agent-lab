@@ -2,6 +2,7 @@ package com.seunghyeon.harbortrade.round;
 
 import com.seunghyeon.harbortrade.HarborTrade;
 import com.seunghyeon.harbortrade.bank.Bank;
+import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemMarket;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import java.util.List;
@@ -61,6 +62,10 @@ public final class RoundManager {
 
 	private static long hours(long hours) {
 		return minutes(hours * 60);
+	}
+
+	public static boolean isActive(MinecraftServer server) {
+		return RoundData.get(server).active;
 	}
 
 	public static boolean isJewelerOpen(MinecraftServer server) {
@@ -159,8 +164,11 @@ public final class RoundManager {
 		data.paused = false;
 		data.nextEvent = TIMELINE.size();
 		data.setDirty();
-		broadcast(server, data.round + "회차가 종료되었습니다. 보석상이 문을 닫았습니다.");
-		// Fame ranking announcement goes here once the fame shop exists.
+		broadcast(server, data.round + "회차가 종료되었습니다. 보석상과 명성상점이 문을 닫았습니다.");
+		// Only the leader is announced; the rest of the ranking stays hidden.
+		broadcast(server, Fame.leader(server)
+				.map(rank -> "현재 명성 1위: " + rank.name() + " (명성 " + rank.fame() + ")")
+				.orElse("아직 명성을 가진 플레이어가 없습니다."));
 	}
 
 	public static Component status(MinecraftServer server) {
@@ -192,7 +200,7 @@ public final class RoundManager {
 	private static void sendHud(MinecraftServer server, ServerPlayer player) {
 		RoundData data = RoundData.get(server);
 		ServerPlayNetworking.send(player, new HudPayload(data.round, data.active, data.elapsedMillis, ROUND_MILLIS,
-				Bank.balance(server, player.getUUID())));
+				Bank.balance(server, player.getUUID()), Fame.get(server, player.getUUID())));
 	}
 
 	private static void broadcast(MinecraftServer server, String message) {
