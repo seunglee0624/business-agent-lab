@@ -1,5 +1,9 @@
 {
-	"item.harbortrade.copper_coin": "Copper Coin",
-	"item.harbortrade.silver_coin": "Silver Coin",
-	"item.harbortrade.gold_coin": "Gold Coin"
+	"item.harbortrade.amethyst": "Amethyst",
+	"item.harbortrade.topaz": "Topaz",
+	"item.harbortrade.pearl": "Pearl",
+	"item.harbortrade.sapphire": "Sapphire",
+	"item.harbortrade.ruby": "Ruby",
+	"item.harbortrade.diamond": "Adamant",
+	"entity.harbortrade.merchant": "Merchant"
 }

@@ -1,5 +1,9 @@
 {
-	"item.harbortrade.copper_coin": "동화",
-	"item.harbortrade.silver_coin": "은화",
-	"item.harbortrade.gold_coin": "금화"
+	"item.harbortrade.amethyst": "자수정",
+	"item.harbortrade.topaz": "토파즈",
+	"item.harbortrade.pearl": "진주",
+	"item.harbortrade.sapphire": "사파이어",
+	"item.harbortrade.ruby": "루비",
+	"item.harbortrade.diamond": "금강석",
+	"entity.harbortrade.merchant": "상인"
 }

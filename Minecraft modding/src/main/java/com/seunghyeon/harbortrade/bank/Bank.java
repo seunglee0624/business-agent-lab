@@ -3,11 +3,8 @@ package com.seunghyeon.harbortrade.bank;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 
-/** The only place balances change. All amounts are in copper. */
+/** The only place balances change. All amounts are in KD. */
 public final class Bank {
-	/** Transfer fee, in percent, charged to the sender on top of the amount. */
-	public static final int TRANSFER_FEE_PERCENT = 10;
-
 	private Bank() {
 	}
 
@@ -32,20 +29,6 @@ public final class Bank {
 			return false;
 		}
 		set(server, player, balance - amount);
-		return true;
-	}
-
-	/** Fee for sending the amount, rounded up. */
-	public static long transferFee(long amount) {
-		return (amount * TRANSFER_FEE_PERCENT + 99) / 100;
-	}
-
-	/** Moves the amount to the receiver and burns the fee; returns false if the sender cannot cover both. */
-	public static boolean transfer(MinecraftServer server, UUID from, UUID to, long amount) {
-		if (!withdraw(server, from, amount + transferFee(amount))) {
-			return false;
-		}
-		deposit(server, to, amount);
 		return true;
 	}
 }

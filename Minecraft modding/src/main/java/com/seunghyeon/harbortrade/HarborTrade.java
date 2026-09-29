@@ -1,10 +1,18 @@
 package com.seunghyeon.harbortrade;
 
-import com.seunghyeon.harbortrade.bank.DeathCoins;
 import com.seunghyeon.harbortrade.command.MoneyCommand;
-import com.seunghyeon.harbortrade.currency.ModItems;
+import com.seunghyeon.harbortrade.command.PriceCommand;
+import com.seunghyeon.harbortrade.command.RoundCommand;
+import com.seunghyeon.harbortrade.command.ShopCommand;
+import com.seunghyeon.harbortrade.gem.GemItems;
+import com.seunghyeon.harbortrade.network.HudPayload;
+import com.seunghyeon.harbortrade.round.RoundManager;
+import com.seunghyeon.harbortrade.shop.ModEntities;
+import com.seunghyeon.harbortrade.shop.ShopConfig;
+import java.io.IOException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 import net.minecraft.resources.ResourceLocation;
 
@@ -25,9 +33,23 @@ public class HarborTrade implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
-		ModItems.register();
-		DeathCoins.register();
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> MoneyCommand.register(dispatcher));
+		GemItems.register();
+		HudPayload.register();
+		RoundManager.register();
+		ModEntities.register();
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+			try {
+				LOGGER.info("Loaded {} shop offers", ShopConfig.load());
+			} catch (IOException | RuntimeException e) {
+				LOGGER.error("Failed to load shops.json", e);
+			}
+		});
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			MoneyCommand.register(dispatcher);
+			PriceCommand.register(dispatcher);
+			ShopCommand.register(dispatcher);
+			RoundCommand.register(dispatcher);
+		});
 
 		LOGGER.info("Harbor Trade initialized");
 	}
