@@ -5,6 +5,8 @@ import com.seunghyeon.harbortrade.bank.Bank;
 import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemMarket;
 import com.seunghyeon.harbortrade.network.HudPayload;
+import com.seunghyeon.harbortrade.trade.TradeConfig;
+import com.seunghyeon.harbortrade.trade.TradeManager;
 import java.util.List;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -24,8 +26,8 @@ public final class RoundManager {
 	public static final long ROUND_MILLIS = hours(3);
 	private static final long JEWELER_OPEN_MILLIS = minutes(30);
 
-	// Placeholder until the trader is built.
-	private static final List<String> TRADE_CATEGORIES = List.of("곡물", "수산물", "광물", "가공식품", "철제품");
+	private static final long TRADER_ARRIVE_MILLIS = minutes(90);
+	private static final long TRADER_DEPART_MILLIS = minutes(100);
 
 	private record Event(long atMillis, String name, Consumer<MinecraftServer> action) {
 	}
@@ -35,9 +37,9 @@ public final class RoundManager {
 			new Event(JEWELER_OPEN_MILLIS, "보석상 개장", server -> broadcast(server, "보석상이 문을 열었습니다.")),
 			new Event(minutes(60), "보석 시세 변동", GemMarket::changePrices),
 			new Event(minutes(90), "보석 시세 변동", GemMarket::changePrices),
-			new Event(minutes(90), "무역상 도착", server -> HarborTrade.LOGGER.info("Trader arrives (not implemented yet)")),
-			new Event(minutes(100), "무역상 출항", server -> HarborTrade.LOGGER.info("Trader departs (not implemented yet)")),
-			new Event(minutes(105), "무역 결과 발표", server -> HarborTrade.LOGGER.info("Trade results (not implemented yet)")),
+			new Event(TRADER_ARRIVE_MILLIS, "무역상 도착", TradeManager::arrive),
+			new Event(TRADER_DEPART_MILLIS, "무역상 출항", TradeManager::depart),
+			new Event(minutes(105), "무역 결과 발표", TradeManager::settle),
 			new Event(minutes(120), "보석 시세 변동", GemMarket::changePrices),
 			new Event(minutes(150), "보석 시세 변동", GemMarket::changePrices),
 			new Event(ROUND_MILLIS, "회차 종료", RoundManager::onEnd));
@@ -71,6 +73,15 @@ public final class RoundManager {
 	public static boolean isJewelerOpen(MinecraftServer server) {
 		RoundData data = RoundData.get(server);
 		return data.active && data.elapsedMillis >= JEWELER_OPEN_MILLIS;
+	}
+
+	public static boolean isTraderHere(MinecraftServer server) {
+		RoundData data = RoundData.get(server);
+		return data.active && data.elapsedMillis >= TRADER_ARRIVE_MILLIS && data.elapsedMillis < TRADER_DEPART_MILLIS;
+	}
+
+	public static String tradeCategory(MinecraftServer server) {
+		return RoundData.get(server).tradeCategory;
 	}
 
 	private static void tick(MinecraftServer server) {
@@ -114,7 +125,9 @@ public final class RoundManager {
 		data.paused = false;
 		data.elapsedMillis = 0;
 		data.nextEvent = 0;
-		data.tradeCategory = TRADE_CATEGORIES.get(RANDOM.nextInt(TRADE_CATEGORIES.size()));
+		List<String> categories = TradeConfig.categories().stream().filter(c -> !TradeConfig.items(c).isEmpty()).toList();
+		data.tradeCategory = categories.isEmpty() ? "" : categories.get(RANDOM.nextInt(categories.size()));
+		TradeManager.clear(server);
 		data.setDirty();
 		runDueEvents(server);
 		return true;
@@ -159,6 +172,10 @@ public final class RoundManager {
 	}
 
 	private static void onEnd(MinecraftServer server) {
+		// A round ended early still pays out goods already at sea.
+		if (TradeManager.hasShipments(server)) {
+			TradeManager.settle(server);
+		}
 		RoundData data = RoundData.get(server);
 		data.active = false;
 		data.paused = false;

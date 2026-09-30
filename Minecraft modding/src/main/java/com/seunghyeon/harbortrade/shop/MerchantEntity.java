@@ -1,6 +1,8 @@
 package com.seunghyeon.harbortrade.shop;
 
 import com.seunghyeon.harbortrade.round.RoundManager;
+import com.seunghyeon.harbortrade.trade.TradeConfig;
+import com.seunghyeon.harbortrade.trade.TraderMenu;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -41,12 +43,33 @@ public class MerchantEntity extends PathfinderMob {
 				serverPlayer.sendSystemMessage(Component.literal("명성상점은 회차가 진행 중일 때만 영업합니다."));
 				return InteractionResult.SUCCESS;
 			}
+			if (shopType == ShopType.TRADER) {
+				openTrader(serverPlayer);
+				return InteractionResult.SUCCESS;
+			}
 			var offers = ShopConfig.offers(shopType);
 			serverPlayer.openMenu(new SimpleMenuProvider(
 					(containerId, inventory, p) -> ShopMenu.create(containerId, inventory, this, offers),
 					Component.literal(shopType.displayName())));
 		}
 		return InteractionResult.sidedSuccess(level().isClientSide);
+	}
+
+	/** Opens the trader screen, or tells the player why it is closed. */
+	public void openTrader(ServerPlayer player) {
+		if (!RoundManager.isTraderHere(player.server)) {
+			player.sendSystemMessage(Component.literal("무역상은 지금 항구에 없습니다. (회차 1:30 ~ 1:40)"));
+			return;
+		}
+		String category = RoundManager.tradeCategory(player.server);
+		var offers = TradeConfig.items(category);
+		if (offers.isEmpty()) {
+			player.sendSystemMessage(Component.literal("오늘의 무역상품(" + category + ")이 trade.json에 없습니다. 관리자에게 알려주세요."));
+			return;
+		}
+		player.openMenu(new SimpleMenuProvider(
+				(containerId, inventory, p) -> TraderMenu.create(containerId, inventory, this, offers),
+				Component.literal("무역상 - 오늘의 무역상품: " + category)));
 	}
 
 	@Override

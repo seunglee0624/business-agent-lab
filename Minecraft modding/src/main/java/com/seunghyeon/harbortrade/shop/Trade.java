@@ -119,7 +119,7 @@ public final class Trade {
 		return stack.is(offer.item()) && !stack.isDamaged();
 	}
 
-	private static int countSellable(ServerPlayer player, Offer offer) {
+	public static int countSellable(ServerPlayer player, Offer offer) {
 		Inventory inv = player.getInventory();
 		int count = 0;
 		for (int i = 0; i < inv.items.size(); i++) {
@@ -130,7 +130,7 @@ public final class Trade {
 		return count;
 	}
 
-	private static void removeSellable(ServerPlayer player, Offer offer, int count) {
+	public static void removeSellable(ServerPlayer player, Offer offer, int count) {
 		Inventory inv = player.getInventory();
 		for (int i = 0; i < inv.items.size() && count > 0; i++) {
 			ItemStack stack = inv.items.get(i);

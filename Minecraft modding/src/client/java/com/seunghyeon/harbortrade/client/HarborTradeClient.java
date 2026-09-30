@@ -9,5 +9,6 @@ public class HarborTradeClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		EntityRendererRegistry.register(ModEntities.MERCHANT, MerchantRenderer::new);
 		RoundHud.register();
+		ShipScreen.register();
 	}
 }
