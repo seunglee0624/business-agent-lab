@@ -54,15 +54,15 @@ public final class MoneyCommand {
 
 	private static int adminSet(CommandSourceStack source, ServerPlayer target, long amount) {
 		Bank.set(source.getServer(), target.getUUID(), amount);
-		source.sendSuccess(() -> Component.literal(target.getName().getString() + "님의 은행 잔액을 "
-				+ format(amount) + "(으)로 설정했습니다."), true);
+		source.sendSuccess(() -> Component.literal("잔액 설정 · " + target.getName().getString() + " = "
+				+ format(amount)), true);
 		return 1;
 	}
 
 	private static int adminGive(CommandSourceStack source, ServerPlayer target, long amount) {
 		Bank.deposit(source.getServer(), target.getUUID(), amount);
-		source.sendSuccess(() -> Component.literal(target.getName().getString() + "님에게 "
-				+ format(amount) + "을(를) 지급했습니다."), true);
+		source.sendSuccess(() -> Component.literal("지급 · " + target.getName().getString() + " +"
+				+ format(amount)), true);
 		return 1;
 	}
 }

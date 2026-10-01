@@ -81,7 +81,7 @@ public final class ShopCommand {
 		merchant.setYBodyRot(player.getYRot());
 		merchant.setShopType(type);
 		player.serverLevel().addFreshEntity(merchant);
-		source.sendSuccess(() -> Component.literal(type.displayName() + "을(를) 설치했습니다."), true);
+		source.sendSuccess(() -> Component.literal("설치 완료 · " + type.displayName()), true);
 		return 1;
 	}
 
@@ -115,10 +115,10 @@ public final class ShopCommand {
 		try {
 			long previous = ShopConfig.put(type, item, price);
 			Component message = previous == -1
-					? Component.literal(type.displayName() + "에 ").append(item.getDescription())
-							.append("을(를) 추가했습니다. 판매가: " + format(price))
-					: Component.literal(type.displayName() + "의 ").append(item.getDescription())
-							.append(" 판매가를 " + format(previous) + " → " + format(price) + "(으)로 바꿨습니다.");
+					? Component.literal("판매 목록 추가 · " + type.displayName() + " · ").append(item.getDescription())
+							.append(" = " + format(price))
+					: Component.literal("판매가 변경 · " + type.displayName() + " · ").append(item.getDescription())
+							.append(" " + format(previous) + " → " + format(price));
 			source.sendSuccess(() -> message, true);
 			return 1;
 		} catch (IOException e) {
@@ -132,7 +132,7 @@ public final class ShopCommand {
 				source.sendFailure(Component.literal(type.displayName() + "에 그 상품이 없습니다."));
 				return 0;
 			}
-			source.sendSuccess(() -> Component.literal(type.displayName() + "에서 ").append(item.getDescription()).append("을(를) 제거했습니다."), true);
+			source.sendSuccess(() -> Component.literal("판매 목록 제거 · " + type.displayName() + " · ").append(item.getDescription()), true);
 			return 1;
 		} catch (IOException e) {
 			return saveFailed(source, e);

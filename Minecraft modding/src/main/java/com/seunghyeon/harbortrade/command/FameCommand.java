@@ -88,7 +88,7 @@ public final class FameCommand {
 	private static int setPrice(CommandSourceStack source, long price) {
 		try {
 			Fame.savePrice(price);
-			source.sendSuccess(() -> Component.literal("명성 가격을 " + format(price) + "(으)로 바꿨습니다."), true);
+			source.sendSuccess(() -> Component.literal("명성 가격 변경 · " + format(price)), true);
 			return 1;
 		} catch (IOException e) {
 			HarborTrade.LOGGER.error("Failed to save fame.json", e);

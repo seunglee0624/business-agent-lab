@@ -4,6 +4,7 @@ import static com.seunghyeon.harbortrade.bank.MoneyFormat.format;
 
 import com.seunghyeon.harbortrade.bank.Bank;
 import com.seunghyeon.harbortrade.fame.Fame;
+import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -26,23 +27,22 @@ public final class Trade {
 			return;
 		}
 		if (!offer.playerCanBuy()) {
-			player.sendSystemMessage(Component.literal("이 상점은 이 물건을 팔지 않습니다."));
+			NoticePayload.fail(player, "이 상점은 이 물건을 팔지 않습니다.");
 			return;
 		}
 		if (freeSpace(player, offer) < count) {
-			player.sendSystemMessage(Component.literal("인벤토리 공간이 부족합니다."));
+			NoticePayload.fail(player, "인벤토리 공간 부족");
 			return;
 		}
 		long cost = offer.buyPrice(server) * count;
 		if (!Bank.withdraw(server, player.getUUID(), cost)) {
-			player.sendSystemMessage(Component.literal("잔액이 부족합니다. 필요 금액: " + format(cost)
-					+ ", 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+			notEnoughMoney(player, cost);
 			return;
 		}
 
 		player.getInventory().add(new ItemStack(offer.item(), count));
-		player.sendSystemMessage(Component.empty().append(offer.item().getDescription()).append(" " + count + "개를 "
-				+ format(cost) + "에 구매했습니다. 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+		NoticePayload.ok(player, Component.literal("구매 · ").append(offer.item().getDescription())
+				.append(" ×" + count + "  -" + format(cost) + "  (잔액 " + format(Bank.balance(server, player.getUUID())) + ")"));
 	}
 
 	public static void sell(ServerPlayer player, Offer offer, int count) {
@@ -51,39 +51,42 @@ public final class Trade {
 			return;
 		}
 		if (countSellable(player, offer) < count) {
-			player.sendSystemMessage(Component.literal("판매할 물건이 부족합니다. (손상된 물건은 팔 수 없습니다)"));
+			NoticePayload.fail(player, "판매할 물건 부족 (손상된 물건 제외)");
 			return;
 		}
 
 		removeSellable(player, offer, count);
 		long income = offer.sellPrice(server) * count;
 		Bank.deposit(server, player.getUUID(), income);
-		player.sendSystemMessage(Component.empty().append(offer.item().getDescription()).append(" " + count + "개를 "
-				+ format(income) + "에 판매했습니다. 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+		NoticePayload.ok(player, Component.literal("판매 · ").append(offer.item().getDescription())
+				.append(" ×" + count + "  +" + format(income) + "  (잔액 " + format(Bank.balance(server, player.getUUID())) + ")"));
 	}
 
 	/** Fame is a score, not an item: pay from the bank and add points. Sold only during a round. */
 	private static void buyFame(ServerPlayer player, int count) {
 		MinecraftServer server = player.server;
 		if (!RoundManager.isActive(server)) {
-			player.sendSystemMessage(Component.literal("명성상점이 문을 닫았습니다."));
+			NoticePayload.fail(player, "명성상점 영업 종료");
 			return;
 		}
 		long cost = Fame.price() * count;
 		if (!Bank.withdraw(server, player.getUUID(), cost)) {
-			player.sendSystemMessage(Component.literal("잔액이 부족합니다. 필요 금액: " + format(cost)
-					+ ", 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+			notEnoughMoney(player, cost);
 			return;
 		}
 		Fame.add(server, player, count);
-		player.sendSystemMessage(Component.literal("명성 " + count + "을(를) " + format(cost) + "에 구매했습니다. 내 명성: "
-				+ Fame.get(server, player.getUUID()) + ", 은행 잔액: " + format(Bank.balance(server, player.getUUID()))));
+		NoticePayload.ok(player, Component.literal("구매 · 명성 +" + count + "  -" + format(cost)
+				+ "  (명성 " + Fame.get(server, player.getUUID()) + ", 잔액 " + format(Bank.balance(server, player.getUUID())) + ")"));
+	}
+
+	private static void notEnoughMoney(ServerPlayer player, long cost) {
+		NoticePayload.fail(player, "잔액 부족 · 필요 " + format(cost) + " / 잔액 " + format(Bank.balance(player.server, player.getUUID())));
 	}
 
 	/** Gems trade only while the jeweler is open; covers a shop screen left open past closing time. */
 	private static boolean isClosedGem(MinecraftServer server, ServerPlayer player, Offer offer) {
 		if (offer.gem() != null && !RoundManager.isJewelerOpen(server)) {
-			player.sendSystemMessage(Component.literal("보석상이 문을 닫았습니다."));
+			NoticePayload.fail(player, "보석상 영업 종료");
 			return true;
 		}
 		return false;

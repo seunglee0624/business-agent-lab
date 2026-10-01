@@ -7,6 +7,7 @@ import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.Gem;
 import com.seunghyeon.harbortrade.network.AmountPrompt;
 import com.seunghyeon.harbortrade.network.AmountPromptPayload;
+import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import java.io.IOException;
 import java.util.List;
@@ -50,11 +51,11 @@ public class MerchantEntity extends PathfinderMob {
 	protected InteractionResult mobInteract(Player player, InteractionHand hand) {
 		if (player instanceof ServerPlayer serverPlayer) {
 			if (shopType == ShopType.JEWELER && !RoundManager.isJewelerOpen(serverPlayer.server)) {
-				serverPlayer.sendSystemMessage(Component.literal("보석상은 지금 영업하지 않습니다. (회차 시작 30분 후부터 회차 종료까지)"));
+				NoticePayload.fail(serverPlayer, "보석상은 지금 영업하지 않습니다. (회차 시작 30분 후부터 회차 종료까지)");
 				return InteractionResult.SUCCESS;
 			}
 			if (shopType == ShopType.FAME && !RoundManager.isActive(serverPlayer.server)) {
-				serverPlayer.sendSystemMessage(Component.literal("명성상점은 회차가 진행 중일 때만 영업합니다."));
+				NoticePayload.fail(serverPlayer, "명성상점은 회차가 진행 중일 때만 영업합니다.");
 				return InteractionResult.SUCCESS;
 			}
 			if (shopType.adminEditable() && player.isShiftKeyDown() && serverPlayer.hasPermissions(2)) {
@@ -88,7 +89,7 @@ public class MerchantEntity extends PathfinderMob {
 			}
 			try {
 				Fame.savePrice(price);
-				p.sendSystemMessage(Component.literal("명성 가격을 " + format(price) + "(으)로 바꿨습니다."));
+				p.sendSystemMessage(Component.literal("명성 가격 변경 · " + format(price)));
 			} catch (IOException e) {
 				HarborTrade.LOGGER.error("Failed to save fame.json", e);
 				p.sendSystemMessage(Component.literal("fame.json을 저장하지 못했습니다: " + e.getMessage()));
@@ -119,11 +120,11 @@ public class MerchantEntity extends PathfinderMob {
 			try {
 				if (price == 0) {
 					ShopConfig.remove(shopType, item);
-					p.sendSystemMessage(Component.literal(shopType.displayName() + "에서 ").append(item.getDescription()).append("을(를) 제거했습니다."));
+					p.sendSystemMessage(Component.literal("판매 목록 제거 · " + shopType.displayName() + " · ").append(item.getDescription()));
 				} else {
 					ShopConfig.put(shopType, item, price);
-					p.sendSystemMessage(Component.literal(shopType.displayName() + "의 ").append(item.getDescription())
-							.append(" 판매가를 " + format(price) + "(으)로 정했습니다."));
+					p.sendSystemMessage(Component.literal("판매가 설정 · " + shopType.displayName() + " · ").append(item.getDescription())
+							.append(" = " + format(price)));
 				}
 			} catch (IOException e) {
 				HarborTrade.LOGGER.error("Failed to save shops.json", e);
@@ -135,7 +136,7 @@ public class MerchantEntity extends PathfinderMob {
 	/** Opens the trader screen, or tells the player why it is closed. */
 	public void openTrader(ServerPlayer player) {
 		if (!RoundManager.isTraderHere(player.server)) {
-			player.sendSystemMessage(Component.literal("무역상은 지금 항구에 없습니다. (회차 1:30 ~ 1:40)"));
+			NoticePayload.fail(player, "무역상은 지금 항구에 없습니다. (회차 1:30 ~ 1:40)");
 			return;
 		}
 		Offer offer = RoundManager.tradeOffer(player.server).orElse(null);

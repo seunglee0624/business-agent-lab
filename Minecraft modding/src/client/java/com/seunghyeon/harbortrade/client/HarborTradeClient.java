@@ -10,5 +10,6 @@ public class HarborTradeClient implements ClientModInitializer {
 		EntityRendererRegistry.register(ModEntities.MERCHANT, MerchantRenderer::new);
 		RoundHud.register();
 		AmountScreen.register();
+		NoticeOverlay.register();
 	}
 }

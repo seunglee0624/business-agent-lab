@@ -9,6 +9,7 @@ import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemItems;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import com.seunghyeon.harbortrade.network.AmountPrompt;
+import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import com.seunghyeon.harbortrade.shop.ModEntities;
 import com.seunghyeon.harbortrade.shop.ShopConfig;
@@ -41,6 +42,7 @@ public class HarborTrade implements ModInitializer {
 		GemItems.register();
 		HudPayload.register();
 		AmountPrompt.register();
+		NoticePayload.register();
 		RoundManager.register();
 		ModEntities.register();
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {

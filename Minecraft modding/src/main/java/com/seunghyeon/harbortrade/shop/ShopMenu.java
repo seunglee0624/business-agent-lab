@@ -2,6 +2,7 @@ package com.seunghyeon.harbortrade.shop;
 
 import static com.seunghyeon.harbortrade.bank.MoneyFormat.format;
 
+import com.seunghyeon.harbortrade.network.NoticePayload;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.component.DataComponents;
@@ -89,11 +90,11 @@ public class ShopMenu extends ChestMenu {
 				if (offer.playerCanBuy()) {
 					Trade.buy(serverPlayer, offer, count);
 				} else {
-					serverPlayer.sendSystemMessage(Component.literal("이 상점은 물건을 팔지 않습니다. 우클릭으로 판매하세요."));
+					NoticePayload.fail(serverPlayer, "이 상점은 물건을 팔지 않습니다. 우클릭으로 판매하세요.");
 				}
 			} else if (button == 1) {
 				if (offer.isFame()) {
-					serverPlayer.sendSystemMessage(Component.literal("명성은 되팔 수 없습니다."));
+					NoticePayload.fail(serverPlayer, "명성은 되팔 수 없습니다.");
 				} else {
 					Trade.sell(serverPlayer, offer, count);
 				}
