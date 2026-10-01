@@ -24,6 +24,8 @@ public final class RoundCommand {
 				})
 				.then(Commands.literal("시작").requires(admin)
 						.executes(ctx -> result(ctx.getSource(), RoundManager.start(ctx.getSource().getServer()), "이미 진행 중인 회차가 있습니다.")))
+				.then(Commands.literal("초기화").requires(admin)
+						.executes(ctx -> result(ctx.getSource(), RoundManager.restart(ctx.getSource().getServer()), "아직 시작된 회차가 없습니다.")))
 				.then(Commands.literal("종료").requires(admin)
 						.executes(ctx -> result(ctx.getSource(), RoundManager.end(ctx.getSource().getServer()), "진행 중인 회차가 없습니다.")))
 				.then(Commands.literal("일시정지").requires(admin)

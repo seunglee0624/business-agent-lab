@@ -20,74 +20,61 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemLore;
 
-/**
- * The trader's screen. The rows below list today's goods; click one to pick it (it glows), then click a city in
- * the top row to type how many to ship there.
- */
+/** The trader's screen: today's trade good on the left, the cities on the right. Click a city to type an amount. */
 public class TraderMenu extends ChestMenu {
-	private static final int[] CITY_SLOTS = {2, 4, 6};
-	private static final MenuType<?>[] TYPES = {MenuType.GENERIC_9x1, MenuType.GENERIC_9x2, MenuType.GENERIC_9x3,
-			MenuType.GENERIC_9x4, MenuType.GENERIC_9x5, MenuType.GENERIC_9x6};
+	private static final int GOOD_SLOT = 1;
+	private static final int[] CITY_SLOTS = {4, 6, 8};
 
 	private final MerchantEntity merchant;
-	private final List<Offer> offers;
+	private final Offer offer;
 	private final SimpleContainer display;
-	private int selected = -1;
 
-	private TraderMenu(int containerId, Inventory inventory, MerchantEntity merchant, List<Offer> offers, SimpleContainer display, int rows) {
-		super(TYPES[rows - 1], containerId, inventory, display, rows);
+	private TraderMenu(int containerId, Inventory inventory, MerchantEntity merchant, Offer offer, SimpleContainer display) {
+		super(MenuType.GENERIC_9x1, containerId, inventory, display, 1);
 		this.merchant = merchant;
-		this.offers = offers;
+		this.offer = offer;
 		this.display = display;
 		refresh(inventory.player);
 	}
 
-	public static TraderMenu create(int containerId, Inventory inventory, MerchantEntity merchant, List<Offer> offers) {
-		int rows = 1 + Math.clamp((offers.size() + 8) / 9, 1, TYPES.length - 1);
-		return new TraderMenu(containerId, inventory, merchant, offers, new SimpleContainer(rows * 9), rows);
+	public static TraderMenu create(int containerId, Inventory inventory, MerchantEntity merchant, Offer offer) {
+		return new TraderMenu(containerId, inventory, merchant, offer, new SimpleContainer(9));
 	}
 
 	private void refresh(Player player) {
 		for (int i = 0; i < display.getContainerSize(); i++) {
 			display.setItem(i, ItemStack.EMPTY);
 		}
+		display.setItem(GOOD_SLOT, goodIcon());
 		TradeCity[] cities = TradeCity.values();
 		for (int i = 0; i < cities.length; i++) {
 			display.setItem(CITY_SLOTS[i], cityIcon(cities[i], player));
 		}
-		for (int i = 0; i < offers.size(); i++) {
-			display.setItem(9 + i, goodIcon(offers.get(i), i == selected));
-		}
 	}
 
-	private ItemStack cityIcon(TradeCity target, Player player) {
+	private ItemStack goodIcon() {
+		Style plain = Style.EMPTY.withItalic(false);
+		ItemStack stack = new ItemStack(offer.item());
+		stack.set(DataComponents.LORE, new ItemLore(List.of(
+				Component.literal("오늘의 무역상품").withStyle(plain.withColor(0x55FF55)),
+				Component.literal("무역 기준가: " + format(offer.price())).withStyle(plain.withColor(0xFFAA00)),
+				Component.literal("오른쪽 도시를 클릭해서 선적하세요").withStyle(plain.withColor(0xAAAAAA)))));
+		return stack;
+	}
+
+	private ItemStack cityIcon(TradeCity city, Player player) {
 		Style plain = Style.EMPTY.withItalic(false);
 		List<Component> lore = new ArrayList<>();
 		var server = merchant.level().getServer();
 		if (server != null) {
-			lore.add(Component.literal("내 선적(기준가): " + format(TradeManager.shipped(server, player.getUUID(), target)))
+			lore.add(Component.literal("내 선적(기준가): " + format(TradeManager.shipped(server, player.getUUID(), city)))
 					.withStyle(plain.withColor(0xFFAA00)));
 		}
-		lore.add(Component.literal(selected >= 0 ? "클릭: 선택한 상품을 이 도시로 선적" : "먼저 아래에서 상품을 고르세요")
-				.withStyle(plain.withColor(selected >= 0 ? 0x55FF55 : 0xAAAAAA)));
+		lore.add(Component.literal("클릭: 이 도시로 선적").withStyle(plain.withColor(0xAAAAAA)));
 
-		ItemStack stack = new ItemStack(target.icon());
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(target.displayName()).withStyle(plain.withColor(0xFFFFFF)));
+		ItemStack stack = new ItemStack(city.icon());
+		stack.set(DataComponents.CUSTOM_NAME, Component.literal(city.displayName()).withStyle(plain.withColor(0xFFFFFF)));
 		stack.set(DataComponents.LORE, new ItemLore(lore));
-		return stack;
-	}
-
-	private ItemStack goodIcon(Offer offer, boolean isSelected) {
-		Style plain = Style.EMPTY.withItalic(false);
-		List<Component> lore = List.of(
-				Component.literal("무역 기준가: " + format(offer.price())).withStyle(plain.withColor(0xFFAA00)),
-				Component.literal(isSelected ? "선택됨 - 위에서 도시를 클릭하세요" : "클릭해서 선택")
-						.withStyle(plain.withColor(isSelected ? 0x55FF55 : 0xAAAAAA)));
-		ItemStack stack = new ItemStack(offer.item());
-		stack.set(DataComponents.LORE, new ItemLore(lore));
-		if (isSelected) {
-			stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
-		}
 		return stack;
 	}
 
@@ -99,18 +86,10 @@ public class TraderMenu extends ChestMenu {
 		}
 
 		if (player instanceof ServerPlayer serverPlayer && (clickType == ClickType.PICKUP || clickType == ClickType.QUICK_MOVE)) {
-			int index = slotId - 9;
-			if (index >= 0 && index < offers.size()) {
-				selected = index;
-			}
 			for (int i = 0; i < CITY_SLOTS.length; i++) {
 				if (CITY_SLOTS[i] == slotId) {
-					if (selected < 0) {
-						serverPlayer.sendSystemMessage(Component.literal("먼저 아래에서 선적할 상품을 고르세요."));
-					} else {
-						TradeManager.prompt(serverPlayer, merchant, offers.get(selected), TradeCity.values()[i]);
-						return;
-					}
+					TradeManager.prompt(serverPlayer, merchant, offer, TradeCity.values()[i]);
+					return;
 				}
 			}
 		}

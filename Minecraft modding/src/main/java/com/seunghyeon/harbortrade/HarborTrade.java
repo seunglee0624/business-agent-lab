@@ -8,13 +8,11 @@ import com.seunghyeon.harbortrade.command.ShopCommand;
 import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemItems;
 import com.seunghyeon.harbortrade.network.HudPayload;
-import com.seunghyeon.harbortrade.network.ShipAmountPayload;
-import com.seunghyeon.harbortrade.network.ShipPromptPayload;
+import com.seunghyeon.harbortrade.network.AmountPrompt;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import com.seunghyeon.harbortrade.shop.ModEntities;
 import com.seunghyeon.harbortrade.shop.ShopConfig;
 import com.seunghyeon.harbortrade.trade.TradeConfig;
-import com.seunghyeon.harbortrade.trade.TradeManager;
 import com.seunghyeon.harbortrade.command.TradeCommand;
 import java.io.IOException;
 import net.fabricmc.api.ModInitializer;
@@ -42,16 +40,14 @@ public class HarborTrade implements ModInitializer {
 
 		GemItems.register();
 		HudPayload.register();
-		ShipPromptPayload.register();
-		ShipAmountPayload.register();
-		TradeManager.register();
+		AmountPrompt.register();
 		RoundManager.register();
 		ModEntities.register();
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			try {
 				LOGGER.info("Loaded {} shop offers", ShopConfig.load());
 				Fame.load();
-				LOGGER.info("Loaded {} trade categories", TradeConfig.load());
+				LOGGER.info("Loaded {} trade goods", TradeConfig.load());
 			} catch (IOException | RuntimeException e) {
 				LOGGER.error("Failed to load config", e);
 			}
@@ -62,7 +58,7 @@ public class HarborTrade implements ModInitializer {
 			ShopCommand.register(dispatcher, registryAccess);
 			RoundCommand.register(dispatcher);
 			FameCommand.register(dispatcher);
-			TradeCommand.register(dispatcher, registryAccess);
+			TradeCommand.register(dispatcher);
 		});
 
 		LOGGER.info("Harbor Trade initialized");

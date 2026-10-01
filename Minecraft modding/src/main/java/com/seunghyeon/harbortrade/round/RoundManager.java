@@ -7,13 +7,16 @@ import com.seunghyeon.harbortrade.gem.GemMarket;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import com.seunghyeon.harbortrade.trade.TradeConfig;
 import com.seunghyeon.harbortrade.trade.TradeManager;
+import com.seunghyeon.harbortrade.shop.Offer;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
@@ -80,8 +83,13 @@ public final class RoundManager {
 		return data.active && data.elapsedMillis >= TRADER_ARRIVE_MILLIS && data.elapsedMillis < TRADER_DEPART_MILLIS;
 	}
 
-	public static String tradeCategory(MinecraftServer server) {
-		return RoundData.get(server).tradeCategory;
+	/** Today's trade good, unless none was drawn or an admin removed it since. */
+	public static Optional<Offer> tradeOffer(MinecraftServer server) {
+		return TradeConfig.find(RoundData.get(server).tradeItem);
+	}
+
+	public static Component tradeItemName(MinecraftServer server) {
+		return tradeOffer(server).map(offer -> offer.item().getDescription()).orElse(Component.literal("없음"));
 	}
 
 	private static void tick(MinecraftServer server) {
@@ -125,12 +133,36 @@ public final class RoundManager {
 		data.paused = false;
 		data.elapsedMillis = 0;
 		data.nextEvent = 0;
-		List<String> categories = TradeConfig.categories().stream().filter(c -> !TradeConfig.items(c).isEmpty()).toList();
-		data.tradeCategory = categories.isEmpty() ? "" : categories.get(RANDOM.nextInt(categories.size()));
+		List<Offer> goods = TradeConfig.items();
+		data.tradeItem = goods.isEmpty() ? "" : TradeConfig.id(goods.get(RANDOM.nextInt(goods.size())).item());
 		TradeManager.clear(server);
 		data.setDirty();
 		runDueEvents(server);
 		return true;
+	}
+
+	/**
+	 * Replays the round without touching money, fame, gems, or items. During a round it restarts the same round
+	 * from 0:00 (goods already shipped are refunded at base value); after a round ends it takes the number back,
+	 * so the next start repeats it. Returns false before the first round.
+	 */
+	public static boolean restart(MinecraftServer server) {
+		RoundData data = RoundData.get(server);
+		if (data.round == 0) {
+			return false;
+		}
+		if (!data.active) {
+			data.round--;
+			data.setDirty();
+			broadcast(server, (data.round + 1) + "회차 기록을 취소했습니다. 다음 회차 시작 때 " + (data.round + 1) + "회차를 다시 진행합니다.");
+			return true;
+		}
+		TradeManager.refund(server);
+		data.round--;
+		data.active = false;
+		data.setDirty();
+		broadcast(server, (data.round + 1) + "회차를 처음부터 다시 시작합니다.");
+		return start(server);
 	}
 
 	/** Ends the current round right away; returns false if none is running. */
@@ -168,7 +200,7 @@ public final class RoundManager {
 
 	private static void onStart(MinecraftServer server) {
 		RoundData data = RoundData.get(server);
-		broadcast(server, data.round + "회차가 시작되었습니다! 오늘의 무역상품: " + data.tradeCategory);
+		broadcast(server, Component.literal(data.round + "회차가 시작되었습니다! 오늘의 무역상품: ").append(tradeItemName(server)));
 	}
 
 	private static void onEnd(MinecraftServer server) {
@@ -196,16 +228,15 @@ public final class RoundManager {
 		if (!data.active) {
 			return Component.literal(data.round + "회차가 종료되었습니다. 다음 회차를 기다리는 중입니다.");
 		}
-		StringBuilder sb = new StringBuilder();
-		sb.append(data.round).append("회차 진행 중").append(data.paused ? " (일시정지)" : "")
-				.append(" · ").append(formatTime(data.elapsedMillis)).append(" / ").append(formatTime(ROUND_MILLIS))
-				.append("\n오늘의 무역상품: ").append(data.tradeCategory);
+		MutableComponent message = Component.literal(data.round + "회차 진행 중" + (data.paused ? " (일시정지)" : "")
+				+ " · 남은 시간 " + formatTime(ROUND_MILLIS - data.elapsedMillis) + "\n오늘의 무역상품: ")
+				.append(tradeItemName(server));
 		if (data.nextEvent < TIMELINE.size()) {
 			Event next = TIMELINE.get(data.nextEvent);
 			long minutesLeft = (next.atMillis() - data.elapsedMillis + 59_999) / 60_000;
-			sb.append("\n다음: ").append(next.name()).append(" (").append(minutesLeft).append("분 후)");
+			message.append("\n다음: " + next.name() + " (" + minutesLeft + "분 후)");
 		}
-		return Component.literal(sb.toString());
+		return message;
 	}
 
 	/** Formats milliseconds as h:mm:ss. */
@@ -221,6 +252,10 @@ public final class RoundManager {
 	}
 
 	private static void broadcast(MinecraftServer server, String message) {
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[회차] " + message), false);
+		broadcast(server, Component.literal(message));
+	}
+
+	private static void broadcast(MinecraftServer server, Component message) {
+		server.getPlayerList().broadcastSystemMessage(Component.literal("[회차] ").append(message), false);
 	}
 }

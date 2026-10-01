@@ -34,6 +34,14 @@ public enum ShopType {
 		return this != JEWELER && this != FAME && this != TRADER;
 	}
 
+	/**
+	 * Shops an admin edits by shift+right clicking: regular shops (with the item in hand) and the fame shop
+	 * (its price). Trade goods cannot be edited in game.
+	 */
+	public boolean adminEditable() {
+		return usesItemList() || this == FAME;
+	}
+
 	public static ShopType byId(String id) {
 		for (ShopType type : values()) {
 			if (type.id.equals(id)) {

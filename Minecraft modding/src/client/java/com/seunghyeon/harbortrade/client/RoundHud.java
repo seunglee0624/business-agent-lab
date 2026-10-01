@@ -12,7 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
-/** Top-right HUD: round number, round clock, bank balance, and fame, as last sent by the server. */
+/** Top-right HUD: round number, time left in the round, bank balance, and fame, as last sent by the server. */
 public final class RoundHud {
 	private static final int MARGIN = 4;
 	private static final int PADDING = 3;
@@ -40,7 +40,7 @@ public final class RoundHud {
 
 		String round = state.round() == 0 ? "회차 대기" : state.round() + "회차" + (state.active() ? "" : " 종료");
 		String time = state.active()
-				? RoundManager.formatTime(state.elapsedMillis()) + " / " + RoundManager.formatTime(state.roundMillis())
+				? "남은 시간 " + RoundManager.formatTime(Math.max(state.roundMillis() - state.elapsedMillis(), 0))
 				: "-";
 		String money = format(state.balance());
 		String fame = "명성 " + state.fame();

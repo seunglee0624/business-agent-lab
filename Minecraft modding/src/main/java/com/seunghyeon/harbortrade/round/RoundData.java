@@ -17,7 +17,8 @@ public class RoundData extends SavedData {
 	long elapsedMillis;
 	/** Index of the next timeline event to run. */
 	int nextEvent;
-	String tradeCategory = "";
+	/** Registry id of today's trade good, or empty. */
+	String tradeItem = "";
 
 	public static RoundData get(MinecraftServer server) {
 		return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME);
@@ -30,7 +31,7 @@ public class RoundData extends SavedData {
 		data.paused = tag.getBoolean("paused");
 		data.elapsedMillis = tag.getLong("elapsed_millis");
 		data.nextEvent = tag.getInt("next_event");
-		data.tradeCategory = tag.getString("trade_category");
+		data.tradeItem = tag.getString("trade_item");
 		return data;
 	}
 
@@ -41,7 +42,7 @@ public class RoundData extends SavedData {
 		tag.putBoolean("paused", paused);
 		tag.putLong("elapsed_millis", elapsedMillis);
 		tag.putInt("next_event", nextEvent);
-		tag.putString("trade_category", tradeCategory);
+		tag.putString("trade_item", tradeItem);
 		return tag;
 	}
 }
