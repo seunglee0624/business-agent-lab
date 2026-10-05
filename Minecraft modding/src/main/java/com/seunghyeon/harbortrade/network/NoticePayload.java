@@ -39,8 +39,12 @@ public record NoticePayload(Component message, boolean ok) implements CustomPack
 	}
 
 	private static void send(ServerPlayer player, Component message, boolean ok) {
+		new NoticePayload(message, ok).send(player);
+	}
+
+	public void send(ServerPlayer player) {
 		if (ServerPlayNetworking.canSend(player, TYPE)) {
-			ServerPlayNetworking.send(player, new NoticePayload(message, ok));
+			ServerPlayNetworking.send(player, this);
 		} else {
 			player.displayClientMessage(message, true);
 		}

@@ -41,6 +41,10 @@ public class MerchantEntity extends PathfinderMob {
 		setPersistenceRequired();
 	}
 
+	public ShopType shopType() {
+		return shopType;
+	}
+
 	public void setShopType(ShopType shopType) {
 		this.shopType = shopType;
 		setCustomName(Component.literal(shopType.displayName()));

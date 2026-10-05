@@ -1,5 +1,6 @@
 package com.seunghyeon.harbortrade.round;
 
+import com.seunghyeon.harbortrade.Chat;
 import com.seunghyeon.harbortrade.HarborTrade;
 import com.seunghyeon.harbortrade.bank.Bank;
 import com.seunghyeon.harbortrade.fame.Fame;
@@ -136,6 +137,7 @@ public final class RoundManager {
 		List<Offer> goods = TradeConfig.items();
 		data.tradeItem = goods.isEmpty() ? "" : TradeConfig.id(goods.get(RANDOM.nextInt(goods.size())).item());
 		TradeManager.clear(server);
+		GemMarket.startRound(server);
 		data.setDirty();
 		runDueEvents(server);
 		return true;
@@ -194,7 +196,8 @@ public final class RoundManager {
 		}
 		data.elapsedMillis = Math.min(data.elapsedMillis + minutes(minutes), ROUND_MILLIS);
 		data.setDirty();
-		runDueEvents(server);
+		// Skipped-over events still happen, just without their announcements.
+		Chat.silently(() -> runDueEvents(server));
 		return true;
 	}
 
@@ -213,11 +216,11 @@ public final class RoundManager {
 		data.paused = false;
 		data.nextEvent = TIMELINE.size();
 		data.setDirty();
-		broadcast(server, data.round + "회차가 종료되었습니다. 보석상과 명성상점이 문을 닫았습니다.");
 		// Only the leader is announced; the rest of the ranking stays hidden.
-		broadcast(server, Fame.leader(server)
-				.map(rank -> "현재 명성 1위: " + rank.name() + " (명성 " + rank.fame() + ")")
-				.orElse("아직 명성을 가진 플레이어가 없습니다."));
+		Chat.announce(server, "회차", Component.literal(data.round + "회차가 종료되었습니다. 보석상과 명성상점이 문을 닫았습니다."),
+				Component.literal(Fame.leader(server)
+						.map(rank -> "현재 명성 1위: " + rank.name() + " (명성 " + rank.fame() + ")")
+						.orElse("아직 명성을 가진 플레이어가 없습니다.")));
 	}
 
 	public static Component status(MinecraftServer server) {
@@ -256,6 +259,6 @@ public final class RoundManager {
 	}
 
 	private static void broadcast(MinecraftServer server, Component message) {
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[회차] ").append(message), false);
+		Chat.announce(server, "회차", message);
 	}
 }

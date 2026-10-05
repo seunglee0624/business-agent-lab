@@ -2,6 +2,7 @@ package com.seunghyeon.harbortrade.trade;
 
 import static com.seunghyeon.harbortrade.bank.MoneyFormat.format;
 
+import com.seunghyeon.harbortrade.Chat;
 import com.seunghyeon.harbortrade.bank.Bank;
 import com.seunghyeon.harbortrade.round.RoundManager;
 import com.seunghyeon.harbortrade.shop.Offer;
@@ -10,6 +11,7 @@ import com.seunghyeon.harbortrade.network.AmountPrompt;
 import com.seunghyeon.harbortrade.network.AmountPromptPayload;
 import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.shop.MerchantEntity;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.network.chat.Component;
@@ -44,35 +46,37 @@ public final class TradeManager {
 						.append(" · 기준가 " + format(offer.price()) + " · 보유 " + available + "개"),
 				available, offer.price(), false);
 		AmountPrompt.open(player, prompt, (p, count) -> {
-			if (count > 0) {
-				ship(p, city, offer, (int) count);
-			}
-			// Back to the trader screen to keep shipping.
+			NoticePayload result = count > 0 ? ship(p, city, offer, (int) count) : null;
+			// Back to the trader screen to keep shipping; the result is sent after it so it shows above the window.
 			if (merchant.isAlive() && p.distanceToSqr(merchant) < 64) {
 				merchant.openTrader(p);
+			}
+			if (result != null) {
+				result.send(p);
 			}
 		});
 	}
 
 	public static void arrive(MinecraftServer server) {
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[무역] 무역상이 항구에 도착했습니다! 10분 동안 오늘의 무역상품(")
-				.append(RoundManager.tradeItemName(server)).append(")을 선적할 수 있습니다."), false);
+		Chat.announce(server, "무역", Component.literal("무역상이 항구에 도착했습니다! 10분 동안 오늘의 무역상품(")
+				.append(RoundManager.tradeItemName(server)).append(")을 선적할 수 있습니다."));
 	}
 
 	public static void depart(MinecraftServer server) {
 		broadcast(server, "무역상이 출항했습니다. 5분 뒤 무역 결과가 발표됩니다.");
 	}
 
-	/** Loads goods onto the ship for a city. The player must have them undamaged in the inventory. */
-	public static void ship(ServerPlayer player, TradeCity city, Offer offer, int count) {
+	/**
+	 * Loads goods onto the ship for a city. The player must have them undamaged in the inventory. Returns the
+	 * notice for the caller to send.
+	 */
+	private static NoticePayload ship(ServerPlayer player, TradeCity city, Offer offer, int count) {
 		MinecraftServer server = player.server;
 		if (!RoundManager.isTraderHere(server)) {
-			NoticePayload.fail(player, "무역상이 항구에 없습니다.");
-			return;
+			return new NoticePayload(Component.literal("무역상이 항구에 없습니다."), false);
 		}
 		if (Trade.countSellable(player, offer) < count) {
-			NoticePayload.fail(player, "선적할 물건 부족 (손상된 물건 제외)");
-			return;
+			return new NoticePayload(Component.literal("선적할 물건 부족 (손상된 물건 제외)"), false);
 		}
 
 		Trade.removeSellable(player, offer, count);
@@ -80,9 +84,9 @@ public final class TradeManager {
 		TradeData data = TradeData.get(server);
 		data.of(player.getUUID())[city.ordinal()] += value;
 		data.setDirty();
-		NoticePayload.ok(player, Component.literal("선적 · ").append(offer.item().getDescription())
+		return new NoticePayload(Component.literal("선적 · ").append(offer.item().getDescription())
 				.append(" ×" + count + " → " + city.displayName() + "  기준가 " + format(value)
-						+ "  (" + city.displayName() + " 누적 " + format(shipped(server, player.getUUID(), city)) + ")"));
+						+ "  (" + city.displayName() + " 누적 " + format(shipped(server, player.getUUID(), city)) + ")"), true);
 	}
 
 	/** Base value the player has sent to the city this round. */
@@ -100,13 +104,12 @@ public final class TradeManager {
 		TradeCity[] cities = TradeCity.values();
 		int[] rates = new int[cities.length];
 		StringBuilder summary = new StringBuilder("무역 결과 발표! ");
+		Map<UUID, Component> results = new HashMap<>();
 		for (int i = 0; i < cities.length; i++) {
 			rates[i] = MIN_RATE + RANDOM.nextInt(MAX_RATE - MIN_RATE + 1);
 			summary.append(i == 0 ? "" : ", ").append(cities[i].displayName()).append(" ")
 					.append(rates[i] > 0 ? "+" : "").append(rates[i]).append("%");
 		}
-		broadcast(server, summary.toString());
-
 		TradeData data = TradeData.get(server);
 		for (Map.Entry<UUID, long[]> entry : data.shipments.entrySet()) {
 			long sent = 0;
@@ -119,10 +122,19 @@ public final class TradeManager {
 			if (received > 0) {
 				Bank.deposit(server, entry.getKey(), received);
 			}
-			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-			if (player != null && sent > 0) {
-				player.sendSystemMessage(Component.literal("[무역] 선적 기준가 " + format(sent) + " → 수령액 "
+			if (sent > 0) {
+				results.put(entry.getKey(), Component.literal("내 선적 기준가 " + format(sent) + " → 수령액 "
 						+ format(received) + " (" + (received >= sent ? "+" : "") + format(received - sent) + ")"));
+			}
+		}
+		// Everyone sees the city rates; shippers also get their own result in the same block.
+		Component headline = Component.literal(summary.toString());
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			Component result = results.get(player.getUUID());
+			if (result == null) {
+				Chat.send(player, "무역", headline);
+			} else {
+				Chat.send(player, "무역", headline, result);
 			}
 		}
 		data.shipments.clear();
@@ -141,7 +153,7 @@ public final class TradeManager {
 				Bank.deposit(server, entry.getKey(), sent);
 				ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
 				if (player != null) {
-					player.sendSystemMessage(Component.literal("[무역] 회차 재시작 · 선적한 물건값 " + format(sent)
+					Chat.send(player, "무역", Component.literal("회차 재시작 · 선적한 물건값 " + format(sent)
 							+ " 환불 (기준가 그대로)"));
 				}
 			}
@@ -158,6 +170,6 @@ public final class TradeManager {
 	}
 
 	private static void broadcast(MinecraftServer server, String message) {
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[무역] " + message), false);
+		Chat.announce(server, "무역", message);
 	}
 }

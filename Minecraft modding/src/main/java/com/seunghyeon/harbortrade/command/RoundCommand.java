@@ -38,7 +38,7 @@ public final class RoundCommand {
 									int minutes = IntegerArgumentType.getInteger(ctx, MINUTES);
 									boolean ok = RoundManager.skip(ctx.getSource().getServer(), minutes);
 									if (ok) {
-										ctx.getSource().sendSuccess(() -> RoundManager.status(ctx.getSource().getServer()), true);
+										ctx.getSource().sendSuccess(() -> Component.literal(minutes + "분 건너뛰기 완료"), false);
 									}
 									return result(ctx.getSource(), ok, "진행 중인 회차가 없습니다.");
 								}))));

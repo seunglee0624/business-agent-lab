@@ -24,15 +24,20 @@ public final class NoticeOverlay {
 
 	public static void register() {
 		ClientPlayNetworking.registerGlobalReceiver(NoticePayload.TYPE, (payload, context) -> {
+			// With nothing open the action bar shows it; keeping it would leak onto the next shop opened.
+			if (context.client().screen == null) {
+				notice = null;
+				context.client().gui.setOverlayMessage(payload.message(), false);
+				return;
+			}
 			notice = payload;
 			shownAt = System.currentTimeMillis();
-			if (context.client().screen == null) {
-				context.client().gui.setOverlayMessage(payload.message(), false);
-			}
 		});
 		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
 			if (screen instanceof ContainerScreen chest) {
 				ScreenEvents.afterRender(screen).register((s, graphics, mouseX, mouseY, delta) -> render(chest, graphics));
+				// A notice belongs to the shop it came from, not the next one.
+				ScreenEvents.remove(screen).register(s -> notice = null);
 			}
 		});
 	}

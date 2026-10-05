@@ -6,6 +6,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.seunghyeon.harbortrade.Chat;
 import com.seunghyeon.harbortrade.HarborTrade;
 import com.seunghyeon.harbortrade.fame.Fame;
 import java.io.IOException;
@@ -105,7 +106,7 @@ public final class FameCommand {
 		Component subtitle = leader
 				.<Component>map(rank -> Component.literal("우승: " + rank.name() + " (명성 " + rank.fame() + ")"))
 				.orElse(Component.literal("명성을 가진 플레이어가 없습니다"));
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[게임 종료] ").append(subtitle), false);
+		Chat.announce(server, "게임 종료", subtitle);
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			player.connection.send(new ClientboundSetTitleTextPacket(title));
 			player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));

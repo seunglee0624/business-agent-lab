@@ -1,7 +1,12 @@
 package com.seunghyeon.harbortrade.gem;
 
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongArrayTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 
@@ -12,6 +17,8 @@ public class GemMarketData extends SavedData {
 
 	final long[] prices = new long[Gem.values().length];
 	final long[] previousPrices = new long[Gem.values().length];
+	/** Prices at the start of this round and after each change since, oldest first. */
+	final List<long[]> history = new ArrayList<>();
 
 	private GemMarketData() {
 		for (Gem gem : Gem.values()) {
@@ -34,6 +41,12 @@ public class GemMarketData extends SavedData {
 				data.previousPrices[gem.ordinal()] = previous.getLong(gem.id());
 			}
 		}
+		for (Tag entry : tag.getList("history", Tag.TAG_LONG_ARRAY)) {
+			long[] snapshot = ((LongArrayTag) entry).getAsLongArray();
+			if (snapshot.length == Gem.values().length) {
+				data.history.add(snapshot);
+			}
+		}
 		return data;
 	}
 
@@ -47,6 +60,11 @@ public class GemMarketData extends SavedData {
 		}
 		tag.put("prices", prices);
 		tag.put("previous_prices", previous);
+		ListTag history = new ListTag();
+		for (long[] snapshot : this.history) {
+			history.add(new LongArrayTag(snapshot));
+		}
+		tag.put("history", history);
 		return tag;
 	}
 }

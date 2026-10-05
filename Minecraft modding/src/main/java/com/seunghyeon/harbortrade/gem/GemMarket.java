@@ -2,6 +2,9 @@ package com.seunghyeon.harbortrade.gem;
 
 import static com.seunghyeon.harbortrade.bank.MoneyFormat.format;
 
+import com.seunghyeon.harbortrade.Chat;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.RandomSource;
@@ -31,7 +34,28 @@ public final class GemMarket {
 		return (data.prices[gem.ordinal()] - previous) * 100.0 / previous;
 	}
 
-	/** Moves every gem price once and announces the new prices to all players. */
+	/** Starts this round's price record from the current prices. */
+	public static void startRound(MinecraftServer server) {
+		GemMarketData data = GemMarketData.get(server);
+		data.history.clear();
+		data.history.add(data.prices.clone());
+		data.setDirty();
+	}
+
+	/** This round's prices for the gem, oldest first; just the current price if nothing is recorded. */
+	public static List<Long> history(MinecraftServer server, Gem gem) {
+		GemMarketData data = GemMarketData.get(server);
+		List<Long> prices = new ArrayList<>();
+		for (long[] snapshot : data.history) {
+			prices.add(snapshot[gem.ordinal()]);
+		}
+		if (prices.isEmpty()) {
+			prices.add(price(server, gem));
+		}
+		return prices;
+	}
+
+	/** Moves every gem price once; players see the new prices in the jeweler, chat only says they changed. */
 	public static void changePrices(MinecraftServer server) {
 		GemMarketData data = GemMarketData.get(server);
 		for (Gem gem : Gem.values()) {
@@ -42,12 +66,10 @@ public final class GemMarket {
 			data.previousPrices[i] = data.prices[i];
 			data.prices[i] = Math.clamp(Math.round(data.prices[i] * factor), min, max);
 		}
+		data.history.add(data.prices.clone());
 		data.setDirty();
 
-		server.getPlayerList().broadcastSystemMessage(Component.literal("[보석 시세] 가격이 변동되었습니다."), false);
-		for (Gem gem : Gem.values()) {
-			server.getPlayerList().broadcastSystemMessage(priceLine(server, gem), false);
-		}
+		Chat.announce(server, "보석", "시세가 변동되었습니다. 보석상에서 확인하세요.");
 	}
 
 	/** One line like "루비 104,200 KD (▲4.2%)". */
