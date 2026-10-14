@@ -9,12 +9,21 @@ import com.seunghyeon.harbortrade.network.AmountPrompt;
 import com.seunghyeon.harbortrade.network.AmountPromptPayload;
 import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
+import com.seunghyeon.harbortrade.network.TextPrompt;
+import com.seunghyeon.harbortrade.network.TextPromptPayload;
+import com.seunghyeon.harbortrade.trade.TraderMenu;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import com.seunghyeon.harbortrade.trade.TraderMenu;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.Items;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -27,12 +36,18 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
 /**
- * A shopkeeper NPC: stands still, cannot be hurt or pushed, and opens its shop on right click. An admin who
- * shift+right clicks a regular shop while holding an item sets that item's price, and on the fame shop sets the
- * fame price.
+ * A shopkeeper NPC: stands still, cannot be hurt or pushed, and opens its shop on right click. A general shop
+ * keeps its own name and goods; an admin shift+right clicks it to open the admin screen, or the fame shop to set
+ * the fame price.
  */
 public class MerchantEntity extends PathfinderMob {
-	private ShopType shopType = ShopType.GROCER;
+	public static final int MAX_GOODS = 45;
+	private static final int MAX_NAME_LENGTH = 16;
+	private static final long MAX_PRICE = 1_000_000_000_000L;
+
+	private ShopType shopType = ShopType.GENERAL;
+	/** General shops only: what the shop buys from players, in display order. */
+	private final List<Offer> goods = new ArrayList<>();
 
 	public MerchantEntity(EntityType<? extends MerchantEntity> type, Level level) {
 		super(type, level);
@@ -51,6 +66,24 @@ public class MerchantEntity extends PathfinderMob {
 		setCustomNameVisible(true);
 	}
 
+	public Component shopName() {
+		return getCustomName() != null ? getCustomName() : Component.literal(shopType.displayName());
+	}
+
+	public List<Offer> goods() {
+		return goods;
+	}
+
+	/** What this shop shows to customers. */
+	private List<Offer> offers() {
+		return switch (shopType) {
+			case GENERAL -> goods;
+			case JEWELER -> Arrays.stream(Gem.values()).map(Offer::gem).toList();
+			case FAME -> List.of(Offer.fame());
+			case TRADER -> List.of();
+		};
+	}
+
 	@Override
 	protected InteractionResult mobInteract(Player player, InteractionHand hand) {
 		if (player instanceof ServerPlayer serverPlayer) {
@@ -67,19 +100,16 @@ public class MerchantEntity extends PathfinderMob {
 					promptFamePrice(serverPlayer);
 					return InteractionResult.SUCCESS;
 				}
-				if (!player.getItemInHand(hand).isEmpty()) {
-					promptPrice(serverPlayer, player.getItemInHand(hand).getItem());
-					return InteractionResult.SUCCESS;
-				}
+				openAdmin(serverPlayer);
+				return InteractionResult.SUCCESS;
 			}
 			if (shopType == ShopType.TRADER) {
 				openTrader(serverPlayer);
 				return InteractionResult.SUCCESS;
 			}
-			var offers = ShopConfig.offers(shopType);
+			List<Offer> offers = offers();
 			serverPlayer.openMenu(new SimpleMenuProvider(
-					(containerId, inventory, p) -> ShopMenu.create(containerId, inventory, this, offers),
-					Component.literal(shopType.displayName())));
+					(containerId, inventory, p) -> ShopMenu.create(containerId, inventory, this, offers), shopName()));
 		}
 		return InteractionResult.sidedSuccess(level().isClientSide);
 	}
@@ -101,40 +131,81 @@ public class MerchantEntity extends PathfinderMob {
 		});
 	}
 
-	/** Admin shortcut: asks for the sell price of the held item and adds it to this shop (0 removes it). */
-	private void promptPrice(ServerPlayer player, Item item) {
+	private void openAdmin(ServerPlayer player) {
+		player.openMenu(new SimpleMenuProvider((containerId, inventory, p) -> ShopAdminMenu.create(containerId, inventory, this),
+				Component.literal("[관리] ").append(shopName())));
+	}
+
+	/** Back to the admin screen after an input screen, if the admin is still nearby. */
+	private void reopenAdmin(ServerPlayer player) {
+		if (isAlive() && player.distanceToSqr(this) < 64) {
+			openAdmin(player);
+		}
+	}
+
+	/** Asks for the sell price of the item, adding it to this shop if it is new. */
+	void promptPrice(ServerPlayer player, Item item) {
 		if (Gem.of(new ItemStack(item)) != null) {
-			player.sendSystemMessage(Component.literal("보석은 보석상에서만 거래합니다."));
+			NoticePayload.fail(player, "보석은 보석상에서만 거래합니다.");
 			return;
 		}
-		List<Offer> offers = ShopConfig.offers(shopType);
-		long current = offers.stream().filter(offer -> offer.item() == item).mapToLong(Offer::price).findFirst().orElse(-1);
-		if (current == -1 && offers.size() >= ShopConfig.MAX_OFFERS) {
-			player.sendSystemMessage(Component.literal(shopType.displayName() + "의 상품이 가득 찼습니다. (최대 " + ShopConfig.MAX_OFFERS + "개)"));
+		long current = goods.stream().filter(offer -> offer.item() == item).mapToLong(Offer::price).findFirst().orElse(-1);
+		if (current == -1 && goods.size() >= MAX_GOODS) {
+			NoticePayload.fail(player, "상품이 가득 찼습니다. (최대 " + MAX_GOODS + "개)");
 			return;
 		}
 		Component info = Component.empty().append(item.getDescription()).append(current == -1
 				? " · 새 상품, 판매가를 입력하세요"
-				: " · 현재 판매가 " + format(current) + " (0 입력 시 제거)");
-		AmountPrompt.open(player, new AmountPromptPayload(Component.literal(shopType.displayName() + " 판매가 설정"),
-				info, 0, 0, current != -1), (p, price) -> {
-			if (price < 0) {
-				return;
-			}
-			try {
-				if (price == 0) {
-					ShopConfig.remove(shopType, item);
-					p.sendSystemMessage(Component.literal("판매 목록 제거 · " + shopType.displayName() + " · ").append(item.getDescription()));
-				} else {
-					ShopConfig.put(shopType, item, price);
-					p.sendSystemMessage(Component.literal("판매가 설정 · " + shopType.displayName() + " · ").append(item.getDescription())
-							.append(" = " + format(price)));
+				: " · 현재 판매가 " + format(current));
+		AmountPrompt.open(player, new AmountPromptPayload(Component.literal("판매가 설정"), info, 0, 0, false), (p, price) -> {
+			NoticePayload result = null;
+			if (price > 0) {
+				price = Math.min(price, MAX_PRICE);
+				Offer offer = Offer.fixed(item, price);
+				int index = indexOf(item);
+				if (index >= 0) {
+					goods.set(index, offer);
+				} else if (goods.size() < MAX_GOODS) {
+					goods.add(offer);
 				}
-			} catch (IOException e) {
-				HarborTrade.LOGGER.error("Failed to save shops.json", e);
-				p.sendSystemMessage(Component.literal("shops.json을 저장하지 못했습니다: " + e.getMessage()));
+				result = new NoticePayload(Component.literal(index >= 0 ? "판매가 변경 · " : "상품 추가 · ")
+						.append(item.getDescription()).append(" = " + format(price)), true);
+			}
+			reopenAdmin(p);
+			if (result != null) {
+				result.send(p);
 			}
 		});
+	}
+
+	void removeGood(ServerPlayer player, Item item) {
+		int index = indexOf(item);
+		if (index >= 0) {
+			goods.remove(index);
+			NoticePayload.ok(player, Component.literal("상품 빼기 · ").append(item.getDescription()));
+		}
+	}
+
+	void promptName(ServerPlayer player) {
+		TextPrompt.open(player, new TextPromptPayload(Component.literal("상점 이름 변경"), shopName().getString(), MAX_NAME_LENGTH),
+				(p, name) -> {
+					if (name != null) {
+						setCustomName(Component.literal(name));
+					}
+					reopenAdmin(p);
+					if (name != null) {
+						NoticePayload.ok(p, Component.literal("이름 변경 · " + name));
+					}
+				});
+	}
+
+	private int indexOf(Item item) {
+		for (int i = 0; i < goods.size(); i++) {
+			if (goods.get(i).item() == item) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	/** Opens the trader screen, or tells the player why it is closed. */
@@ -157,6 +228,14 @@ public class MerchantEntity extends PathfinderMob {
 	public void addAdditionalSaveData(CompoundTag tag) {
 		super.addAdditionalSaveData(tag);
 		tag.putString("ShopType", shopType.id());
+		ListTag list = new ListTag();
+		for (Offer offer : goods) {
+			CompoundTag entry = new CompoundTag();
+			entry.putString("item", BuiltInRegistries.ITEM.getKey(offer.item()).toString());
+			entry.putLong("price", offer.price());
+			list.add(entry);
+		}
+		tag.put("Goods", list);
 	}
 
 	@Override
@@ -165,6 +244,16 @@ public class MerchantEntity extends PathfinderMob {
 		ShopType type = ShopType.byId(tag.getString("ShopType"));
 		if (type != null) {
 			shopType = type;
+		}
+		goods.clear();
+		for (Tag entry : tag.getList("Goods", Tag.TAG_COMPOUND)) {
+			CompoundTag good = (CompoundTag) entry;
+			ResourceLocation id = ResourceLocation.tryParse(good.getString("item"));
+			if (id == null) {
+				continue;
+			}
+			BuiltInRegistries.ITEM.getOptional(id).filter(item -> item != Items.AIR)
+					.ifPresent(item -> goods.add(Offer.fixed(item, good.getLong("price"))));
 		}
 	}
 

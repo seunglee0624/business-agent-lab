@@ -4,15 +4,21 @@ import com.seunghyeon.harbortrade.command.FameCommand;
 import com.seunghyeon.harbortrade.command.MoneyCommand;
 import com.seunghyeon.harbortrade.command.PriceCommand;
 import com.seunghyeon.harbortrade.command.RoundCommand;
+import com.seunghyeon.harbortrade.command.ShipCommand;
 import com.seunghyeon.harbortrade.command.ShopCommand;
+import com.seunghyeon.harbortrade.command.TalkCommand;
 import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemItems;
+import com.seunghyeon.harbortrade.network.BannerPayload;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import com.seunghyeon.harbortrade.network.AmountPrompt;
+import com.seunghyeon.harbortrade.network.TextPrompt;
 import com.seunghyeon.harbortrade.network.NoticePayload;
 import com.seunghyeon.harbortrade.round.RoundManager;
+import com.seunghyeon.harbortrade.ship.ShipManager;
 import com.seunghyeon.harbortrade.shop.ModEntities;
-import com.seunghyeon.harbortrade.shop.ShopConfig;
+import com.seunghyeon.harbortrade.talk.MerchantTalk;
+import com.seunghyeon.harbortrade.talk.TalkConfig;
 import com.seunghyeon.harbortrade.trade.TradeConfig;
 import com.seunghyeon.harbortrade.command.TradeCommand;
 import java.io.IOException;
@@ -42,13 +48,17 @@ public class HarborTrade implements ModInitializer {
 		GemItems.register();
 		HudPayload.register();
 		AmountPrompt.register();
+		TextPrompt.register();
 		NoticePayload.register();
+		BannerPayload.register();
 		RoundManager.register();
 		ModEntities.register();
+		ShipManager.register();
+		MerchantTalk.register();
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			try {
-				LOGGER.info("Loaded {} shop offers", ShopConfig.load());
 				Fame.load();
+				TalkConfig.load();
 				LOGGER.info("Loaded {} trade goods", TradeConfig.load());
 			} catch (IOException | RuntimeException e) {
 				LOGGER.error("Failed to load config", e);
@@ -57,10 +67,12 @@ public class HarborTrade implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			MoneyCommand.register(dispatcher);
 			PriceCommand.register(dispatcher);
-			ShopCommand.register(dispatcher, registryAccess);
+			ShopCommand.register(dispatcher);
 			RoundCommand.register(dispatcher);
 			FameCommand.register(dispatcher);
 			TradeCommand.register(dispatcher);
+			ShipCommand.register(dispatcher);
+			TalkCommand.register(dispatcher);
 		});
 
 		LOGGER.info("Harbor Trade initialized");

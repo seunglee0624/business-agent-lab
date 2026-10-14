@@ -5,5 +5,6 @@
 	"item.harbortrade.sapphire": "사파이어",
 	"item.harbortrade.ruby": "루비",
 	"item.harbortrade.diamond": "금강석",
-	"entity.harbortrade.merchant": "상인"
+	"entity.harbortrade.merchant": "상인",
+	"entity.harbortrade.trade_ship": "무역선"
 }

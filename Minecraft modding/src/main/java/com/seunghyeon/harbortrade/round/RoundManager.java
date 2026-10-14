@@ -5,6 +5,7 @@ import com.seunghyeon.harbortrade.HarborTrade;
 import com.seunghyeon.harbortrade.bank.Bank;
 import com.seunghyeon.harbortrade.fame.Fame;
 import com.seunghyeon.harbortrade.gem.GemMarket;
+import com.seunghyeon.harbortrade.network.BannerPayload;
 import com.seunghyeon.harbortrade.network.HudPayload;
 import com.seunghyeon.harbortrade.trade.TradeConfig;
 import com.seunghyeon.harbortrade.trade.TradeManager;
@@ -79,6 +80,15 @@ public final class RoundManager {
 		return data.active && data.elapsedMillis >= JEWELER_OPEN_MILLIS;
 	}
 
+	public static int round(MinecraftServer server) {
+		return RoundData.get(server).round;
+	}
+
+	/** How long ago the trader arrived this round (0 before that). */
+	public static long millisSinceTraderArrival(MinecraftServer server) {
+		return Math.max(0, RoundData.get(server).elapsedMillis - TRADER_ARRIVE_MILLIS);
+	}
+
 	public static boolean isTraderHere(MinecraftServer server) {
 		RoundData data = RoundData.get(server);
 		return data.active && data.elapsedMillis >= TRADER_ARRIVE_MILLIS && data.elapsedMillis < TRADER_DEPART_MILLIS;
@@ -139,6 +149,7 @@ public final class RoundManager {
 		TradeManager.clear(server);
 		GemMarket.startRound(server);
 		data.setDirty();
+		BannerPayload.sendAll(server);
 		runDueEvents(server);
 		return true;
 	}
