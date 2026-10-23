@@ -1,0 +1,446 @@
+// 경기 엔진. 1분씩 진행하며, 경기 상태(match)는 그대로 저장할 수 있는 순수 객체다.
+// 내 경기는 화면에서 stepMinute를 반복 호출하고, 다른 경기는 simulateMatch로 한 번에 계산한다.
+
+import { FORMATIONS } from '../../data/formations.js';
+import { ROLES, DEFAULT_ROLE } from '../../data/roles.js';
+import { ratingAt } from '../player.js';
+import { teamStrength, energyFactor, PRESSING_ENERGY, PRESSING_FOULS } from './strength.js';
+
+const HOME_BONUS = 1.06;
+const POSSESSION_POWER = 1.6;
+const ATTACK_RATE = 0.48;
+// 같은 수준의 두 팀이 붙을 때 (창출 / 수비) 비율의 평균. 이 값으로 나눠 1 근처가 되게 한다.
+export const BASE_RATIO = 0.49;
+
+const XG = { big: 0.38, normal: 0.095, header: 0.08, long: 0.034 };
+const ON_TARGET_IF_MISSED = { big: 0.42, normal: 0.3, header: 0.28, long: 0.24 };
+const ASSIST_CHANCE = { big: 0.85, normal: 0.75, header: 0.95, long: 0.3 };
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function snapshot(p) {
+  return { id: p.id, name: p.name, position: p.position, secondary: p.secondary, attrs: p.attrs };
+}
+
+function buildSide(setup, players, maxSubs) {
+  const slots = FORMATIONS[setup.tactics.formation];
+  const onPitch = [];
+  setup.lineup.forEach((entry, i) => {
+    if (!entry) return;
+    onPitch.push({
+      playerId: entry.playerId,
+      pos: slots[i],
+      role: entry.role,
+      energy: players[entry.playerId].condition,
+      yellow: 0,
+      sentOff: false,
+    });
+  });
+  return {
+    clubId: setup.clubId,
+    tactics: {
+      formation: setup.tactics.formation,
+      mentality: setup.tactics.mentality,
+      pressing: setup.tactics.pressing,
+      tempo: setup.tactics.tempo,
+      line: setup.tactics.line,
+    },
+    setPieceTaker: setup.tactics.setPieceTaker ?? null,
+    onPitch,
+    bench: setup.bench.slice(),
+    used: [],
+    subsUsed: 0,
+    maxSubs,
+    auto: setup.auto !== false,
+    score: 0,
+    shots: 0,
+    onTarget: 0,
+    fouls: 0,
+    possession: 0,
+  };
+}
+
+function emptyStats(side, started) {
+  return {
+    side, started, minuteOn: started ? 0 : null, minuteOff: null,
+    goals: 0, assists: 0, shots: 0, onTarget: 0, saves: 0, conceded: 0,
+    yellow: 0, red: false, secondYellow: false, involvement: 0, rating: null,
+  };
+}
+
+// setup: { clubId, tactics, lineup(포메이션 슬롯 순서), bench, auto }
+export function createMatch({ id, competitionId, date, home, away, players, maxSubs = 5 }) {
+  const snap = {};
+  const stats = {};
+  const sides = [buildSide(home, players, maxSubs), buildSide(away, players, maxSubs)];
+  sides.forEach((side, s) => {
+    for (const slot of side.onPitch) stats[slot.playerId] = emptyStats(s, true);
+    for (const id of side.bench) stats[id] = emptyStats(s, false);
+    for (const pid of [...side.onPitch.map((x) => x.playerId), ...side.bench]) snap[pid] = snapshot(players[pid]);
+  });
+  return {
+    id, competitionId, date,
+    phase: 'pre',
+    minute: 0,
+    added: [0, 0],
+    sides,
+    players: snap,
+    stats,
+    events: [],
+  };
+}
+
+export function clockLabel(match, minute = match.minute) {
+  if (match.phase === 'first' && minute > 45) return `45+${minute - 45}'`;
+  if ((match.phase === 'second' || match.phase === 'ft') && minute > 90) return `90+${minute - 90}'`;
+  return `${minute}'`;
+}
+
+function push(match, event) {
+  const e = { minute: match.minute, clock: clockLabel(match), ...event };
+  match.events.push(e);
+  return e;
+}
+
+const active = (side) => side.onPitch.filter((s) => !s.sentOff);
+
+function pickPlayer(rng, slots, weightOf) {
+  if (slots.length === 0) return null;
+  return rng.weighted(slots, weightOf);
+}
+
+// ---- 공격과 슈팅 ----
+
+function attack(match, rng, a, d, str, newEvents) {
+  const att = match.sides[a];
+  const def = match.sides[d];
+  const ratio = str[a].create / Math.max(1, str[d].defend) / BASE_RATIO;
+  const exposure = str[d].exposure;
+  const pShot = clamp(0.5 * ratio ** 1.6 + exposure, 0.12, 0.88);
+  const outfield = active(att).filter((s) => s.pos !== 'GK');
+
+  if (!rng.chance(pShot)) {
+    // 공격이 끊김: 수비수가 막아낸 기록, 공격 전개 기록
+    const creator = pickPlayer(rng, outfield, (s) => ROLES[s.role].create + 0.1);
+    const defender = pickPlayer(rng, active(def), (s) => ROLES[s.role].defend);
+    if (creator) match.stats[creator.playerId].involvement += 0.02;
+    if (defender) match.stats[defender.playerId].involvement += 0.03;
+    if (creator && rng.chance(0.25)) {
+      newEvents.push(push(match, { type: 'attack', side: a, playerId: creator.playerId, otherId: defender?.playerId ?? null }));
+    }
+    return;
+  }
+
+  const pBig = clamp(0.12 * ratio ** 1.8 + exposure, 0.02, 0.4);
+  const pLong = clamp(0.22 / ratio, 0.08, 0.4);
+  const pHeader = 0.16;
+  const r = rng.next();
+  const kind = r < pBig ? 'big' : r < pBig + pLong ? 'long' : r < pBig + pLong + pHeader ? 'header' : 'normal';
+
+  const shooter = pickPlayer(rng, outfield, (s) => {
+    const role = ROLES[s.role];
+    const at = match.players[s.playerId].attrs;
+    const skill = kind === 'long' ? at.longShots : kind === 'header' ? at.heading : at.finishing;
+    return role.shot * (skill + 8) * energyFactor(s.energy);
+  });
+  if (!shooter) return;
+  const sAttrs = match.players[shooter.playerId].attrs;
+  const skill = kind === 'long' ? (sAttrs.longShots * 2 + sAttrs.composure) / 3
+    : kind === 'header' ? (sAttrs.heading * 2 + sAttrs.strength) / 3
+    : (sAttrs.finishing * 2 + sAttrs.composure) / 3;
+  const quality = skill * energyFactor(shooter.energy);
+
+  shot(match, rng, a, d, shooter, kind, quality, str, newEvents, outfield);
+}
+
+function shot(match, rng, a, d, shooter, kind, quality, str, newEvents, outfield) {
+  const att = match.sides[a];
+  const def = match.sides[d];
+  const keeperSlot = active(def).find((s) => s.pos === 'GK');
+  const keeper = keeperSlot ? str[d].keeper : 4;
+  const st = match.stats[shooter.playerId];
+  att.shots++;
+  st.shots++;
+
+  let assistId = null;
+  if (kind !== 'penalty' && rng.chance(ASSIST_CHANCE[kind])) {
+    const helper = pickPlayer(rng, outfield.filter((s) => s !== shooter), (s) => {
+      const at = match.players[s.playerId].attrs;
+      const skill = kind === 'header' ? at.crossing * 1.5 + at.passing * 0.5 : at.passing + at.vision;
+      return (ROLES[s.role].assist + 0.05) * skill;
+    });
+    assistId = helper?.playerId ?? null;
+  }
+
+  const xg = kind === 'penalty' ? 0.76 : XG[kind];
+  const power = kind === 'penalty' ? 0.3 : 1.2;
+  const pGoal = clamp(xg * (quality / keeper) ** power, 0.005, 0.9);
+
+  if (rng.chance(pGoal)) {
+    att.score++;
+    att.onTarget++;
+    st.onTarget++;
+    st.goals++;
+    if (assistId) match.stats[assistId].assists++;
+    for (const s of def.onPitch) if (!s.sentOff) match.stats[s.playerId].conceded++;
+    newEvents.push(push(match, { type: 'goal', kind, side: a, playerId: shooter.playerId, assistId: kind === 'penalty' ? null : assistId }));
+    return;
+  }
+
+  const onTargetP = kind === 'penalty' ? 0.6 : ON_TARGET_IF_MISSED[kind];
+  if (rng.chance(onTargetP)) {
+    att.onTarget++;
+    st.onTarget++;
+    if (keeperSlot) match.stats[keeperSlot.playerId].saves++;
+    newEvents.push(push(match, { type: 'save', kind, side: a, playerId: shooter.playerId, otherId: keeperSlot?.playerId ?? null }));
+  } else if (rng.chance(0.06)) {
+    newEvents.push(push(match, { type: 'woodwork', kind, side: a, playerId: shooter.playerId }));
+  } else {
+    newEvents.push(push(match, { type: 'miss', kind, side: a, playerId: shooter.playerId }));
+  }
+}
+
+// ---- 반칙과 카드 ----
+
+function fouls(match, rng, attacking, str, newEvents) {
+  for (let s = 0; s < 2; s++) {
+    const side = match.sides[s];
+    const defending = s !== attacking;
+    const p = 0.105 * PRESSING_FOULS[side.tactics.pressing] * (defending ? 1.4 : 0.6);
+    if (!rng.chance(p)) continue;
+    // 경고를 받은 선수는 조심해서 반칙을 덜 한다
+    const fouler = pickPlayer(rng, active(side), (slot) => {
+      const at = match.players[slot.playerId].attrs;
+      return (ROLES[slot.role].defend + 0.15) * (1.4 - at.tackling / 20) * (slot.yellow ? 0.35 : 1);
+    });
+    if (!fouler) continue;
+    side.fouls++;
+    const st = match.stats[fouler.playerId];
+
+    if (rng.chance(0.003)) {
+      sendOff(match, s, fouler, st, false, newEvents);
+    } else if (rng.chance(fouler.yellow ? 0.09 : 0.15)) {
+      if (fouler.yellow >= 1) {
+        fouler.yellow++;
+        st.yellow++;
+        sendOff(match, s, fouler, st, true, newEvents);
+      } else {
+        fouler.yellow++;
+        st.yellow++;
+        newEvents.push(push(match, { type: 'yellow', side: s, playerId: fouler.playerId }));
+      }
+    }
+
+    // 수비 중 페널티 박스 안 반칙 → 페널티킥
+    if (defending && rng.chance(0.016)) {
+      const opp = 1 - s;
+      const takers = active(match.sides[opp]).filter((x) => x.pos !== 'GK');
+      const chosen = takers.find((x) => x.playerId === match.sides[opp].setPieceTaker)
+        ?? takers.slice().sort((x, y) => penaltySkill(match, y) - penaltySkill(match, x))[0];
+      if (chosen) {
+        newEvents.push(push(match, { type: 'penalty', side: opp, playerId: chosen.playerId, otherId: fouler.playerId }));
+        shot(match, rng, opp, s, chosen, 'penalty', penaltySkill(match, chosen), str, newEvents, takers);
+      }
+    }
+  }
+}
+
+function penaltySkill(match, slot) {
+  const at = match.players[slot.playerId].attrs;
+  return (at.finishing + at.composure * 2) / 3;
+}
+
+function sendOff(match, s, slot, st, secondYellow, newEvents) {
+  slot.sentOff = true;
+  st.red = true;
+  st.secondYellow = secondYellow;
+  st.minuteOff = match.minute;
+  newEvents.push(push(match, { type: secondYellow ? 'secondYellow' : 'red', side: s, playerId: slot.playerId }));
+}
+
+// ---- 체력과 교체 ----
+
+function drainEnergy(match) {
+  for (const side of match.sides) {
+    const pressing = PRESSING_ENERGY[side.tactics.pressing];
+    for (const slot of side.onPitch) {
+      if (slot.sentOff) continue;
+      const stamina = match.players[slot.playerId].attrs.stamina;
+      slot.energy = Math.max(0, slot.energy - 0.3 * (1.25 - (stamina / 20) * 0.5) * pressing);
+    }
+  }
+}
+
+export function substitute(match, s, outId, inId) {
+  const side = match.sides[s];
+  if (side.subsUsed >= side.maxSubs) return { ok: false, reason: '교체 횟수를 모두 썼습니다.' };
+  const slot = side.onPitch.find((x) => x.playerId === outId && !x.sentOff);
+  if (!slot) return { ok: false, reason: '그 선수는 경기장에 없습니다.' };
+  if (!side.bench.includes(inId)) return { ok: false, reason: '그 선수는 교체 명단에 없습니다.' };
+
+  side.bench = side.bench.filter((id) => id !== inId);
+  side.used.push(outId);
+  side.subsUsed++;
+  match.stats[outId].minuteOff = match.minute;
+  match.stats[inId].minuteOn = match.minute;
+  slot.playerId = inId;
+  slot.energy = 100;
+  slot.yellow = 0;
+  const ev = push(match, { type: 'sub', side: s, playerId: inId, otherId: outId });
+  return { ok: true, event: ev };
+}
+
+function autoSubs(match, rng, newEvents) {
+  if (match.minute < 58) return;
+  match.sides.forEach((side, s) => {
+    if (!side.auto || side.subsUsed >= side.maxSubs || side.bench.length === 0) return;
+    // 58분부터 분마다 확률적으로 한 명씩 교체한다. 경기당 평균 3~4명
+    const p = match.minute >= 75 ? 0.13 : 0.09;
+    if (!rng.chance(p)) return;
+    const outfield = active(side).filter((x) => x.pos !== 'GK');
+    // 체력이 가장 떨어진 선수, 경고를 받은 수비수를 우선 교체한다
+    const tired = outfield
+      .map((x) => ({ x, need: (100 - x.energy) + (x.yellow ? 12 : 0) }))
+      .sort((u, v) => v.need - u.need)[0]?.x;
+    if (!tired) return;
+    const replacement = side.bench
+      .map((id) => match.players[id])
+      .filter((pl) => pl.position !== 'GK')
+      .sort((x, y) => ratingAt(y, tired.pos) - ratingAt(x, tired.pos))[0];
+    if (!replacement) return;
+    const res = substitute(match, s, tired.playerId, replacement.id);
+    if (res.ok) newEvents.push(res.event);
+  });
+}
+
+// AI 팀은 지고 있으면 공격적으로, 리드하면 수비적으로 바꾼다
+function autoMentality(match) {
+  if (match.minute < 70) return;
+  match.sides.forEach((side, s) => {
+    if (!side.auto) return;
+    const diff = side.score - match.sides[1 - s].score;
+    if (diff < 0) side.tactics.mentality = 'attacking';
+    else if (diff === 1 && match.minute >= 80) side.tactics.mentality = 'defensive';
+  });
+}
+
+export function changeTactics(match, s, patch) {
+  const side = match.sides[s];
+  if (patch.formation && patch.formation !== side.tactics.formation) {
+    const slots = FORMATIONS[patch.formation];
+    side.onPitch.forEach((slot, i) => {
+      slot.pos = slots[i];
+      if (!ROLES[slot.role].positions.includes(slot.pos)) slot.role = DEFAULT_ROLE[slot.pos];
+    });
+  }
+  Object.assign(side.tactics, patch);
+  push(match, { type: 'tactics', side: s });
+}
+
+export function changeRole(match, s, playerId, role) {
+  const slot = match.sides[s].onPitch.find((x) => x.playerId === playerId);
+  if (slot && ROLES[role]?.positions.includes(slot.pos)) slot.role = role;
+}
+
+// ---- 진행 ----
+
+function playMinute(match, rng, newEvents) {
+  const str = [
+    teamStrength(match.sides[0], match.players, HOME_BONUS),
+    teamStrength(match.sides[1], match.players, 1),
+  ];
+  const c0 = str[0].control ** POSSESSION_POWER;
+  const c1 = str[1].control ** POSSESSION_POWER;
+  const a = rng.chance(c0 / (c0 + c1)) ? 0 : 1;
+  match.sides[a].possession++;
+
+  if (rng.chance(ATTACK_RATE * str[a].rate)) attack(match, rng, a, 1 - a, str, newEvents);
+  fouls(match, rng, a, str, newEvents);
+  drainEnergy(match);
+  autoSubs(match, rng, newEvents);
+  autoMentality(match);
+}
+
+export function isFinished(match) {
+  return match.phase === 'ft';
+}
+
+// 1분 진행하고 그 사이 생긴 이벤트를 돌려준다
+export function stepMinute(match, rng) {
+  const newEvents = [];
+  if (match.phase === 'pre') {
+    match.added = [rng.int(0, 4), rng.int(2, 7)];
+    match.phase = 'first';
+    newEvents.push(push(match, { type: 'kickoff' }));
+    return newEvents;
+  }
+  if (match.phase === 'ht') {
+    match.phase = 'second';
+    match.minute = 45;
+    newEvents.push(push(match, { type: 'secondHalf' }));
+    return newEvents;
+  }
+  if (match.phase === 'ft') return newEvents;
+
+  match.minute++;
+  playMinute(match, rng, newEvents);
+
+  if (match.phase === 'first' && match.minute >= 45 + match.added[0]) {
+    newEvents.push(push(match, { type: 'halftime' }));
+    match.phase = 'ht';
+  } else if (match.phase === 'second' && match.minute >= 90 + match.added[1]) {
+    match.phase = 'ft';
+    finalize(match, rng);
+    newEvents.push(push(match, { type: 'fulltime' }));
+  }
+  return newEvents;
+}
+
+export function simulateMatch(match, rng) {
+  while (!isFinished(match)) stepMinute(match, rng);
+  return match;
+}
+
+// ---- 경기 후: 출장 시간과 평점 ----
+
+function finalize(match, rng) {
+  const end = match.minute;
+  const [h, a] = [match.sides[0].score, match.sides[1].score];
+  for (const [pid, st] of Object.entries(match.stats)) {
+    if (st.minuteOn === null) continue;
+    if (st.minuteOff === null) st.minuteOff = end;
+    const minutes = Math.max(0, st.minuteOff - st.minuteOn);
+    const p = match.players[pid];
+    const line = p.position === 'GK' ? 'gk' : ['CB', 'LB', 'RB'].includes(p.position) ? 'def' : ['DM', 'CM', 'LM', 'RM', 'AM'].includes(p.position) ? 'mid' : 'att';
+    const scored = st.side === 0 ? h : a;
+    const against = st.side === 0 ? a : h;
+
+    let r = 6.5 + rng.normal(0, 0.3);
+    r += st.goals * 1.0 + st.assists * 0.6 + st.onTarget * 0.1 - (st.shots - st.onTarget) * 0.05;
+    r += st.involvement;
+    r += st.saves * 0.25;
+    if (line === 'gk') r -= st.conceded * 0.45;
+    else if (line === 'def') r -= st.conceded * 0.25;
+    else if (line === 'mid') r -= st.conceded * 0.1;
+    if (st.conceded === 0 && minutes >= 60) r += line === 'gk' || line === 'def' ? 0.6 : line === 'mid' ? 0.2 : 0;
+    r += scored > against ? 0.35 : scored < against ? -0.35 : 0;
+    r -= st.yellow > 0 && !st.secondYellow ? 0.3 : 0;
+    if (st.red) r -= st.secondYellow ? 1.2 : 1.5;
+    if (minutes < 20) r = 6.5 + (r - 6.5) * 0.6;
+    st.minutes = minutes;
+    st.rating = Math.round(clamp(r, 3, 10) * 10) / 10;
+  }
+}
+
+// 경기 결과 요약 (fixture에 저장할 내용)
+export function summarize(match) {
+  return {
+    home: match.sides[0].score,
+    away: match.sides[1].score,
+    events: match.events
+      .filter((e) => ['goal', 'yellow', 'secondYellow', 'red', 'sub'].includes(e.type))
+      .map(({ minute, clock, type, kind, side, playerId, assistId, otherId }) => ({ minute, clock, type, kind, side, playerId, assistId, otherId })),
+    stats: match.sides.map((s) => ({ shots: s.shots, onTarget: s.onTarget, fouls: s.fouls, possession: s.possession })),
+  };
+}
+

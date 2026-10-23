@@ -11,6 +11,11 @@ export const SQUAD_TEMPLATE = {
   GK: 3, CB: 4, LB: 2, RB: 2, DM: 2, CM: 3, LM: 1, RM: 1, AM: 2, LW: 1, RW: 1, ST: 3,
 };
 
+// AI 구단 포메이션 선택 비율
+const FORMATION_POPULARITY = {
+  '4-2-3-1': 6, '4-3-3': 6, '4-4-2': 4, '3-5-2': 2, '3-4-3': 2, '4-1-4-1': 2, '5-3-2': 1, '4-1-2-1-2': 1, '4-5-1': 1,
+};
+
 const CLUB_COLORS = ['#c8102e', '#034694', '#6cabdd', '#fdb913', '#132257', '#ffffff', '#000000', '#7a263a',
   '#00a650', '#ef0107', '#1b458f', '#f78f1e', '#670e36', '#95bfe5', '#ee2737', '#241f20'];
 
@@ -190,7 +195,7 @@ export function generateLeague(rng, rule, { seasonStart, clubStartId = 1, player
       players.push(player);
     }
     club.reputation = Math.round(club.level);
-    club.tactics = defaultTactics();
+    club.tactics = { ...defaultTactics(), formation: rng.weighted(Object.keys(FORMATION_POPULARITY), (f) => FORMATION_POPULARITY[f]) };
   }
   return { clubs, players };
 }
