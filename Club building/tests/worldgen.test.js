@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Rng } from '../js/core/rng.js';
-import { generateLeague, SQUAD_TEMPLATE } from '../js/core/worldgen.js';
-import { PREMIER_LEAGUE, ENGLAND_CITIES } from '../js/data/england.js';
+import { generateLeague, generateWorld, SQUAD_TEMPLATE } from '../js/core/worldgen.js';
+import { LEAGUES, COUNTRIES } from '../js/data/countries/index.js';
 import { overall, ageOn } from '../js/core/player.js';
 import { autoLineup } from '../js/core/tactics.js';
 import { FORMATIONS } from '../js/data/formations.js';
+
+const PREMIER_LEAGUE = LEAGUES.ENG1;
 
 const SEASON_START = '2026-07-01';
 const make = (seed) => generateLeague(Rng.fromSeed(seed), PREMIER_LEAGUE, { seasonStart: SEASON_START });
@@ -17,15 +19,29 @@ test('리그 규칙대로 구단 20개, 구단마다 25명', () => {
   assert.equal(players.length, 500);
 });
 
-test('구단 이름은 겹치지 않고 실제 구단 이름을 피한다', () => {
-  for (const seed of ['a', 'b', 'c', 'd', 'e']) {
-    const { clubs } = make(seed);
-    assert.equal(new Set(clubs.map((c) => c.name)).size, clubs.length);
-    for (const city of ENGLAND_CITIES) {
-      for (const suffix of city.avoid) {
-        assert.ok(!clubs.some((c) => c.name === `${city.name} ${suffix}`), `${city.name} ${suffix}`);
-      }
-    }
+test('5개 나라 1~3부 전체: 리그별 팀 수, 이름 중복 없음, 실제 구단 이름 피함', () => {
+  const { clubs, players } = generateWorld(Rng.fromSeed('w'), { seasonStart: SEASON_START });
+  for (const rule of Object.values(LEAGUES)) {
+    assert.equal(clubs.filter((c) => c.leagueId === rule.id).length, rule.teams, rule.id);
+  }
+  assert.equal(new Set(clubs.map((c) => c.name)).size, clubs.length);
+  assert.equal(new Set(players.map((p) => p.id)).size, players.length);
+  for (const country of Object.values(COUNTRIES)) {
+    const real = new Set(country.realNames);
+    for (const c of clubs.filter((x) => x.country === country.code)) assert.ok(!real.has(c.name), c.name);
+  }
+});
+
+test('윗 리그일수록 강하다', () => {
+  const { clubs, players } = generateWorld(Rng.fromSeed('w'), { seasonStart: SEASON_START });
+  const byId = Object.fromEntries(players.map((p) => [p.id, p]));
+  const avg = (leagueId) => {
+    const xs = clubs.filter((c) => c.leagueId === leagueId).flatMap((c) => c.squad.map((id) => overall(byId[id])));
+    return xs.reduce((s, x) => s + x, 0) / xs.length;
+  };
+  for (const code of Object.keys(COUNTRIES)) {
+    assert.ok(avg(`${code}1`) > avg(`${code}2`) + 4, code);
+    assert.ok(avg(`${code}2`) > avg(`${code}3`) + 4, code);
   }
 });
 

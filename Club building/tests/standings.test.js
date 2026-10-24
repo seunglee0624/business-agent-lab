@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeStandings } from '../js/core/standings.js';
-import { PREMIER_LEAGUE } from '../js/data/england.js';
+import { LEAGUES } from '../js/data/countries/index.js';
+
+const PREMIER_LEAGUE = LEAGUES.ENG1;
 
 const fx = (date, home, away, h, a) => ({ date, home, away, result: h === null ? null : { home: h, away: a } });
 

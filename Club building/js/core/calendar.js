@@ -62,30 +62,32 @@ export function internationalBreakSaturdays(startYear) {
   ];
 }
 
-// 리그 경기일 count개. 주말(토요일) 위주로 배치하고, 모자라면 주중(수요일)을 더한다.
+// 고르게 흩어진 k개를 고른다 (처음과 끝 포함)
+function spread(list, k) {
+  if (k >= list.length) return list.slice();
+  if (k <= 1) return list.slice(0, k);
+  const out = [];
+  for (let i = 0; i < k; i++) out.push(list[Math.round((i * (list.length - 1)) / (k - 1))]);
+  return out;
+}
+
+// 리그 경기일 count개. 토요일 위주로 배치하고, 모자라면 A매치 주간이 아닌 화요일을 고르게 더한다.
+// 토요일이 남으면 고르게 비운다 (18팀 리그 등)
 export function leagueMatchDates(startYear, count) {
   const first = nextWeekday(`${startYear}-08-15`, 6);
   const last = nextWeekday(`${startYear + 1}-05-17`, 6);
-  const breaks = new Set(internationalBreakSaturdays(startYear));
+  const breaks = internationalBreakSaturdays(startYear);
+  const breakSet = new Set(breaks);
 
   const saturdays = [];
   for (let d = first; d <= last; d = addDays(d, 7)) {
-    if (!breaks.has(d)) saturdays.push(d);
+    if (!breakSet.has(d)) saturdays.push(d);
   }
+  if (count <= saturdays.length) return spread(saturdays, count);
 
-  const midweekCandidates = [
-    nextWeekday(`${startYear}-12-27`, 3),
-    nthWeekdayOfMonth(startYear, 12, 3, 1),
-    nthWeekdayOfMonth(startYear + 1, 2, 3, 2),
-    lastWeekdayOfMonth(startYear + 1, 4, 3),
-    nthWeekdayOfMonth(startYear, 10, 3, 4),
-    nthWeekdayOfMonth(startYear + 1, 1, 3, 3),
-  ];
-
-  let dates = saturdays.slice(0, count);
-  for (const d of midweekCandidates) {
-    if (dates.length >= count) break;
-    dates.push(d);
+  const tuesdays = [];
+  for (let d = nextWeekday(addDays(first, 1), 2); d < last; d = addDays(d, 7)) {
+    if (!breaks.some((b) => Math.abs(daysBetween(b, d)) <= 4)) tuesdays.push(d);
   }
-  return dates.sort();
+  return [...saturdays, ...spread(tuesdays, count - saturdays.length)].sort();
 }

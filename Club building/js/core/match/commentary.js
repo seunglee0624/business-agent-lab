@@ -51,6 +51,7 @@ const T = {
   secondYellow: ['{player}, 두 번째 경고로 퇴장당합니다!', '경고 누적! {player:가} 그라운드를 떠납니다.'],
   red: ['레드카드! {player:가} 퇴장당합니다!', '다이렉트 퇴장! {player}의 위험한 반칙입니다.'],
   sub: ['{team} 교체: {other} 나가고 {player} 들어갑니다.'],
+  injury: ['{player:가} 쓰러졌습니다. 부상으로 더 뛸 수 없을 것 같습니다.', '아, {player:가} 다리를 붙잡고 주저앉습니다. 부상입니다.'],
   tactics: ['{team:가} 전술을 바꿉니다.'],
 };
 

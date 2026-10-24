@@ -1,0 +1,302 @@
+// 시즌 종료 처리와 새 시즌 준비:
+// 기록 보관 → 승강 → 은퇴 → 유스 정리 → 선수단 채우기 → 새 일정
+
+import { COUNTRIES, LEAGUES, BOTTOM_TIER } from '../data/countries/index.js';
+import { leagueMatchDates, seasonStart } from './calendar.js';
+import { generateLeagueFixtures } from './schedule.js';
+import { generatePromotedClub, generatePlayer, SQUAD_TEMPLATE } from './worldgen.js';
+import { overall, ageOn } from './player.js';
+import { resetSeasonYellows } from './discipline.js';
+import { retirementChance, isHomegrownYouth } from './development.js';
+import { withParticle } from './korean.js';
+import { addMessage, standings, topScorers, clubStrength } from './state.js';
+
+export const RETURN_CHANCE = 0.3;
+export const RETURN_AFTER_SEASONS = 2;
+const POSITIONS = Object.keys(SQUAD_TEMPLATE);
+
+export function newCompetitions(rng, state, season) {
+  const competitions = {};
+  for (const rule of Object.values(LEAGUES)) {
+    const clubIds = Object.values(state.clubs).filter((c) => c.status === 'active' && c.leagueId === rule.id).map((c) => c.id);
+    const dates = leagueMatchDates(season, (rule.teams - 1) * 2);
+    competitions[rule.id] = {
+      id: rule.id,
+      ruleId: rule.id,
+      name: rule.name,
+      season,
+      clubIds,
+      fixtures: generateLeagueFixtures(rng, rule.id, clubIds, dates),
+    };
+  }
+  return competitions;
+}
+
+// 1. 지난 시즌 요약을 history에 남긴다
+function recordHistory(state) {
+  const entry = { season: state.season, leagues: {} };
+  for (const comp of Object.values(state.competitions)) {
+    const table = standings(state, comp.id);
+    const [top] = topScorers(state, comp.id, 1);
+    entry.leagues[comp.id] = {
+      table: table.map((r) => ({ ...r, name: state.clubs[r.clubId].name })),
+      champion: table[0].clubId,
+      topScorer: top ? { playerId: top.player.id, name: top.player.name, clubId: top.player.clubId, goals: top.s.goals } : null,
+    };
+    table.forEach((r, i) => {
+      state.clubs[r.clubId].history.push({ season: state.season, leagueId: comp.id, position: i + 1, points: r.points });
+    });
+  }
+  state.history.push(entry);
+  return entry;
+}
+
+// 2. 승강. 돌려주는 값: 이동 목록 [{ clubId, from, to }] (to가 null이면 보관)
+function promoteAndRelegate(state, rng) {
+  const moves = [];
+  for (const country of Object.values(COUNTRIES)) {
+    const tables = Object.fromEntries(country.leagues.map((l) => [l.tier, standings(state, l.id)]));
+    for (const rule of country.leagues) {
+      const table = tables[rule.tier];
+      const below = country.leagues.find((l) => l.tier === rule.tier + 1);
+      if (below) {
+        for (const r of table.slice(-rule.relegated)) moves.push({ clubId: r.clubId, from: rule.id, to: below.id });
+        for (const r of tables[below.tier].slice(0, below.promoted)) moves.push({ clubId: r.clubId, from: below.id, to: rule.id });
+      } else if (rule.tier === BOTTOM_TIER) {
+        for (const r of table.slice(-rule.relegated)) moves.push({ clubId: r.clubId, from: rule.id, to: null });
+      }
+    }
+  }
+  for (const m of moves) {
+    const club = state.clubs[m.clubId];
+    if (m.to) {
+      club.leagueId = m.to;
+    } else {
+      club.status = 'archived';
+      club.leagueId = null;
+      club.archivedSeason = state.season;
+    }
+  }
+  return moves;
+}
+
+// 3. 3부 빈자리를 보관 구단(30%) 또는 새 구단으로 채운다
+function fillBottomTier(state, rng, moves) {
+  const added = [];
+  const usedNames = new Set(Object.values(state.clubs).map((c) => c.name));
+  for (const country of Object.values(COUNTRIES)) {
+    const rule = country.leagues.find((l) => l.tier === BOTTOM_TIER);
+    const needed = moves.filter((m) => m.from === rule.id && m.to === null).length;
+    const takenCities = new Map();
+    for (const c of Object.values(state.clubs)) {
+      if (c.country === country.code && c.status === 'active') takenCities.set(c.city, (takenCities.get(c.city) ?? 0) + 1);
+    }
+    for (let i = 0; i < needed; i++) {
+      const eligible = Object.values(state.clubs).filter((c) => c.status === 'archived' && c.country === country.code
+        && state.season - c.archivedSeason >= RETURN_AFTER_SEASONS);
+      if (eligible.length && rng.chance(RETURN_CHANCE)) {
+        const club = rng.pick(eligible);
+        club.status = 'active';
+        club.leagueId = rule.id;
+        club.archivedSeason = null;
+        club.tier = 'weak';
+        club.level = rule.tierLevel.weak;
+        refreshReturningSquad(state, rng, club);
+        added.push({ club, returned: true });
+      } else {
+        const { club, players } = generatePromotedClub(rng, country, rule, {
+          ids: state.ids, usedNames, takenCities, seasonStart: seasonStart(state.season + 1),
+        });
+        state.clubs[club.id] = club;
+        for (const p of players) state.players[p.id] = p;
+        added.push({ club, returned: false });
+      }
+    }
+  }
+  return added;
+}
+
+// 돌아오는 보관 구단: 3부 약팀 기준보다 크게 약한 선수는 내보낸다 (빈자리는 fillSquads가 채운다)
+function refreshReturningSquad(state, rng, club) {
+  const floor = club.level - 10;
+  for (const id of club.squad.slice()) {
+    const p = state.players[id];
+    if (overall(p) < floor) release(state, club, p);
+  }
+}
+
+function release(state, club, p) {
+  club.squad = club.squad.filter((id) => id !== p.id);
+  club.youth = club.youth.filter((id) => id !== p.id);
+  p.lastClubId = club.id;
+  p.clubId = null;
+  if (club.tactics.lineup) club.tactics.lineup = null;
+}
+
+// 4. 은퇴: 시즌 끝 기준 나이로 판정
+function retirements(state, rng, date) {
+  const retired = [];
+  for (const club of Object.values(state.clubs)) {
+    for (const id of club.squad.slice()) {
+      const p = state.players[id];
+      if (rng.chance(retirementChance(ageOn(p, date), overall(p)))) {
+        release(state, club, p);
+        p.retired = true;
+        // 은퇴한 선수는 기록만 남긴다
+        delete p.attrs;
+        delete p.progress;
+        delete p.secondary;
+        delete p.injury;
+        retired.push(p);
+      }
+    }
+  }
+  return retired;
+}
+
+export const YOUTH_CAP = 14;
+
+// 5. 21세가 넘었는데 1군에 못 올라간 유스, 그리고 정원(14명)을 넘는 유스는 잠재력 낮은 순으로 방출한다
+// (1군 경기 기록이 없으므로 지운다). 선수단 채우기가 끝난 뒤에 부른다.
+function releaseYouth(state, date) {
+  const released = [];
+  for (const club of Object.values(state.clubs)) {
+    const youth = club.youth.map((id) => state.players[id]);
+    const keep = youth
+      .filter((p) => ageOn(p, date) <= 21)
+      .sort((a, b) => b.potential - a.potential)
+      .slice(0, YOUTH_CAP);
+    for (const p of youth) {
+      if (keep.includes(p)) continue;
+      release(state, club, p);
+      delete state.players[p.id];
+      released.push(p);
+    }
+  }
+  return released;
+}
+
+// 6. 포지션별 빈자리를 유스 → 자유계약 선수 순으로 채워 25명을 맞춘다
+export function fillSquads(state, rng, clubs, date) {
+  const report = new Map();
+  for (const club of clubs) {
+    const log = { promoted: [], signed: [] };
+    const counts = Object.fromEntries(POSITIONS.map((p) => [p, 0]));
+    for (const id of club.squad) counts[state.players[id].position]++;
+    for (const pos of POSITIONS) {
+      while (counts[pos] < SQUAD_TEMPLATE[pos] && registeredCount(state, club, date) < 25) {
+        const youth = club.youth
+          .map((id) => state.players[id])
+          .filter((p) => p.position === pos)
+          .sort((a, b) => overall(b) - overall(a))[0];
+        if (youth && overall(youth) >= club.level - 18) {
+          club.youth = club.youth.filter((id) => id !== youth.id);
+          club.squad.push(youth.id);
+          log.promoted.push(youth);
+        } else {
+          const age = Math.max(19, Math.min(31, Math.round(rng.normal(24, 3))));
+          const p = generatePlayer(rng, {
+            id: `p${state.ids.player++}`, pos, target: club.level - 4 + rng.normal(0, 3), age,
+            country: club.country, seasonStart: seasonStart(state.season + 1),
+          });
+          p.clubId = club.id;
+          state.players[p.id] = p;
+          club.squad.push(p.id);
+          log.signed.push(p);
+        }
+        counts[pos]++;
+      }
+    }
+    report.set(club.id, log);
+  }
+  return report;
+}
+
+export function registeredCount(state, club, date) {
+  return club.squad.filter((id) => !isHomegrownYouth(state.players[id], date)).length;
+}
+
+// 7. 구단 수준과 강팀/중위권/약팀 구분을 새 리그 기준으로 다시 매긴다
+function rerateClubs(state) {
+  for (const rule of Object.values(LEAGUES)) {
+    const clubs = Object.values(state.clubs).filter((c) => c.status === 'active' && c.leagueId === rule.id);
+    const strength = new Map(clubs.map((c) => [c.id, clubStrength(state, c)]));
+    clubs.sort((a, b) => strength.get(b.id) - strength.get(a.id)).forEach((c, i) => {
+      c.tier = i < rule.tiers.strong ? 'strong' : i < rule.tiers.strong + rule.tiers.mid ? 'mid' : 'weak';
+      // 실제 전력과 리그 기준값을 반씩 섞는다. 보강 선수·유스 수준이 시즌마다 한쪽으로 흘러가지 않게 고정하는 역할
+      c.level = (strength.get(c.id) + rule.tierLevel[c.tier]) / 2;
+      c.reputation = Math.round((c.reputation * 2 + c.level) / 3);
+    });
+  }
+}
+
+// 지난 시즌 경기 기록은 한 시즌만 더 보관하고, 그 전 시즌 선수 기록 외 세부 기록은 버린다
+function rotateCompetitions(state) {
+  state.previousCompetitions = state.competitions;
+}
+
+// 시즌 종료 처리 전체. 돌려주는 값: 내 구단 관련 요약
+export function processSeasonEnd(state, rng) {
+  const endDate = `${state.season + 1}-06-30`;
+  const userId = state.manager.clubId;
+  const userLeague = state.clubs[userId].leagueId;
+  const userTable = standings(state, userLeague);
+  const userPos = userTable.findIndex((r) => r.clubId === userId) + 1;
+
+  recordHistory(state);
+  state.manager.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
+
+  const moves = promoteAndRelegate(state, rng);
+  const added = fillBottomTier(state, rng, moves);
+  const retired = retirements(state, rng, endDate);
+  for (const p of Object.values(state.players)) {
+    if (!p.clubId && !p.retired) delete state.players[p.id]; // 자유계약 선수는 이적이 생기기 전까지 보관하지 않는다
+  }
+  const active = Object.values(state.clubs).filter((c) => c.status === 'active');
+  const fill = fillSquads(state, rng, active, endDate);
+  releaseYouth(state, endDate);
+  rerateClubs(state);
+  resetSeasonYellows(state.discipline);
+  rotateCompetitions(state);
+
+  // 내 구단 메시지
+  const myMove = moves.find((m) => m.clubId === userId);
+  const myRetired = retired.filter((p) => p.lastClubId === userId);
+  const myFill = fill.get(userId);
+  return { userPos, userLeague, move: myMove ?? null, retired: myRetired, fill: myFill, added, moves };
+}
+
+// 새 시즌을 시작한다 (7월 1일, 일정 생성)
+export function startSeason(state, rng) {
+  state.season++;
+  state.competitions = newCompetitions(rng, state, state.season);
+  for (const p of Object.values(state.players)) p.condition = 100;
+}
+
+export function seasonEndMessages(state, summary) {
+  const club = state.clubs[state.manager.clubId];
+  const leagueName = LEAGUES[summary.userLeague].name;
+  if (summary.move?.to === null) {
+    addMessage(state, {
+      title: '감독 계약 종료',
+      body: `${withParticle(club.name, '가')} ${leagueName}에서 강등되어 리그를 떠나게 되었습니다. 새 시즌에 맡을 구단을 골라주세요.`,
+      important: true,
+    });
+  } else if (summary.move) {
+    const up = LEAGUES[summary.move.to].tier < LEAGUES[summary.move.from].tier;
+    addMessage(state, {
+      title: up ? '승격!' : '강등',
+      body: up ? `${withParticle(club.name, '가')} ${withParticle(LEAGUES[summary.move.to].name, '로')} 승격했습니다!` : `${withParticle(club.name, '가')} ${withParticle(LEAGUES[summary.move.to].name, '로')} 강등되었습니다.`,
+      important: true,
+    });
+  }
+  const f = summary.fill;
+  if (summary.retired.length || f?.promoted.length || f?.signed.length) {
+    const parts = [];
+    if (summary.retired.length) parts.push(`은퇴: ${summary.retired.map((p) => p.name).join(', ')}`);
+    if (f?.promoted.length) parts.push(`유스에서 1군 승격: ${f.promoted.map((p) => p.name).join(', ')}`);
+    if (f?.signed.length) parts.push(`빈자리 보강(자유계약): ${f.signed.map((p) => `${p.name}(${p.position})`).join(', ')}`);
+    addMessage(state, { title: '선수단 정리', body: parts.join(' / ') });
+  }
+}
+

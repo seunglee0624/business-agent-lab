@@ -3,7 +3,9 @@
 
 import { Rng } from '../js/core/rng.js';
 import { generateLeague } from '../js/core/worldgen.js';
-import { PREMIER_LEAGUE } from '../js/data/england.js';
+import { LEAGUES } from '../js/data/countries/index.js';
+
+const PREMIER_LEAGUE = LEAGUES.ENG1;
 import { autoLineup } from '../js/core/tactics.js';
 import { overall } from '../js/core/player.js';
 import { createMatch, simulateMatch } from '../js/core/match/engine.js';
@@ -15,7 +17,7 @@ const byId = Object.fromEntries(players.map((p) => [p.id, p]));
 const setup = (c) => ({ clubId: c.id, tactics: c.tactics, ...autoLineup(c.squad.map((i) => byId[i]), c.tactics.formation) });
 const xiAvg = Object.fromEntries(clubs.map((c) => [c.id, setup(c).lineup.reduce((s, e) => s + overall(byId[e.playerId]), 0) / 11]));
 
-const t = { n: 0, goals: 0, home: 0, draw: 0, away: 0, shots: 0, onTarget: 0, yellows: 0, reds: 0, pens: 0, penGoals: 0, subs: 0, strongN: 0, strongWins: 0 };
+const t = { injuries: 0, n: 0, goals: 0, home: 0, draw: 0, away: 0, shots: 0, onTarget: 0, yellows: 0, reds: 0, pens: 0, penGoals: 0, subs: 0, strongN: 0, strongWins: 0 };
 const goalsByPos = {};
 const ratings = [];
 
@@ -40,6 +42,7 @@ for (let k = 0; k < N; k++) {
     if (e.type === 'secondYellow') { t.yellows++; t.reds++; }
     if (e.type === 'red') t.reds++;
     if (e.type === 'penalty') t.pens++;
+    if (e.type === 'injury') t.injuries++;
     if (e.type === 'goal') {
       if (e.kind === 'penalty') t.penGoals++;
       const pos = byId[e.playerId].position;
@@ -64,6 +67,7 @@ console.log(`경기당 경고        ${per(t.yellows)}`);
 console.log(`경기당 퇴장        ${per(t.reds)}`);
 console.log(`경기당 페널티킥    ${per(t.pens)} (성공률 ${pct(t.penGoals, t.pens)})`);
 console.log(`팀당 교체          ${(t.subs / t.n / 2).toFixed(2)}`);
+console.log(`팀당 경기 중 부상  ${(t.injuries / t.n / 2).toFixed(3)}`);
 console.log(`강팀 승률 (7 이상)  ${pct(t.strongWins, t.strongN)} (${t.strongN}경기)`);
 console.log(`평균 평점          ${(ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(2)}`);
 console.log('포지션별 득점      ' + Object.entries(goalsByPos).sort((p, q) => q[1] - p[1]).map(([k, v]) => `${k} ${pct(v, t.goals)}`).join(', '));

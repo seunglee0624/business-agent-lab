@@ -13,27 +13,36 @@ const UNIT_ATTRS = {
 
 const KEEPER_ATTRS = { reflexes: 3, handling: 2, oneOnOne: 2, positioning: 2 };
 
-function weighted(attrs, weights) {
+// 가중치 표를 [키, 가중치] 배열과 합계로 미리 펴 둔다 (경기 중 매 분 계산하므로)
+const flat = (weights) => {
+  const entries = Object.entries(weights);
+  return { entries, total: entries.reduce((s, [, w]) => s + w, 0) };
+};
+const FLAT = {
+  defend: flat(UNIT_ATTRS.defend),
+  control: flat(UNIT_ATTRS.control),
+  create: flat(UNIT_ATTRS.create),
+  finish: flat(UNIT_ATTRS.finish),
+  keeper: flat(KEEPER_ATTRS),
+};
+
+function weighted(attrs, { entries, total }) {
   let s = 0;
-  let t = 0;
-  for (const [k, w] of Object.entries(weights)) {
-    s += attrs[k] * w;
-    t += w;
-  }
-  return s / t;
+  for (const [k, w] of entries) s += attrs[k] * w;
+  return s / total;
 }
 
 export function unitScores(attrs) {
   return {
-    defend: weighted(attrs, UNIT_ATTRS.defend),
-    control: weighted(attrs, UNIT_ATTRS.control),
-    create: weighted(attrs, UNIT_ATTRS.create),
-    finish: weighted(attrs, UNIT_ATTRS.finish),
+    defend: weighted(attrs, FLAT.defend),
+    control: weighted(attrs, FLAT.control),
+    create: weighted(attrs, FLAT.create),
+    finish: weighted(attrs, FLAT.finish),
   };
 }
 
 export function keeperScore(attrs) {
-  return weighted(attrs, KEEPER_ATTRS);
+  return weighted(attrs, FLAT.keeper);
 }
 
 // 체력이 떨어질수록 능력이 떨어진다 (100 → 1.0, 50 → 0.85)
@@ -43,7 +52,11 @@ export function energyFactor(energy) {
 
 // 선수 한 명의 경기 중 효율 (체력 × 포지션 적합도)
 export function playerEfficiency(slot, player) {
-  return energyFactor(slot.energy) * familiarity(player, slot.pos);
+  if (slot.famKey !== `${slot.playerId}|${slot.pos}`) {
+    slot.famKey = `${slot.playerId}|${slot.pos}`;
+    slot.fam = familiarity(player, slot.pos);
+  }
+  return energyFactor(slot.energy) * slot.fam;
 }
 
 const MENTALITY = {
@@ -77,16 +90,16 @@ export function teamStrength(side, players, homeBonus) {
   let backlinePace = 0;
   let backlineCount = 0;
   for (const slot of side.onPitch) {
-    if (slot.sentOff) continue;
+    if (slot.sentOff || slot.injured) continue;
     const p = players[slot.playerId];
     const role = ROLES[slot.role];
     const eff = playerEfficiency(slot, p);
-    const s = unitScores(p.attrs);
+    const s = (p.units ??= unitScores(p.attrs));
     units.defend += role.defend * s.defend * eff;
     units.control += role.control * s.control * eff;
     units.create += role.create * s.create * eff;
     units.finish += role.finish * s.finish * eff;
-    if (slot.pos === 'GK') keeper = keeperScore(p.attrs) * eff;
+    if (slot.pos === 'GK') keeper = (p.keeper ??= keeperScore(p.attrs)) * eff;
     if (slot.pos === 'CB') {
       backlinePace += p.attrs.pace;
       backlineCount++;

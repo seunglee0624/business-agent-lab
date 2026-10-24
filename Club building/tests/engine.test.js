@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Rng } from '../js/core/rng.js';
 import { generateLeague } from '../js/core/worldgen.js';
-import { PREMIER_LEAGUE } from '../js/data/england.js';
+import { LEAGUES } from '../js/data/countries/index.js';
+
+const PREMIER_LEAGUE = LEAGUES.ENG1;
 import { autoLineup } from '../js/core/tactics.js';
 import { overall } from '../js/core/player.js';
 import { createMatch, simulateMatch, stepMinute, substitute, isFinished, summarize } from '../js/core/match/engine.js';

@@ -1,24 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewGame, chooseClub, advance, simulateUserMatch, finishUserMatch, simulateToSeasonEnd, league } from '../js/core/game.js';
+import * as g from '../js/core/game.js';
 import {
-  newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail, seasonEndBanner,
+  newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
+  seasonEndBanner, youthView, historyView, chooseJobView,
 } from '../js/ui/views.js';
 
 const BAD = /undefined|NaN|\[object Object\]|null<\/|>null</;
 
 function renderAll(state, ui = {}) {
+  const club = g.userClub(state);
   const pages = {
     home: homeView(state, ui),
     squad: squadView(state, ui),
-    squadDetail: squadView(state, { ...ui, playerId: state.clubs[state.manager.clubId].squad[0] }),
+    squadDetail: squadView(state, { ...ui, playerId: club.squad[0] }),
     tactics: tacticsView(state, ui),
+    youth: youthView(state, ui),
     schedule: scheduleView(state, ui),
     table: tableView(state, ui),
+    tableOther: tableView(state, { tableLeague: 'GER3' }),
+    history: historyView(state, ui),
     settings: settingsView(state, ui),
   };
   pages.layout = layout(state, { view: 'home' }, pages.home);
-  const played = league(state).fixtures.find((f) => f.result);
+  const played = g.league(state).fixtures.find((f) => f.result);
   if (played) pages.fixture = fixtureDetail(state, played.id);
   return pages;
 }
@@ -31,26 +36,34 @@ function check(pages) {
   }
 }
 
-test('새 게임 화면 (세계 생성 전/후)', () => {
+test('새 게임 화면: 나라·리그를 바꿔 구단을 고른다', () => {
   assert.ok(newGameView(null, {}).includes('세계 생성'));
-  const preview = createNewGame('v');
-  const html = newGameView(null, { preview });
-  assert.equal((html.match(/data-action="pickClub"/g) ?? []).length, 20);
-  assert.ok(!BAD.test(html));
+  const preview = g.createNewGame('v');
+  const count = (html) => (html.match(/data-action="pickClub"/g) ?? []).length;
+  assert.equal(count(newGameView(null, { preview })), 20);
+  assert.equal(count(newGameView(null, { preview, previewLeague: 'ENG2' })), 24);
+  assert.equal(count(newGameView(null, { preview, previewLeague: 'GER1' })), 18);
+  assert.ok(!BAD.test(newGameView(null, { preview, previewLeague: 'FRA3' })));
 });
 
-test('시즌 시작, 중간, 종료 시점에 모든 화면을 그릴 수 있다', () => {
-  const state = createNewGame('v');
-  chooseClub(state, Object.keys(state.clubs)[3], '테스트');
+test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 수 있다', () => {
+  const state = g.createNewGame('v');
+  g.chooseClub(state, Object.values(state.clubs).find((c) => c.leagueId === 'ESP3').id, '테스트');
   check(renderAll(state));
   for (let i = 0; i < 12; i++) {
-    advance(state);
-    simulateUserMatch(state);
-    finishUserMatch(state);
+    g.advance(state);
+    g.simulateUserMatch(state);
+    g.finishUserMatch(state);
   }
   check(renderAll(state));
-  simulateToSeasonEnd(state);
-  const pages = renderAll(state);
-  pages.seasonEnd = seasonEndBanner(state);
-  check(pages);
+  g.simulateToSeasonEnd(state);
+  const end = renderAll(state);
+  end.seasonEnd = seasonEndBanner(state);
+  check(end);
+  g.startNextSeason(state);
+  if (state.phase === 'chooseJob') {
+    check({ job: chooseJobView(state, {}) });
+    g.chooseNewClub(state, g.jobOffers(state)[0].id);
+  }
+  check(renderAll(state));
 });

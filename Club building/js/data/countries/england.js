@@ -1,8 +1,10 @@
 // 잉글랜드: 도시 목록, 구단 이름 패턴, 리그 규칙
 
+import { leagueRule } from './rules.js';
+
 // size: 도시 규모(1~5). 큰 도시일수록 강팀이 될 확률이 높다.
 // avoid: 이 도시와 붙이면 실제 구단 이름이 되는 접미사
-export const ENGLAND_CITIES = [
+const CITIES = [
   { name: '런던', size: 5, avoid: [] },
   { name: '맨체스터', size: 5, avoid: ['유나이티드', '시티'] },
   { name: '리버풀', size: 5, avoid: [] },
@@ -75,25 +77,20 @@ export const ENGLAND_CITIES = [
   { name: '웨이머스', size: 1, avoid: [] },
 ];
 
-export const ENGLAND_SUFFIXES = ['유나이티드', '시티', '타운', '로버스', '애슬레틱', '원더러스', '레인저스', '알비온', '카운티', '스포르팅'];
+const SUFFIXES = ['유나이티드', '시티', '타운', '로버스', '애슬레틱', '원더러스', '레인저스', '알비온', '카운티', '스포르팅'];
 
-// 런던처럼 큰 도시에 여러 구단이 있을 때 쓰는 지역명
-export const ENGLAND_DISTRICTS = {
-  런던: ['노스 런던', '이스트 런던', '사우스 런던', '웨스트 런던', '런던'],
-};
-
-export const PREMIER_LEAGUE = {
-  id: 'ENG1',
-  country: 'ENG',
-  name: '프리미어리그',
-  tier: 1,
-  teams: 20,
-  // 전력 계층 분포: 강팀/중위권/약팀 수
-  tiers: { strong: 3, mid: 10, weak: 7 },
-  // 계층별 주전 평균 능력치(1~100)
-  tierLevel: { strong: 76, mid: 70, weak: 66 },
-  points: { win: 3, draw: 1, loss: 0 },
-  tiebreakers: ['points', 'goalDiff', 'goalsFor'],
-  maxSubs: 5,
-  benchSize: 9,
+export const ENGLAND = {
+  code: 'ENG',
+  name: '잉글랜드',
+  cities: CITIES.map(({ name, size }) => ({ name, size })),
+  // 런던처럼 큰 도시에 여러 구단이 있을 때 쓰는 지역명
+  districts: { 런던: ['노스 런던', '이스트 런던', '사우스 런던', '웨스트 런던', '런던'] },
+  patterns: SUFFIXES.map((s) => `{c} ${s}`),
+  realNames: CITIES.flatMap((c) => c.avoid.map((s) => `${c.name} ${s}`)),
+  nationalities: { ENG: 52, SCO: 6, IRL: 5, ESP: 4, FRA: 6, GER: 3, ITA: 2, POR: 4, NED: 4, BRA: 5, ARG: 3, NGA: 4, KOR: 2, GHA: 2, JPN: 1, BEL: 2, DEN: 1, CIV: 1 },
+  leagues: [
+    leagueRule({ id: 'ENG1', country: 'ENG', tier: 1, name: '프리미어리그', teams: 20, levels: [76, 70, 66] }),
+    leagueRule({ id: 'ENG2', country: 'ENG', tier: 2, name: '챔피언십', teams: 24, levels: [64, 60, 57] }),
+    leagueRule({ id: 'ENG3', country: 'ENG', tier: 3, name: '리그 원', teams: 24, levels: [56, 53, 50] }),
+  ],
 };

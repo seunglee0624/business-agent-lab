@@ -2,16 +2,16 @@
 
 import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
-  simulateToSeasonEnd, userClub,
+  simulateToSeasonEnd, userClub, userLeagueId, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth,
 } from '../core/game.js';
+import { unavailableSet } from '../core/state.js';
 import { autoLineup, resolveLineup } from '../core/tactics.js';
-import { unavailableFor } from '../core/discipline.js';
 import { FORMATIONS } from '../data/formations.js';
 import { DEFAULT_ROLE, ROLES } from '../data/roles.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner,
+  fixtureDetail, seasonEndBanner, chooseJobView, youthView, historyView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 
@@ -51,6 +51,11 @@ export class App {
       this.root.innerHTML = newGameView(s, this.ui);
       return;
     }
+    if (s.phase === 'chooseJob') {
+      this.root.className = 'app newgame-root';
+      this.root.innerHTML = chooseJobView(s, this.ui);
+      return;
+    }
     this.root.className = 'app';
     if (this.ui.view === 'match') {
       this.root.innerHTML = layout(s, this.ui, '');
@@ -62,9 +67,12 @@ export class App {
       });
       return;
     }
-    const views = { home: homeView, squad: squadView, tactics: tacticsView, schedule: scheduleView, table: tableView, settings: settingsView };
+    const views = {
+      home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
+      table: tableView, history: historyView, settings: settingsView,
+    };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
-    if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s) + content;
+    if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
     if (this.ui.fixtureId) content += fixtureDetail(s, this.ui.fixtureId);
     this.root.innerHTML = layout(s, this.ui, content);
   }
@@ -106,6 +114,20 @@ export class App {
     this.render();
   }
 
+  nextSeason() {
+    this.ui.busy = true;
+    this.render();
+    setTimeout(() => {
+      startNextSeason(this.state);
+      this.ui.busy = false;
+      this.ui.view = 'home';
+      this.ui.round = null;
+      this.ui.tableLeague = null;
+      this.persist();
+      this.render();
+    }, 30);
+  }
+
   toSeasonEnd() {
     if (!confirm('내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다. 계속할까요?')) return;
     this.ui.busy = true;
@@ -129,7 +151,7 @@ export class App {
   editLineup(fn) {
     const club = userClub(this.state);
     const t = club.tactics;
-    const current = resolveLineup(club, this.state.players, { unavailable: unavailableFor(this.state.discipline, 'ENG1') });
+    const current = resolveLineup(club, this.state.players, { unavailable: unavailableSet(this.state, userLeagueId(this.state), club) });
     t.lineup = current.lineup.map((e) => (e ? { ...e } : null));
     t.bench = null;
     fn(t);
@@ -182,6 +204,36 @@ export class App {
       case 'toSeasonEnd':
         this.toSeasonEnd();
         break;
+      case 'nextSeason':
+        this.nextSeason();
+        break;
+      case 'previewLeague':
+        this.ui.managerName = this.root.querySelector('#managerName')?.value ?? this.ui.managerName;
+        this.ui.previewLeague = d.league;
+        this.render();
+        break;
+      case 'tableLeague':
+      case 'historyLeague':
+      case 'jobLeague':
+        this.ui[a] = d.league;
+        this.render();
+        break;
+      case 'takeJob':
+        chooseNewClub(s, d.id);
+        this.ui = { view: 'home' };
+        this.persist();
+        this.render();
+        break;
+      case 'callUp':
+        callUpYouth(s, d.id);
+        this.persist();
+        this.render();
+        break;
+      case 'sendDown':
+        sendDownToYouth(s, d.id);
+        this.persist();
+        this.render();
+        break;
       case 'showFixture':
         this.ui.fixtureId = d.id;
         this.render();
@@ -205,7 +257,7 @@ export class App {
       case 'autoLineupNow': {
         const club = userClub(s);
         const squad = club.squad.map((id) => s.players[id]);
-        const { lineup, bench } = autoLineup(squad, club.tactics.formation, { unavailable: unavailableFor(s.discipline, 'ENG1') });
+        const { lineup, bench } = autoLineup(squad, club.tactics.formation, { unavailable: unavailableSet(s, userLeagueId(s), club) });
         club.tactics.lineup = lineup;
         club.tactics.bench = bench;
         this.persist();

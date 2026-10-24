@@ -172,3 +172,19 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
   .grid.two, .grid.two.wide-left, .squad.with-detail, .match-body { grid-template-columns: 1fr; }
   .side { width: 150px; }
 }
+
+/* 2단계: 탭, 순위 구역 */
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.tabs.sub { margin-bottom: 14px; }
+.tab { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.tabs.sub .tab.active { background: var(--accent); border-color: var(--accent); }
+.table tr.zone-europe td:first-child { box-shadow: inset 3px 0 var(--blue); }
+.table tr.zone-up td:first-child { box-shadow: inset 3px 0 var(--accent-2); }
+.table tr.zone-down td:first-child { box-shadow: inset 3px 0 var(--red); }
+.legend { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.legend.zone-europe { background: var(--blue); }
+.legend.zone-up { background: var(--accent-2); }
+.legend.zone-down { background: var(--red); }
+.good { color: var(--accent-2); font-weight: 700; }
+.tag { background: var(--panel-2); }

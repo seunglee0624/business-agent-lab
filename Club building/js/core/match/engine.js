@@ -34,6 +34,7 @@ function buildSide(setup, players, maxSubs) {
       energy: players[entry.playerId].condition,
       yellow: 0,
       sentOff: false,
+      injured: false,
     });
   });
   return {
@@ -65,7 +66,7 @@ function emptyStats(side, started) {
   return {
     side, started, minuteOn: started ? 0 : null, minuteOff: null,
     goals: 0, assists: 0, shots: 0, onTarget: 0, saves: 0, conceded: 0,
-    yellow: 0, red: false, secondYellow: false, involvement: 0, rating: null, energyEnd: null,
+    yellow: 0, red: false, secondYellow: false, injured: false, involvement: 0, rating: null, energyEnd: null,
   };
 }
 
@@ -103,7 +104,7 @@ function push(match, event) {
   return e;
 }
 
-const active = (side) => side.onPitch.filter((s) => !s.sentOff);
+const active = (side) => side.onPitch.filter((s) => !s.sentOff && !s.injured);
 
 function pickPlayer(rng, slots, weightOf) {
   if (slots.length === 0) return null;
@@ -184,7 +185,7 @@ function shot(match, rng, a, d, shooter, kind, quality, str, newEvents, outfield
     st.onTarget++;
     st.goals++;
     if (assistId) match.stats[assistId].assists++;
-    for (const s of def.onPitch) if (!s.sentOff) match.stats[s.playerId].conceded++;
+    for (const s of active(def)) match.stats[s.playerId].conceded++;
     newEvents.push(push(match, { type: 'goal', kind, side: a, playerId: shooter.playerId, assistId: kind === 'penalty' ? null : assistId }));
     return;
   }
@@ -266,7 +267,7 @@ function drainEnergy(match) {
   for (const side of match.sides) {
     const pressing = PRESSING_ENERGY[side.tactics.pressing];
     for (const slot of side.onPitch) {
-      if (slot.sentOff) continue;
+      if (slot.sentOff || slot.injured) continue;
       const stamina = match.players[slot.playerId].attrs.stamina;
       slot.energy = Math.max(0, slot.energy - 0.3 * (1.25 - (stamina / 20) * 0.5) * pressing);
     }
@@ -289,8 +290,43 @@ export function substitute(match, s, outId, inId) {
   slot.playerId = inId;
   slot.energy = 100;
   slot.yellow = 0;
+  slot.injured = false;
   const ev = push(match, { type: 'sub', side: s, playerId: inId, otherId: outId });
   return { ok: true, event: ev };
+}
+
+// ---- 부상 ----
+
+// 선수 1명이 1분에 다칠 확률. 지칠수록 높아진다. 팀당 경기당 약 0.1~0.15건
+const INJURY_RATE = 1.1e-4;
+
+function injuries(match, rng, newEvents) {
+  match.sides.forEach((side, s) => {
+    for (const slot of active(side)) {
+      const p = INJURY_RATE * (1 + (100 - slot.energy) / 60) * (slot.pos === 'GK' ? 0.3 : 1);
+      if (!rng.chance(p)) continue;
+      slot.injured = true;
+      match.stats[slot.playerId].injured = true;
+      match.stats[slot.playerId].minuteOff = match.minute;
+      newEvents.push(push(match, { type: 'injury', side: s, playerId: slot.playerId }));
+    }
+  });
+}
+
+// 자동 교체 팀은 다친 선수를 바로 바꾼다
+function injurySubs(match, newEvents) {
+  match.sides.forEach((side, s) => {
+    if (!side.auto) return;
+    for (const slot of side.onPitch.filter((x) => x.injured)) {
+      if (side.subsUsed >= side.maxSubs) return;
+      const pool = side.bench.map((id) => match.players[id]).filter((pl) => (slot.pos === 'GK') === (pl.position === 'GK'));
+      const replacement = (pool.length ? pool : side.bench.map((id) => match.players[id]))
+        .sort((x, y) => ratingAt(y, slot.pos) - ratingAt(x, slot.pos))[0];
+      if (!replacement) return;
+      const res = substitute(match, s, slot.playerId, replacement.id);
+      if (res.ok) newEvents.push(res.event);
+    }
+  });
 }
 
 function autoSubs(match, rng, newEvents) {
@@ -362,6 +398,8 @@ function playMinute(match, rng, newEvents) {
   const ease = lead >= 3 ? 0.65 : lead >= 2 ? 0.8 : 1;
   if (rng.chance(ATTACK_RATE * str[a].rate * ease)) attack(match, rng, a, 1 - a, str, newEvents);
   fouls(match, rng, a, str, newEvents);
+  injuries(match, rng, newEvents);
+  injurySubs(match, newEvents);
   drainEnergy(match);
   autoSubs(match, rng, newEvents);
   autoMentality(match);
@@ -441,14 +479,22 @@ function finalize(match, rng) {
   }
 }
 
+const SUMMARY_EVENTS = new Set(['goal', 'yellow', 'secondYellow', 'red', 'injury']);
+
 // 경기 결과 요약 (fixture에 저장할 내용)
 export function summarize(match) {
   return {
     home: match.sides[0].score,
     away: match.sides[1].score,
+    // 기록에는 골·카드·부상만 남기고, 빈 값은 저장하지 않는다 (시즌마다 수천 경기가 쌓이므로)
     events: match.events
-      .filter((e) => ['goal', 'yellow', 'secondYellow', 'red', 'sub'].includes(e.type))
-      .map(({ minute, clock, type, kind, side, playerId, assistId, otherId }) => ({ minute, clock, type, kind, side, playerId, assistId, otherId })),
+      .filter((e) => SUMMARY_EVENTS.has(e.type))
+      .map(({ clock, type, kind, side, playerId, assistId }) => {
+        const e = { clock, type, side, playerId };
+        if (type === 'goal' && kind === 'penalty') e.kind = kind;
+        if (assistId) e.assistId = assistId;
+        return e;
+      }),
     stats: match.sides.map((s) => ({ shots: s.shots, onTarget: s.onTarget, fouls: s.fouls, possession: s.possession })),
   };
 }

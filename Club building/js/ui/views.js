@@ -6,10 +6,12 @@ import { ROLES, rolesForPosition } from '../data/roles.js';
 import { ATTRIBUTES, POSITIONS } from '../data/positions.js';
 import { MENTALITIES, PRESSING, TEMPO, LINE, resolveLineup } from '../core/tactics.js';
 import { NATIONS } from '../data/nations.js';
-import { unavailableFor } from '../core/discipline.js';
+import { unavailableSet } from '../core/state.js';
+import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
+import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { standings, topScorers, league, userClub, nextUserFixture, seasonStats, isUnavailable } from '../core/game.js';
+import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, jobOffers, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
 import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass } from './format.js';
 
 const options = (map, current) =>
@@ -17,37 +19,51 @@ const options = (map, current) =>
 
 // ---- 새 게임 ----
 
+// 구단 고르기 표 (새 게임, 계약 종료 후 새 구단)
+function clubPickTable(world, clubs, action, buttonText) {
+  return `<table class="table clickable">
+    <thead><tr><th>구단</th><th>전력</th><th>주전 평균</th><th>최고 선수</th><th>포메이션</th><th></th></tr></thead>
+    <tbody>
+      ${clubs.map((c) => {
+        const best = c.squad.map((id) => world.players[id]).sort((a, b) => overall(b) - overall(a));
+        const xi = best.slice(0, 11).reduce((sum, p) => sum + overall(p), 0) / 11;
+        return `<tr>
+          <td>${clubLabel(c)}</td>
+          <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td>
+          <td>${xi.toFixed(1)}</td>
+          <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
+          <td>${c.tactics.formation}</td>
+          <td><button class="btn primary small" data-action="${action}" data-id="${c.id}">${buttonText}</button></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// 나라 → 리그 탭
+function leagueTabs(selectedLeague, action) {
+  const country = LEAGUES[selectedLeague].country;
+  return `
+    <div class="tabs">${Object.values(COUNTRIES).map((c) => `<button class="tab ${c.code === country ? 'active' : ''}" data-action="${action}" data-league="${c.code}1">${esc(c.name)}</button>`).join('')}</div>
+    <div class="tabs sub">${COUNTRIES[country].leagues.map((l) => `<button class="tab ${l.id === selectedLeague ? 'active' : ''}" data-action="${action}" data-league="${l.id}">${l.tier}부 ${esc(l.name)}</button>`).join('')}</div>`;
+}
+
 export function newGameView(state, ui) {
   const preview = ui.preview;
   let clubList = '';
   if (preview) {
-    const clubs = Object.values(preview.clubs).sort((a, b) => b.level - a.level);
+    const leagueId = ui.previewLeague ?? 'ENG1';
+    const clubs = Object.values(preview.clubs).filter((c) => c.leagueId === leagueId).sort((a, b) => b.level - a.level);
     clubList = `
       <h2>구단 선택</h2>
-      <p class="muted">프리미어리그 20개 구단 중 맡을 구단을 고르세요. 시드: <code>${esc(preview.seed)}</code></p>
-      <table class="table clickable">
-        <thead><tr><th>구단</th><th>전력</th><th>주전 평균</th><th>최고 선수</th><th>포메이션</th><th></th></tr></thead>
-        <tbody>
-          ${clubs.map((c) => {
-            const squad = c.squad.map((id) => preview.players[id]);
-            const best = squad.slice().sort((a, b) => overall(b) - overall(a));
-            const xi = best.slice(0, 11).reduce((s, p) => s + overall(p), 0) / 11;
-            return `<tr>
-              <td>${clubLabel(c)}</td>
-              <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td>
-              <td>${xi.toFixed(1)}</td>
-              <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
-              <td>${c.tactics.formation}</td>
-              <td><button class="btn primary small" data-action="pickClub" data-id="${c.id}">이 구단 맡기</button></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>`;
+      <p class="muted">5개 나라 1~3부, ${Object.keys(preview.clubs).length}개 구단 중 맡을 구단을 고르세요. 시드: <code>${esc(preview.seed)}</code></p>
+      ${leagueTabs(leagueId, 'previewLeague')}
+      ${clubPickTable(preview, clubs, 'pickClub', '이 구단 맡기')}`;
   }
   return `
     <div class="newgame">
       <h1>축구구단 키우기</h1>
-      <p class="muted">가상의 프리미어리그에서 구단을 맡아 2026-27 시즌을 치릅니다.</p>
+      <p class="muted">가상의 유럽 5개 리그에서 구단을 맡아 여러 시즌을 치릅니다. 3부 약팀에서 1부 정상까지 올라가 보세요.</p>
       <div class="card form-row">
         <label>감독 이름 <input id="managerName" value="${esc(ui.managerName ?? '')}" placeholder="이름을 입력하세요" maxlength="20"></label>
         <label>세계 시드 (선택) <input id="seed" value="${esc(ui.seedInput ?? '')}" placeholder="비우면 무작위" maxlength="30"></label>
@@ -59,14 +75,32 @@ export function newGameView(state, ui) {
     </div>`;
 }
 
+// 3부에서 강등되어 계약이 끝났을 때
+export function chooseJobView(state, ui) {
+  const offers = jobOffers(state);
+  const leagueId = ui.jobLeague && LEAGUES[ui.jobLeague].tier === 3 ? ui.jobLeague : `${offers[0] ? state.clubs[offers[0].id].country : 'ENG'}3`;
+  const clubs = offers.filter((c) => c.leagueId === leagueId).sort((a, b) => b.level - a.level);
+  const last = state.manager.history.at(-1);
+  return `
+    <div class="newgame">
+      <h1>감독 계약 종료</h1>
+      <p>${esc(last?.clubName ?? '')}에서의 시즌이 강등으로 끝났습니다. ${state.season}-${String(state.season + 1).slice(2)} 시즌에 맡을 구단을 고르세요.</p>
+      <p class="muted">지금은 모든 나라의 3부 구단을 고를 수 있습니다. 감독 커리어 기록은 이어집니다.</p>
+      <div class="tabs">${Object.values(COUNTRIES).map((c) => `<button class="tab ${`${c.code}3` === leagueId ? 'active' : ''}" data-action="jobLeague" data-league="${c.code}3">${esc(c.name)} ${esc(c.leagues[2].name)}</button>`).join('')}</div>
+      ${clubPickTable(state, clubs, 'takeJob', '이 구단 맡기')}
+    </div>`;
+}
+
 // ---- 공통 틀 ----
 
 const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
   ['tactics', '전술'],
+  ['youth', '유스'],
   ['schedule', '일정'],
   ['table', '순위표'],
+  ['history', '기록'],
   ['settings', '설정'],
 ];
 
@@ -77,7 +111,7 @@ export function layout(state, ui, content) {
   const ended = state.phase === 'seasonEnd';
   return `
     <aside class="side">
-      <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(state.manager.name)} 감독</div></div></div>
+      <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(LEAGUES[club.leagueId].name)}</div><div class="muted small">${esc(state.manager.name)} 감독</div></div></div>
       <nav>
         ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${key === 'home' && unread ? ` <span class="count">${unread}</span>` : ''}</button>`).join('')}
       </nav>
@@ -161,8 +195,11 @@ function inboxList(state) {
 
 // ---- 선수단 ----
 
+const daysLeft = (state, p) => Math.max(1, Math.round((new Date(p.injury.until) - new Date(state.date)) / 86400000));
+
 export function squadView(state, ui) {
   const club = userClub(state);
+  const leagueId = userLeagueId(state);
   const players = club.squad.map((id) => state.players[id]);
   const order = Object.keys(POSITIONS);
   const sort = ui.squadSort ?? 'pos';
@@ -177,13 +214,13 @@ export function squadView(state, ui) {
   return `
     <div class="squad ${selected ? 'with-detail' : ''}">
       <div class="card">
-        <div class="card-head"><h3>선수단 (${players.length}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
+        <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
           <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
           <tbody>
             ${sorted.map((p) => {
-              const s = seasonStats(p, state.season, 'ENG1');
-              const banned = isUnavailable(state, 'ENG1', p.id);
+              const s = seasonStats(p, state.season, leagueId);
+              const banned = state.discipline[leagueId]?.[p.id]?.ban > 0;
               return `<tr class="${ui.playerId === p.id ? 'selected' : ''}" data-action="selectPlayer" data-id="${p.id}">
                 <td>${posLabel(p.position)}${p.secondary.length ? `<span class="muted small"> ${p.secondary.join(' ')}</span>` : ''}</td>
                 <td>${esc(p.name)}</td>
@@ -193,7 +230,7 @@ export function squadView(state, ui) {
                 <td class="muted">${p.potential}</td>
                 <td>${conditionBar(p.condition)}</td>
                 <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
-                <td>${banned ? '<span class="tag red">출전 정지</span>' : ''}</td>
+                <td>${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -207,8 +244,10 @@ const nationName = (code) => NATIONS[code]?.name ?? code;
 
 export function playerDetail(state, p) {
   const groups = { technical: '기술', mental: '정신', physical: '신체', goalkeeping: '골키퍼' };
-  const s = seasonStats(p, state.season, 'ENG1');
-  const record = state.discipline.ENG1?.[p.id];
+  const leagueId = userLeagueId(state);
+  const s = seasonStats(p, state.season, leagueId);
+  const record = state.discipline[leagueId]?.[p.id];
+  const career = Object.entries(p.stats).sort((a, b) => b[0] - a[0]).flatMap(([season, comps]) => Object.entries(comps).map(([comp, x]) => ({ season, comp, x })));
   return `
     <div class="card detail">
       <div class="card-head"><h3>${esc(p.name)}</h3><button class="btn small" data-action="selectPlayer" data-id="">닫기</button></div>
@@ -225,6 +264,8 @@ export function playerDetail(state, p) {
       <h4>이번 시즌</h4>
       <p>${s ? `${s.apps}경기 (선발 ${s.starts}) · ${s.minutes}분 · ${s.goals}골 ${s.assists}도움 · 평점 ${avgRating(s)} · 경고 ${s.yellows} 퇴장 ${s.reds}` : '출전 기록이 없습니다.'}</p>
       ${record ? `<p class="muted">리그 누적 경고 ${record.yellows}장${record.ban ? ` · 출전 정지 ${record.ban}경기 남음` : ''}</p>` : ''}
+      ${p.injury ? `<p class="error">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
+      ${career.length > 1 ? `<h4>통산 기록</h4><table class="table compact">${career.map(({ season, comp, x }) => `<tr><td>${season}-${String(Number(season) + 1).slice(2)}</td><td>${esc(LEAGUES[comp]?.name ?? comp)}</td><td>${x.apps}경기</td><td>${x.goals}골</td><td>${x.assists}도움</td><td>${avgRating(x)}</td></tr>`).join('')}</table>` : ''}
     </div>`;
 }
 
@@ -234,7 +275,8 @@ export function tacticsView(state) {
   const club = userClub(state);
   const t = club.tactics;
   const slots = FORMATIONS[t.formation];
-  const lineup = resolveLineup(club, state.players, { unavailable: unavailableFor(state.discipline, 'ENG1') });
+  const leagueId = userLeagueId(state);
+  const lineup = resolveLineup(club, state.players, { unavailable: unavailableSet(state, leagueId, club) });
   const squad = club.squad.map((id) => state.players[id]);
   const inLineup = new Set(lineup.lineup.filter(Boolean).map((e) => e.playerId));
 
@@ -246,9 +288,9 @@ export function tacticsView(state) {
       <td>${posLabel(pos)}</td>
       <td><select data-change="setSlotPlayer" data-slot="${i}">
         ${candidates.map((p) => {
-          const banned = isUnavailable(state, 'ENG1', p.id);
+          const banned = isUnavailable(state, leagueId, p.id);
           const mark = p.id !== entry?.playerId && inLineup.has(p.id) ? ' (선발)' : '';
-          return `<option value="${p.id}" ${p.id === entry?.playerId ? 'selected' : ''} ${banned ? 'disabled' : ''}>${esc(p.name)} · ${p.position} · ${ratingAt(p, pos)}${banned ? ' · 정지' : ''}${mark}</option>`;
+          return `<option value="${p.id}" ${p.id === entry?.playerId ? 'selected' : ''} ${banned ? 'disabled' : ''}>${esc(p.name)} · ${p.position} · ${ratingAt(p, pos)}${banned ? (p.injury ? ' · 부상' : ' · 정지') : ''}${mark}</option>`;
         }).join('')}
       </select></td>
       <td><select data-change="setSlotRole" data-slot="${i}">
@@ -304,7 +346,8 @@ export function scheduleView(state, ui) {
   const club = userClub(state);
   const fixtures = league(state).fixtures;
   const mine = fixtures.filter((f) => f.home === club.id || f.away === club.id);
-  const round = ui.round ?? (nextUserFixture(state)?.round ?? 38);
+  const rounds = Math.max(...fixtures.map((f) => f.round));
+  const round = Math.min(rounds, ui.round ?? (nextUserFixture(state)?.round ?? rounds));
   const roundFixtures = fixtures.filter((f) => f.round === round);
 
   const result = (f) => {
@@ -334,7 +377,7 @@ export function scheduleView(state, ui) {
           <h3>${round}라운드 · ${formatShortDate(roundFixtures[0].date)}</h3>
           <div>
             <button class="btn small" data-action="setRound" data-round="${Math.max(1, round - 1)}" ${round <= 1 ? 'disabled' : ''}>◀</button>
-            <button class="btn small" data-action="setRound" data-round="${Math.min(38, round + 1)}" ${round >= 38 ? 'disabled' : ''}>▶</button>
+            <button class="btn small" data-action="setRound" data-round="${Math.min(rounds, round + 1)}" ${round >= rounds ? 'disabled' : ''}>▶</button>
           </div>
         </div>
         <table class="table compact clickable">
@@ -349,12 +392,13 @@ export function scheduleView(state, ui) {
 
 // 끝난 경기 기록 (골, 카드, 평점)
 export function fixtureDetail(state, fixtureId) {
-  const f = league(state).fixtures.find((x) => x.id === fixtureId);
+  const f = findFixture(state, fixtureId);
   if (!f?.result) return '';
   const name = (id) => esc(state.players[id]?.name ?? '');
   const line = (e) => {
     if (e.type === 'goal') return `⚽ ${e.clock} ${name(e.playerId)}${e.kind === 'penalty' ? ' (PK)' : ''}${e.assistId ? ` <span class="muted">(도움 ${name(e.assistId)})</span>` : ''}`;
     if (e.type === 'yellow') return `<span class="card-y"></span> ${e.clock} ${name(e.playerId)}`;
+    if (e.type === 'injury') return `🚑 ${e.clock} ${name(e.playerId)} <span class="muted">(부상)</span>`;
     if (e.type === 'secondYellow' || e.type === 'red') return `<span class="card-r"></span> ${e.clock} ${name(e.playerId)}${e.type === 'secondYellow' ? ' (경고 2회)' : ''}`;
     return '';
   };
@@ -387,31 +431,104 @@ export function fixtureDetail(state, fixtureId) {
 
 // ---- 순위표 ----
 
-export function tableView(state) {
+export function tableView(state, ui) {
   const club = userClub(state);
-  const table = standings(state);
-  const scorers = topScorers(state, 'ENG1', 10);
+  const leagueId = ui.tableLeague ?? userLeagueId(state);
+  const rule = LEAGUES[leagueId];
+  const table = standings(state, leagueId);
+  const scorers = topScorers(state, leagueId, 10);
   const assists = Object.values(state.players)
-    .map((p) => ({ p, s: seasonStats(p, state.season, 'ENG1') }))
-    .filter((x) => x.s?.assists)
+    .filter((p) => p.stats[state.season]?.[leagueId]?.assists)
+    .map((p) => ({ p, s: p.stats[state.season][leagueId] }))
     .sort((a, b) => b.s.assists - a.s.assists || b.s.goals - a.s.goals)
     .slice(0, 10);
-  const person = (p) => `${esc(p.name)} <span class="muted small">${esc(state.clubs[p.clubId].name)}</span>`;
+  const clubName = (p) => (p.clubId ? state.clubs[p.clubId].name : '');
+  const person = (p) => `${esc(p.name)} <span class="muted small">${esc(clubName(p))}</span>`;
+  // 구역: 1부는 상위 4팀(유럽 대회 예정)과 강등 3팀, 2·3부는 승격 3팀과 강등 3팀
+  const zone = (i) => {
+    if (rule.tier === 1 && i < 4) return 'zone-europe';
+    if (rule.tier > 1 && i < rule.promoted) return 'zone-up';
+    if (i >= table.length - rule.relegated) return 'zone-down';
+    return '';
+  };
   return `
+    ${leagueTabs(leagueId, 'tableLeague')}
     <div class="grid two wide-left">
       <div class="card">
-        <h3>${esc(league(state).name)} ${state.season}-${String(state.season + 1).slice(2)}</h3>
+        <h3>${esc(rule.name)} ${state.season}-${String(state.season + 1).slice(2)}</h3>
         <table class="table compact">
           <thead><tr><th>#</th><th>구단</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득</th><th>실</th><th>득실</th><th>승점</th><th>최근</th></tr></thead>
-          <tbody>${table.map((r, i) => `<tr class="${r.clubId === club.id ? 'mine' : ''} ${i === 3 ? 'line-below' : ''} ${i === table.length - 4 ? 'line-below red' : ''}">
+          <tbody>${table.map((r, i) => `<tr class="${r.clubId === club.id ? 'mine' : ''} ${zone(i)}">
             <td>${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === club.id)}</td>
             <td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td>${r.goalsFor}</td><td>${r.goalsAgainst}</td>
             <td>${r.goalDiff > 0 ? '+' : ''}${r.goalDiff}</td><td><strong>${r.points}</strong></td><td>${formBadges(r.form)}</td></tr>`).join('')}</tbody>
         </table>
+        <p class="muted small">${rule.tier === 1 ? '<span class="legend zone-europe"></span> 상위 4팀' : `<span class="legend zone-up"></span> 승격 ${rule.promoted}팀`} · <span class="legend zone-down"></span> ${rule.tier === 3 ? '하부 리그로 강등' : '강등'} ${rule.relegated}팀</p>
       </div>
       <div>
         <div class="card"><h3>득점 순위</h3><table class="table compact">${scorers.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.player)}</td><td><strong>${x.s.goals}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
         <div class="card"><h3>도움 순위</h3><table class="table compact">${assists.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.p)}</td><td><strong>${x.s.assists}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
+      </div>
+    </div>`;
+}
+
+// ---- 유스 ----
+
+export function youthView(state) {
+  const club = userClub(state);
+  const youth = club.youth.map((id) => state.players[id]).sort((a, b) => b.potential - a.potential);
+  const registered = registeredCount(state, club, state.date);
+  return `
+    <div class="card">
+      <div class="card-head"><h3>U-21 팀 (${youth.length}명)</h3><span class="muted small">1군 등록 ${registered}/${MAX_SQUAD}명</span></div>
+      <p class="muted small">매년 3월 유스가 입단합니다. 21세 이하이고 유스에서 2년 이상 지낸 선수는 1군 등록 인원(25명)에 들어가지 않고 출전할 수 있습니다. 시즌이 끝나면 21세가 넘었거나 정원(14명)을 넘는 유스는 방출됩니다.</p>
+      <table class="table">
+        <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>능력</th><th>잠재</th><th>입단</th><th></th></tr></thead>
+        <tbody>${youth.map((p) => {
+          const homegrown = isHomegrownYouth(p, state.date);
+          return `<tr>
+            <td>${posLabel(p.position)}</td><td>${esc(p.name)}</td><td>${age(p, state.date)}</td><td>${ovrCell(p)}</td>
+            <td><strong>${p.potential}</strong></td><td class="muted small">${formatShortDate(p.youthSince)}${homegrown ? ' · <span class="tag">유스 출신 예외</span>' : ''}</td>
+            <td>${canCallUp(state, p.id) ? `<button class="btn small primary" data-action="callUp" data-id="${p.id}">1군 콜업</button>` : '<span class="muted small">1군 정원 초과</span>'}</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="7" class="muted">유스 선수가 없습니다. 3월에 입단합니다.</td></tr>'}</tbody>
+      </table>
+      ${(() => {
+        const down = club.squad.map((id) => state.players[id]).filter((p) => p.youthSince && age(p, state.date) <= 21);
+        return down.length ? `<h4>U-21 팀으로 내릴 수 있는 1군 선수</h4><p>${down.map((p) => `${posLabel(p.position)} ${esc(p.name)} <button class="btn small" data-action="sendDown" data-id="${p.id}">내리기</button>`).join(' · ')}</p>` : '';
+      })()}
+    </div>`;
+}
+
+// ---- 기록 ----
+
+export function historyView(state, ui) {
+  const career = state.manager.history;
+  const leagueId = ui.historyLeague ?? userLeagueId(state);
+  const club = userClub(state);
+  const seasons = state.history.slice().reverse();
+  const name = (id) => esc(state.clubs[id]?.name ?? '');
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>감독 커리어 · ${esc(state.manager.name)}</h3>
+        ${career.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>구단</th><th>리그</th><th>순위</th></tr></thead><tbody>
+          ${career.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(h.clubName)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td><strong>${h.position}위</strong></td></tr>`).join('')}
+        </tbody></table>` : '<p class="muted">첫 시즌을 마치면 기록이 쌓입니다.</p>'}
+        <h3>${esc(club.name)} 역대 성적</h3>
+        ${club.history.length ? `<table class="table compact"><tbody>${club.history.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td>${h.position}위</td><td>${h.points}점</td></tr>`).join('')}</tbody></table>` : '<p class="muted">기록이 없습니다.</p>'}
+      </div>
+      <div class="card">
+        <h3>역대 우승</h3>
+        ${leagueTabs(leagueId, 'historyLeague')}
+        ${seasons.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>우승</th><th>준우승</th><th>득점왕</th></tr></thead><tbody>
+          ${seasons.map((h) => {
+            const l = h.leagues[leagueId];
+            if (!l) return '';
+            const top = l.topScorer;
+            return `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td><strong>${name(l.champion)}</strong></td><td>${name(l.table[1]?.clubId)}</td><td>${top ? `${esc(top.name)} ${top.goals}골` : '-'}</td></tr>`;
+          }).join('')}
+        </tbody></table>` : '<p class="muted">아직 끝난 시즌이 없습니다.</p>'}
       </div>
     </div>`;
 }
@@ -426,6 +543,7 @@ export const PAUSE_NAMES = {
   drawingAt75: '75분에 비기고 있을 때',
   theirRed: '상대 팀 퇴장',
   lowEnergy: '주전 체력이 크게 떨어졌을 때',
+  injury: '우리 팀 선수 부상 (교체를 맡긴 경우. 직접 교체하면 항상 멈춤)',
 };
 
 export const VIEW_MODES = { result: '결과만', highlights: '하이라이트', full: '전체 중계' };
@@ -460,23 +578,29 @@ export function settingsView(state) {
 
 // ---- 시즌 종료 ----
 
-export function seasonEndBanner(state) {
+export function seasonEndBanner(state, ui = {}) {
   const club = userClub(state);
-  const table = standings(state);
+  const leagueId = userLeagueId(state);
+  const rule = LEAGUES[leagueId];
+  const table = standings(state, leagueId);
   const pos = table.findIndex((r) => r.clubId === club.id) + 1;
-  const [top] = topScorers(state, 'ENG1', 1);
+  const [top] = topScorers(state, leagueId, 1);
   const myBest = club.squad.map((id) => state.players[id])
-    .map((p) => ({ p, s: seasonStats(p, state.season, 'ENG1') }))
+    .map((p) => ({ p, s: seasonStats(p, state.season, leagueId) }))
     .filter((x) => x.s?.ratingCount >= 10)
     .sort((a, b) => b.s.ratingSum / b.s.ratingCount - a.s.ratingSum / a.s.ratingCount)[0];
+  let outcome = '잔류';
+  if (rule.tier > 1 && pos <= rule.promoted) outcome = '<span class="good">승격!</span>';
+  else if (pos > table.length - rule.relegated) outcome = rule.tier === 3 ? '<span class="error">하부 리그로 강등 (감독 계약 종료)</span>' : '<span class="error">강등</span>';
+  else if (pos === 1) outcome = '<span class="good">우승!</span>';
   return `
     <div class="card season-end">
-      <h2>2026-27 시즌 종료</h2>
-      <p>우승: ${clubLabel(state.clubs[table[0].clubId])} (승점 ${table[0].points})</p>
-      <p>우리 팀: <strong>${pos}위</strong> · 승점 ${table[pos - 1].points} · ${table[pos - 1].won}승 ${table[pos - 1].drawn}무 ${table[pos - 1].lost}패</p>
-      ${top ? `<p>득점왕: ${esc(top.player.name)} (${esc(state.clubs[top.player.clubId].name)}) ${top.s.goals}골</p>` : ''}
+      <h2>${state.season}-${String(state.season + 1).slice(2)} 시즌 종료</h2>
+      <p>${esc(rule.name)} 우승: ${clubLabel(state.clubs[table[0].clubId])} (승점 ${table[0].points})</p>
+      <p>우리 팀: <strong>${pos}위</strong> · 승점 ${table[pos - 1].points} · ${table[pos - 1].won}승 ${table[pos - 1].drawn}무 ${table[pos - 1].lost}패 · ${outcome}</p>
+      ${top ? `<p>득점왕: ${esc(top.player.name)} (${esc(top.player.clubId ? state.clubs[top.player.clubId].name : '')}) ${top.s.goals}골</p>` : ''}
       ${myBest ? `<p>우리 팀 최고 평점: ${esc(myBest.p.name)} ${avgRating(myBest.s)}</p>` : ''}
-      <p class="muted small">다음 시즌 진행은 2단계에서 추가됩니다.</p>
-      <button class="btn danger" data-action="newGame">새 게임</button>
+      <p class="muted small">다음 시즌으로 넘어가면 승강, 은퇴, 선수단 정리가 처리되고 7월 1일에 새 시즌이 시작됩니다.</p>
+      <button class="btn primary" data-action="nextSeason" ${ui.busy ? 'disabled' : ''}>다음 시즌 시작 ▶</button>
     </div>`;
 }

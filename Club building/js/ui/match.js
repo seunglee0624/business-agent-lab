@@ -17,7 +17,7 @@ const SPEED = {
 };
 
 const ICON = {
-  goal: '⚽', yellow: '🟨', secondYellow: '🟥', red: '🟥', sub: '🔁', save: '🧤', woodwork: '🥅',
+  injury: '🚑', goal: '⚽', yellow: '🟨', secondYellow: '🟥', red: '🟥', sub: '🔁', save: '🧤', woodwork: '🥅',
   penalty: '❗', halftime: '⏸', fulltime: '🏁', kickoff: '▶', secondHalf: '▶',
 };
 
@@ -202,7 +202,7 @@ export class LiveMatchView {
     const p = this.match.players;
     return `<div class="my-lineup">
       <h4>우리 팀 <span class="muted small">교체 ${side.subsUsed}/${side.maxSubs}</span></h4>
-      ${side.onPitch.map((s) => `<div class="lu ${s.sentOff ? 'off' : ''}">${posLabel(s.pos)} <span>${esc(p[s.playerId].name)}</span>${s.yellow ? '<span class="card-y"></span>' : ''}${s.sentOff ? '<span class="card-r"></span>' : ''}${conditionBar(s.energy)}</div>`).join('')}
+      ${side.onPitch.map((s) => `<div class="lu ${s.sentOff || s.injured ? 'off' : ''}">${posLabel(s.pos)} <span>${esc(p[s.playerId].name)}</span>${s.yellow ? '<span class="card-y"></span>' : ''}${s.sentOff ? '<span class="card-r"></span>' : ''}${s.injured ? '🚑' : ''}${conditionBar(s.energy)}</div>`).join('')}
     </div>`;
   }
 
@@ -214,7 +214,7 @@ export class LiveMatchView {
     return `<div class="card match-panel">
       <h4>교체</h4>
       ${canSub ? `<div class="form-row">
-        <select id="subOut">${side.onPitch.filter((s) => !s.sentOff).map((s) => `<option value="${s.playerId}">${s.pos} ${esc(p[s.playerId].name)} (체력 ${Math.round(s.energy)})</option>`).join('')}</select>
+        <select id="subOut">${side.onPitch.filter((s) => !s.sentOff).sort((a, b) => b.injured - a.injured).map((s) => `<option value="${s.playerId}">${s.pos} ${esc(p[s.playerId].name)} ${s.injured ? '(부상)' : `(체력 ${Math.round(s.energy)})`}</option>`).join('')}</select>
         <span>→</span>
         <select id="subIn">${side.bench.map((id) => `<option value="${id}">${p[id].position} ${esc(p[id].name)}</option>`).join('')}</select>
         <button class="btn primary small" data-m="sub">교체</button>

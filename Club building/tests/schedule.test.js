@@ -26,6 +26,18 @@ test('리그 경기일 38개: 8월~5월, A매치 토요일 제외, 겹치지 않
   }
 });
 
+test('18·22·24팀 리그도 경기일이 겹치지 않고 간격이 3일 이상', () => {
+  for (const count of [34, 42, 46]) {
+    const dates = leagueMatchDates(2026, count);
+    assert.equal(dates.length, count);
+    assert.equal(new Set(dates).size, count);
+    const breaks = new Set(internationalBreakSaturdays(2026));
+    for (const d of dates) assert.ok(!breaks.has(d));
+    for (let i = 1; i < dates.length; i++) assert.ok(daysBetween(dates[i - 1], dates[i]) >= 3, `${count}: ${dates[i - 1]} ${dates[i]}`);
+    assert.ok(dates.at(-1) >= '2027-04-25', `${count}경기 리그가 너무 일찍 끝남 ${dates.at(-1)}`);
+  }
+});
+
 test('대진: 팀당 38경기, 홈 19경기, 모든 팀과 홈·원정 한 번씩', () => {
   const dates = leagueMatchDates(2026, 38);
   const fixtures = generateLeagueFixtures(Rng.fromSeed('s'), 'ENG1', clubIds, dates);

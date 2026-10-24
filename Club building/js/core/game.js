@@ -1,19 +1,28 @@
 // 게임 상태(state)와 진행. 화면은 이 함수들만 호출하고 state를 직접 바꾸지 않는다.
 
-import { Rng, hashSeed } from './rng.js';
-import { generateLeague } from './worldgen.js';
-import { PREMIER_LEAGUE } from '../data/england.js';
-import { leagueMatchDates, seasonStart, daysBetween, formatDate } from './calendar.js';
-import { generateLeagueFixtures } from './schedule.js';
+import { Rng } from './rng.js';
+import { generateWorld, newIds } from './worldgen.js';
+import { LEAGUES } from '../data/countries/index.js';
+import { seasonStart, addDays, formatDate } from './calendar.js';
 import { resolveLineup } from './tactics.js';
+import { ageOn } from './player.js';
 import { createMatch, simulateMatch, summarize, isFinished } from './match/engine.js';
-import { applyMatchDiscipline, unavailableFor } from './discipline.js';
-import { computeStandings } from './standings.js';
+import { applyMatchDiscipline } from './discipline.js';
 import { withParticle } from './korean.js';
+import { assignInjury, healOn, trainingInjuryRoll } from './injury.js';
+import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development.js';
+import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount } from './season.js';
+import {
+  withRng, addMessage, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable,
+  unavailableSet, activeClubs,
+} from './state.js';
 
-export const STATE_VERSION = 1;
+export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage };
+
+export const STATE_VERSION = 2;
 export const START_YEAR = 2026;
-export const RULES = { ENG1: PREMIER_LEAGUE };
+export const MAX_SQUAD = 25;
+export const YOUTH_INTAKE_DAY = '03-15';
 
 export const DEFAULT_SETTINGS = {
   viewMode: 'highlights', // result | highlights | full
@@ -26,66 +35,64 @@ export const DEFAULT_SETTINGS = {
     drawingAt75: false,
     theirRed: false,
     lowEnergy: false,
+    injury: false,
   },
 };
-
-function withRng(state, fn) {
-  const rng = new Rng(state.rngState);
-  const result = fn(rng);
-  state.rngState = rng.state;
-  return result;
-}
 
 // 세계를 만들고 구단 선택 단계의 state를 돌려준다
 export function createNewGame(seed = String(Date.now())) {
   const rng = Rng.fromSeed(seed);
-  const rule = PREMIER_LEAGUE;
   const start = seasonStart(START_YEAR);
-  const { clubs, players } = generateLeague(rng, rule, { seasonStart: start });
-  const dates = leagueMatchDates(START_YEAR, (rule.teams - 1) * 2);
-  const fixtures = generateLeagueFixtures(rng, rule.id, clubs.map((c) => c.id), dates);
-  return {
+  const ids = newIds();
+  const { clubs, players } = generateWorld(rng, { seasonStart: start, ids });
+  const state = {
     version: STATE_VERSION,
     seed: String(seed),
-    rngState: rng.state,
+    rngState: 0,
     season: START_YEAR,
     date: start,
-    phase: 'chooseClub', // chooseClub | season | seasonEnd
+    phase: 'chooseClub', // chooseClub | season | seasonEnd | chooseJob
     manager: null,
     settings: structuredClone(DEFAULT_SETTINGS),
+    ids,
     clubs: Object.fromEntries(clubs.map((c) => [c.id, c])),
     players: Object.fromEntries(players.map((p) => [p.id, p])),
-    competitions: {
-      [rule.id]: { id: rule.id, ruleId: rule.id, name: rule.name, season: START_YEAR, clubIds: clubs.map((c) => c.id), fixtures },
-    },
+    competitions: {},
+    previousCompetitions: null,
+    history: [],
     discipline: {},
     inbox: [],
     liveMatch: null,
   };
+  state.competitions = newCompetitions(rng, state, START_YEAR);
+  state.rngState = rng.state;
+  return state;
 }
 
 export function chooseClub(state, clubId, managerName) {
-  state.manager = { name: managerName, clubId };
+  state.manager = { name: managerName, clubId, history: [] };
   state.phase = 'season';
   const club = state.clubs[clubId];
   addMessage(state, {
     title: `${club.name} 감독 부임`,
-    body: `${managerName} 감독님, ${club.name}에 오신 것을 환영합니다. 2026-27 시즌 개막은 ${formatDate(firstFixture(state).date)}입니다.`,
+    body: `${managerName} 감독님, ${club.name}에 오신 것을 환영합니다. ${LEAGUES[club.leagueId].name} ${state.season}-${String(state.season + 1).slice(2)} 시즌 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
   });
 }
 
-export function addMessage(state, { title, body, important = false }) {
-  state.inbox.unshift({ id: `m${hashSeed(`${state.date}${title}${state.inbox.length}`)}`, date: state.date, title, body, important, read: false });
+// 3부에서 강등되어 계약이 끝난 뒤 새 구단을 고른다
+export function chooseNewClub(state, clubId) {
+  state.manager.clubId = clubId;
+  state.phase = 'season';
+  const club = state.clubs[clubId];
+  addMessage(state, { title: `${club.name} 감독 부임`, body: `새 시즌을 ${club.name}에서 시작합니다.` });
+}
+
+// 강등으로 계약이 끝났을 때 고를 수 있는 구단: 모든 나라의 3부 구단
+export function jobOffers(state) {
+  return activeClubs(state).filter((c) => LEAGUES[c.leagueId].tier === 3);
 }
 
 // ---- 조회 ----
-
-export const userClub = (state) => state.clubs[state.manager?.clubId];
-export const league = (state) => state.competitions.ENG1;
-
-function firstFixture(state) {
-  return league(state).fixtures[0];
-}
 
 export function nextUnplayedDate(state) {
   let next = null;
@@ -114,44 +121,67 @@ export function nextUserFixture(state) {
     .sort((a, b) => (a.date < b.date ? -1 : 1))[0] ?? null;
 }
 
-export function standings(state, compId = 'ENG1') {
-  const comp = state.competitions[compId];
-  return computeStandings(comp.fixtures, comp.clubIds, RULES[comp.ruleId]);
+export function findFixture(state, fixtureId) {
+  for (const comps of [state.competitions, state.previousCompetitions ?? {}]) {
+    for (const comp of Object.values(comps)) {
+      const f = comp.fixtures.find((x) => x.id === fixtureId);
+      if (f) return f;
+    }
+  }
+  return null;
 }
 
-export function seasonStats(player, season, compId) {
-  return player.stats[season]?.[compId] ?? null;
+// ---- 하루 진행 ----
+
+function isOffSeason(date) {
+  return date.slice(5, 7) === '06';
 }
 
-export function topScorers(state, compId = 'ENG1', n = 10) {
-  return Object.values(state.players)
-    .map((p) => ({ player: p, s: seasonStats(p, state.season, compId) }))
-    .filter((x) => x.s && x.s.goals > 0)
-    .sort((a, b) => b.s.goals - a.s.goals || b.s.assists - a.s.assists)
-    .slice(0, n);
-}
-
-export function isUnavailable(state, compId, playerId) {
-  return unavailableFor(state.discipline, compId).has(playerId);
-}
-
-// ---- 진행 ----
-
-// 하루 회복: 체력이 좋을수록 빨리 회복한다
-function recoverDays(state, days) {
-  if (days <= 0) return;
-  for (const p of Object.values(state.players)) {
-    p.condition = Math.min(100, p.condition + days * (4 + p.attrs.stamina * 0.3));
+function dailyTick(state, rng, date) {
+  const userId = state.manager?.clubId;
+  const training = !isOffSeason(date);
+  for (const club of Object.values(state.clubs)) {
+    if (club.status !== 'active') continue;
+    for (const id of club.squad) {
+      const p = state.players[id];
+      if (healOn(p, date)) {
+        if (club.id === userId) addMessage(state, { title: `${p.name} 부상 회복`, body: `${withParticle(p.name, '가')} 부상에서 돌아왔습니다. 경기 감각을 찾는 데 시간이 조금 필요합니다.` });
+      } else if (!p.injury) {
+        p.condition = Math.min(100, p.condition + 4 + p.attrs.stamina * 0.3);
+        if (training && trainingInjuryRoll(rng)) {
+          const inj = assignInjury(rng, p, date, 'training');
+          if (club.id === userId) addMessage(state, { title: `${p.name} 훈련 중 부상`, body: `${inj.name}, 약 ${inj.days}일 결장 예상` });
+        }
+      }
+    }
+  }
+  if (date.endsWith('-01')) monthlyDevelopment(state, rng);
+  if (date.slice(5) === YOUTH_INTAKE_DAY) {
+    for (const club of activeClubs(state)) {
+      const { players, golden } = youthIntake(state, rng, club);
+      if (club.id === userId) {
+        const best = players.slice().sort((a, b) => b.potential - a.potential)[0];
+        addMessage(state, {
+          title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
+          body: `${players.length}명이 U-21 팀에 입단했습니다. 가장 기대되는 선수는 ${best.name}(${best.position}, 잠재 ${best.potential})입니다.`,
+          important: golden,
+        });
+      }
+    }
   }
 }
 
 function moveTo(state, date) {
-  recoverDays(state, daysBetween(state.date, date));
-  state.date = date;
+  withRng(state, (rng) => {
+    while (state.date < date) {
+      state.date = addDays(state.date, 1);
+      dailyTick(state, rng, state.date);
+    }
+  });
 }
 
 // 다음으로 결정이 필요한 순간까지 진행한다.
-// 돌려주는 값: { stop: 'userMatch', fixture } | { stop: 'seasonEnd' }
+// 돌려주는 값: { stop: 'userMatch', fixture } | { stop: 'seasonEnd' } | { stop: 현재 phase }
 export function advance(state) {
   if (state.phase !== 'season') return { stop: state.phase };
   for (;;) {
@@ -167,16 +197,18 @@ export function advance(state) {
   }
 }
 
+// ---- 경기 ----
+
 function matchSetup(state, club, compId, auto, aiTactics) {
-  const rule = RULES[state.competitions[compId].ruleId];
-  const unavailable = unavailableFor(state.discipline, compId);
+  const rule = LEAGUES[state.competitions[compId].ruleId];
+  const unavailable = unavailableSet(state, compId, club);
   const { lineup, bench } = resolveLineup(club, state.players, { unavailable, benchSize: rule.benchSize });
   return { clubId: club.id, tactics: club.tactics, lineup, bench, auto, aiTactics };
 }
 
 function buildMatch(state, fixture, userAuto) {
   const userId = state.manager?.clubId;
-  const rule = RULES[state.competitions[fixture.competitionId].ruleId];
+  const rule = LEAGUES[state.competitions[fixture.competitionId].ruleId];
   const home = state.clubs[fixture.home];
   const away = state.clubs[fixture.away];
   return createMatch({
@@ -224,8 +256,8 @@ export function finishUserMatch(state) {
 }
 
 function playOtherMatches(state, date) {
+  const userId = state.manager?.clubId;
   for (const fixture of fixturesOn(state, date)) {
-    const userId = state.manager?.clubId;
     if (fixture.home === userId || fixture.away === userId) continue;
     const match = buildMatch(state, fixture, true);
     withRng(state, (rng) => simulateMatch(match, rng));
@@ -239,7 +271,7 @@ function applyResult(state, fixture, match) {
   const userId = state.manager?.clubId;
 
   for (const [pid, st] of Object.entries(match.stats)) {
-    if (!st.minutes) continue;
+    if (!st.minutes && !st.injured) continue;
     const p = state.players[pid];
     p.stats[state.season] ??= {};
     const s = (p.stats[state.season][compId] ??= {
@@ -254,7 +286,12 @@ function applyResult(state, fixture, match) {
     if (st.red) s.reds++;
     s.ratingSum += st.rating;
     s.ratingCount++;
+    p.minutesMonth = (p.minutesMonth ?? 0) + st.minutes;
     if (st.energyEnd !== null) p.condition = st.energyEnd;
+    if (st.injured) {
+      const inj = withRng(state, (rng) => assignInjury(rng, p, fixture.date, 'match'));
+      if (p.clubId === userId) addMessage(state, { title: `${p.name} 부상`, body: `${inj.name}, 약 ${inj.days}일 결장 예상 (복귀 예정 ${formatDate(inj.until)})` });
+    }
   }
   fixture.result.ratings = Object.fromEntries(
     Object.entries(match.stats).filter(([, st]) => st.minutes > 0).map(([pid, st]) => [pid, st.rating]),
@@ -272,6 +309,8 @@ function applyResult(state, fixture, match) {
   }
 }
 
+// ---- 시즌 ----
+
 function endSeason(state) {
   if (state.phase === 'seasonEnd') return;
   state.phase = 'seasonEnd';
@@ -280,9 +319,29 @@ function endSeason(state) {
   const champion = state.clubs[table[0].clubId];
   addMessage(state, {
     title: '시즌 종료',
-    body: `${withParticle(champion.name, '가')} 우승했습니다. 우리 팀은 ${pos}위로 시즌을 마쳤습니다.`,
+    body: `${LEAGUES[userLeagueId(state)].name}에서 ${withParticle(champion.name, '가')} 우승했습니다. 우리 팀은 ${pos}위로 시즌을 마쳤습니다.`,
     important: true,
   });
+}
+
+// 시즌 종료 처리 후 7월 1일 새 시즌을 시작한다.
+// 돌려주는 값: 시즌 요약. 내 구단이 리그를 떠났으면 phase가 'chooseJob'이 된다.
+export function startNextSeason(state) {
+  if (state.phase !== 'seasonEnd') throw new Error('시즌이 아직 끝나지 않았습니다.');
+  moveTo(state, `${state.season + 1}-06-30`);
+  const summary = withRng(state, (rng) => processSeasonEnd(state, rng));
+  seasonEndMessages(state, summary);
+  withRng(state, (rng) => startSeason(state, rng));
+  moveTo(state, seasonStart(state.season));
+  const lost = summary.move && summary.move.to === null;
+  state.phase = lost ? 'chooseJob' : 'season';
+  if (!lost) {
+    addMessage(state, {
+      title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
+      body: `${LEAGUES[userLeagueId(state)].name} 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
+    });
+  }
+  return summary;
 }
 
 // 시즌이 끝날 때까지 내 경기도 결과만으로 처리하며 진행한다
@@ -294,3 +353,33 @@ export function simulateToSeasonEnd(state) {
     finishUserMatch(state);
   }
 }
+
+// ---- 유스 ----
+
+export function canCallUp(state, playerId) {
+  const club = userClub(state);
+  const p = state.players[playerId];
+  if (!club.youth.includes(playerId)) return false;
+  return isHomegrownYouth(p, state.date) || registeredCount(state, club, state.date) < MAX_SQUAD;
+}
+
+export function callUpYouth(state, playerId) {
+  if (!canCallUp(state, playerId)) return false;
+  const club = userClub(state);
+  club.youth = club.youth.filter((id) => id !== playerId);
+  club.squad.push(playerId);
+  return true;
+}
+
+export function sendDownToYouth(state, playerId) {
+  const club = userClub(state);
+  const p = state.players[playerId];
+  // 유스 출신 21세 이하만 다시 U-21 팀으로 내릴 수 있다
+  if (!club.squad.includes(playerId) || !p.youthSince || ageOn(p, state.date) > 21) return false;
+  club.squad = club.squad.filter((id) => id !== playerId);
+  club.youth.push(playerId);
+  if (club.tactics.lineup?.some((e) => e?.playerId === playerId)) club.tactics.lineup = null;
+  return true;
+}
+
+export { registeredCount };
