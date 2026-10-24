@@ -20,16 +20,16 @@ export const ROLES = {
   ballWinner: { name: '볼 위닝 미드필더', positions: ['CM', 'DM'], defend: 0.8, control: 0.6, create: 0.15, finish: 0.05, shot: 0.2, assist: 0.2 },
   playmaker: { name: '플레이메이커', positions: ['CM', 'AM'], defend: 0.25, control: 0.8, create: 0.75, finish: 0.15, shot: 0.35, assist: 0.8 },
 
-  attackingMidfielder: { name: '공격형 미드필더', positions: ['AM'], defend: 0.15, control: 0.55, create: 0.75, finish: 0.4, shot: 0.6, assist: 0.7 },
+  attackingMidfielder: { name: '공격형 미드필더', positions: ['AM'], defend: 0.15, control: 0.55, create: 0.75, finish: 0.4, shot: 0.65, assist: 0.7 },
   shadowStriker: { name: '섀도 스트라이커', positions: ['AM'], defend: 0.1, control: 0.35, create: 0.5, finish: 0.75, shot: 0.9, assist: 0.45 },
 
   wideMidfielder: { name: '측면 미드필더', positions: ['LM', 'RM'], defend: 0.45, control: 0.45, create: 0.55, finish: 0.2, shot: 0.35, assist: 0.55 },
   winger: { name: '윙어', positions: ['LM', 'RM', 'LW', 'RW'], defend: 0.2, control: 0.3, create: 0.8, finish: 0.3, shot: 0.45, assist: 0.8 },
   insideForward: { name: '인사이드 포워드', positions: ['LW', 'RW'], defend: 0.15, control: 0.3, create: 0.5, finish: 0.7, shot: 0.85, assist: 0.45 },
 
-  targetMan: { name: '타깃맨', positions: ['ST'], defend: 0.1, control: 0.3, create: 0.35, finish: 0.85, shot: 1, assist: 0.4 },
-  poacher: { name: '포처', positions: ['ST'], defend: 0.05, control: 0.1, create: 0.15, finish: 1, shot: 1.2, assist: 0.2 },
-  advancedForward: { name: '어드밴스드 포워드', positions: ['ST'], defend: 0.1, control: 0.25, create: 0.4, finish: 0.9, shot: 1.05, assist: 0.35 },
+  targetMan: { name: '타깃맨', positions: ['ST'], defend: 0.1, control: 0.3, create: 0.35, finish: 0.85, shot: 0.8, assist: 0.4 },
+  poacher: { name: '포처', positions: ['ST'], defend: 0.05, control: 0.1, create: 0.15, finish: 1, shot: 0.95, assist: 0.2 },
+  advancedForward: { name: '어드밴스드 포워드', positions: ['ST'], defend: 0.1, control: 0.25, create: 0.4, finish: 0.9, shot: 0.85, assist: 0.35 },
 };
 
 // 포지션별 기본 역할 (자동 선발 시 사용)

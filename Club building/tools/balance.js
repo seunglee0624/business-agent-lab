@@ -48,7 +48,7 @@ for (let k = 0; k < N; k++) {
   }
   for (const st of Object.values(m.stats)) if (st.minutes > 0) ratings.push(st.rating);
   const diff = xiAvg[h.id] - xiAvg[a.id];
-  if (Math.abs(diff) > 10) {
+  if (Math.abs(diff) > 7) {
     t.strongN++;
     if ((diff > 0 && x > y) || (diff < 0 && y > x)) t.strongWins++;
   }
@@ -64,6 +64,6 @@ console.log(`경기당 경고        ${per(t.yellows)}`);
 console.log(`경기당 퇴장        ${per(t.reds)}`);
 console.log(`경기당 페널티킥    ${per(t.pens)} (성공률 ${pct(t.penGoals, t.pens)})`);
 console.log(`팀당 교체          ${(t.subs / t.n / 2).toFixed(2)}`);
-console.log(`강팀 승률          ${pct(t.strongWins, t.strongN)} (${t.strongN}경기)`);
+console.log(`강팀 승률 (7 이상)  ${pct(t.strongWins, t.strongN)} (${t.strongN}경기)`);
 console.log(`평균 평점          ${(ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(2)}`);
 console.log('포지션별 득점      ' + Object.entries(goalsByPos).sort((p, q) => q[1] - p[1]).map(([k, v]) => `${k} ${pct(v, t.goals)}`).join(', '));

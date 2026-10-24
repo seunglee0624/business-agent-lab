@@ -91,7 +91,7 @@ export const PREMIER_LEAGUE = {
   // 전력 계층 분포: 강팀/중위권/약팀 수
   tiers: { strong: 3, mid: 10, weak: 7 },
   // 계층별 주전 평균 능력치(1~100)
-  tierLevel: { strong: 78, mid: 70, weak: 65 },
+  tierLevel: { strong: 76, mid: 70, weak: 66 },
   points: { win: 3, draw: 1, loss: 0 },
   tiebreakers: ['points', 'goalDiff', 'goalsFor'],
   maxSubs: 5,

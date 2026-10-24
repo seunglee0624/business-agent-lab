@@ -12,7 +12,7 @@ const ATTACK_RATE = 0.46;
 // 같은 수준의 두 팀이 붙을 때 (창출 / 수비) 비율의 평균. 이 값으로 나눠 1 근처가 되게 한다.
 export const BASE_RATIO = 0.49;
 
-const XG = { big: 0.38, normal: 0.095, header: 0.08, long: 0.034 };
+const XG = { big: 0.4, normal: 0.102, header: 0.085, long: 0.036 };
 const ON_TARGET_IF_MISSED = { big: 0.42, normal: 0.3, header: 0.28, long: 0.24 };
 const ASSIST_CHANCE = { big: 0.85, normal: 0.75, header: 0.95, long: 0.3 };
 
@@ -64,7 +64,7 @@ function emptyStats(side, started) {
   return {
     side, started, minuteOn: started ? 0 : null, minuteOff: null,
     goals: 0, assists: 0, shots: 0, onTarget: 0, saves: 0, conceded: 0,
-    yellow: 0, red: false, secondYellow: false, involvement: 0, rating: null,
+    yellow: 0, red: false, secondYellow: false, involvement: 0, rating: null, energyEnd: null,
   };
 }
 
@@ -114,7 +114,8 @@ function pickPlayer(rng, slots, weightOf) {
 function attack(match, rng, a, d, str, newEvents) {
   const att = match.sides[a];
   const def = match.sides[d];
-  const ratio = str[a].create / Math.max(1, str[d].defend) / BASE_RATIO;
+  // 전력 차가 아주 커도 한쪽이 일방적으로 몰아붙이지 않도록 범위를 제한한다
+  const ratio = clamp(str[a].create / Math.max(1, str[d].defend) / BASE_RATIO, 0.55, 1.8);
   const exposure = str[d].exposure;
   const pShot = clamp(0.5 * ratio ** 1.6 + exposure, 0.12, 0.88);
   const outfield = active(att).filter((s) => s.pos !== 'GK');
@@ -282,6 +283,7 @@ export function substitute(match, s, outId, inId) {
   side.used.push(outId);
   side.subsUsed++;
   match.stats[outId].minuteOff = match.minute;
+  match.stats[outId].energyEnd = Math.round(slot.energy);
   match.stats[inId].minuteOn = match.minute;
   slot.playerId = inId;
   slot.energy = 100;
@@ -354,7 +356,10 @@ function playMinute(match, rng, newEvents) {
   const a = rng.chance(c0 / (c0 + c1)) ? 0 : 1;
   match.sides[a].possession++;
 
-  if (rng.chance(ATTACK_RATE * str[a].rate)) attack(match, rng, a, 1 - a, str, newEvents);
+  // 두 골 이상 앞선 팀은 공격을 늦춘다 (대량 득점 방지)
+  const lead = match.sides[a].score - match.sides[1 - a].score;
+  const ease = lead >= 3 ? 0.65 : lead >= 2 ? 0.8 : 1;
+  if (rng.chance(ATTACK_RATE * str[a].rate * ease)) attack(match, rng, a, 1 - a, str, newEvents);
   fouls(match, rng, a, str, newEvents);
   drainEnergy(match);
   autoSubs(match, rng, newEvents);
@@ -405,6 +410,9 @@ export function simulateMatch(match, rng) {
 
 function finalize(match, rng) {
   const end = match.minute;
+  for (const side of match.sides) {
+    for (const slot of side.onPitch) match.stats[slot.playerId].energyEnd ??= Math.round(slot.energy);
+  }
   const [h, a] = [match.sides[0].score, match.sides[1].score];
   for (const [pid, st] of Object.entries(match.stats)) {
     if (st.minuteOn === null) continue;

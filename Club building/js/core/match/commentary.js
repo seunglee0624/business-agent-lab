@@ -1,24 +1,15 @@
 // 경기 이벤트를 한국어 문자 중계 문장으로 바꾼다.
 // 게임 난수를 쓰지 않도록, 문장 선택은 이벤트 내용으로 정한다 (중계를 보든 안 보든 결과가 같아야 한다).
 
+import { withParticle } from '../korean.js';
+
+export { withParticle };
+
 function choose(templates, event) {
   const key = `${event.minute}|${event.type}|${event.playerId ?? ''}`;
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return templates[h % templates.length];
-}
-
-// 받침 여부에 맞춰 조사를 붙인다. {player:가} → '김민준이' / '해리 케인이'
-const PARTICLES = { 가: ['이', '가'], 는: ['은', '는'], 를: ['을', '를'], 와: ['과', '와'], 로: ['으로', '로'] };
-
-export function withParticle(word, particle) {
-  const pair = PARTICLES[particle];
-  if (!pair || !word) return word + (particle ?? '');
-  const code = word.charCodeAt(word.length - 1) - 0xac00;
-  if (code < 0 || code > 11171) return word + pair[1];
-  const jong = code % 28;
-  if (particle === '로' && jong === 8) return word + '로'; // ㄹ 받침은 '로'
-  return word + (jong ? pair[0] : pair[1]);
 }
 
 const fill = (t, vars) => t.replace(/\{(\w+)(?::(\S+?))?\}/g, (_, k, particle) => {

@@ -100,7 +100,7 @@ test('통계: 평균 득점, 홈 이점, 강팀 우세', () => {
     if (x > y) home++;
     if (y > x) away++;
     const diff = avg[h.id] - avg[a.id];
-    if (Math.abs(diff) > 10) {
+    if (Math.abs(diff) > 7) {
       strongN++;
       if ((diff > 0 && x > y) || (diff < 0 && y > x)) strongWins++;
     }
