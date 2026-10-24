@@ -1,0 +1,482 @@
+// 화면별 HTML. 모든 함수는 (state, ui) → 문자열이고, 상태를 바꾸지 않는다.
+// 버튼은 data-action, 입력은 data-change 속성으로 app.js의 처리 함수와 연결된다.
+
+import { FORMATIONS, FORMATION_KEYS } from '../data/formations.js';
+import { ROLES, rolesForPosition } from '../data/roles.js';
+import { ATTRIBUTES, POSITIONS } from '../data/positions.js';
+import { MENTALITIES, PRESSING, TEMPO, LINE, resolveLineup } from '../core/tactics.js';
+import { NATIONS } from '../data/nations.js';
+import { unavailableFor } from '../core/discipline.js';
+import { overall, ratingAt } from '../core/player.js';
+import { formatDate, formatShortDate } from '../core/calendar.js';
+import { standings, topScorers, league, userClub, nextUserFixture, seasonStats, isUnavailable } from '../core/game.js';
+import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass } from './format.js';
+
+const options = (map, current) =>
+  Object.entries(map).map(([k, v]) => `<option value="${k}" ${k === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
+
+// ---- 새 게임 ----
+
+export function newGameView(state, ui) {
+  const preview = ui.preview;
+  let clubList = '';
+  if (preview) {
+    const clubs = Object.values(preview.clubs).sort((a, b) => b.level - a.level);
+    clubList = `
+      <h2>구단 선택</h2>
+      <p class="muted">프리미어리그 20개 구단 중 맡을 구단을 고르세요. 시드: <code>${esc(preview.seed)}</code></p>
+      <table class="table clickable">
+        <thead><tr><th>구단</th><th>전력</th><th>주전 평균</th><th>최고 선수</th><th>포메이션</th><th></th></tr></thead>
+        <tbody>
+          ${clubs.map((c) => {
+            const squad = c.squad.map((id) => preview.players[id]);
+            const best = squad.slice().sort((a, b) => overall(b) - overall(a));
+            const xi = best.slice(0, 11).reduce((s, p) => s + overall(p), 0) / 11;
+            return `<tr>
+              <td>${clubLabel(c)}</td>
+              <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td>
+              <td>${xi.toFixed(1)}</td>
+              <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
+              <td>${c.tactics.formation}</td>
+              <td><button class="btn primary small" data-action="pickClub" data-id="${c.id}">이 구단 맡기</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+  return `
+    <div class="newgame">
+      <h1>축구구단 키우기</h1>
+      <p class="muted">가상의 프리미어리그에서 구단을 맡아 2026-27 시즌을 치릅니다.</p>
+      <div class="card form-row">
+        <label>감독 이름 <input id="managerName" value="${esc(ui.managerName ?? '')}" placeholder="이름을 입력하세요" maxlength="20"></label>
+        <label>세계 시드 (선택) <input id="seed" value="${esc(ui.seedInput ?? '')}" placeholder="비우면 무작위" maxlength="30"></label>
+        <button class="btn primary" data-action="generateWorld">세계 생성</button>
+        <label class="btn file">세이브 파일 불러오기<input type="file" accept=".json" data-change="importSave" hidden></label>
+      </div>
+      ${ui.error ? `<p class="error">${esc(ui.error)}</p>` : ''}
+      ${clubList}
+    </div>`;
+}
+
+// ---- 공통 틀 ----
+
+const NAV = [
+  ['home', '홈'],
+  ['squad', '선수단'],
+  ['tactics', '전술'],
+  ['schedule', '일정'],
+  ['table', '순위표'],
+  ['settings', '설정'],
+];
+
+export function layout(state, ui, content) {
+  const club = userClub(state);
+  const unread = state.inbox.filter((m) => !m.read).length;
+  const inMatch = ui.view === 'match';
+  const ended = state.phase === 'seasonEnd';
+  return `
+    <aside class="side">
+      <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(state.manager.name)} 감독</div></div></div>
+      <nav>
+        ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${key === 'home' && unread ? ` <span class="count">${unread}</span>` : ''}</button>`).join('')}
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="top">
+        <div class="date">${formatDate(state.date)}</div>
+        <div class="top-actions">
+          ${ui.busy ? '<span class="muted">진행 중...</span>' : ''}
+          ${!inMatch && !ended ? `
+            <button class="btn" data-action="toSeasonEnd" ${ui.busy ? 'disabled' : ''} title="내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다">시즌 끝까지</button>
+            <button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>${state.liveMatch ? '경기 재개' : '계속'} ▶</button>` : ''}
+          ${ended && !inMatch ? '<span class="muted">시즌이 끝났습니다</span>' : ''}
+        </div>
+      </header>
+      <section class="content" id="content">${content}</section>
+    </div>`;
+}
+
+// ---- 홈 ----
+
+export function homeView(state) {
+  const club = userClub(state);
+  const next = nextUserFixture(state);
+  const table = standings(state);
+  const myPos = table.findIndex((r) => r.clubId === club.id);
+  const myRow = table[myPos];
+
+  let nextCard = '<p class="muted">남은 경기가 없습니다.</p>';
+  if (next) {
+    const home = next.home === club.id;
+    const opp = state.clubs[home ? next.away : next.home];
+    const oppPos = table.findIndex((r) => r.clubId === opp.id);
+    nextCard = `
+      <div class="next-match">
+        <div>${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
+        <div class="vs">${clubLabel(club, true)} <span class="muted">vs</span> ${clubLabel(opp)}</div>
+        <div class="muted">상대: ${oppPos + 1}위 · 최근 ${formBadges(table[oppPos].form) || '-'}</div>
+      </div>`;
+  }
+
+  const last = league(state).fixtures
+    .filter((f) => f.result && (f.home === club.id || f.away === club.id))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const lastCard = last
+    ? `<div class="result-line">${clubLabel(state.clubs[last.home], last.home === club.id)} <strong>${last.result.home} - ${last.result.away}</strong> ${clubLabel(state.clubs[last.away], last.away === club.id)}</div>
+       <button class="btn small" data-action="showFixture" data-id="${last.id}">경기 기록</button>`
+    : '<p class="muted">아직 치른 경기가 없습니다.</p>';
+
+  const mini = table.slice(0, 5).map((r, i) => miniRow(state, r, i, club.id)).join('')
+    + (myPos >= 5 ? `<tr class="gap"><td colspan="4">…</td></tr>${miniRow(state, myRow, myPos, club.id)}` : '');
+
+  return `
+    <div class="grid two">
+      <div class="card"><h3>다음 경기</h3>${nextCard}</div>
+      <div class="card"><h3>최근 결과</h3>${lastCard}</div>
+      <div class="card">
+        <h3>순위</h3>
+        <table class="table compact"><thead><tr><th>#</th><th>구단</th><th>경기</th><th>승점</th></tr></thead><tbody>${mini}</tbody></table>
+        <button class="btn small" data-action="nav" data-view="table">전체 순위</button>
+      </div>
+      <div class="card">
+        <h3>메시지</h3>
+        ${inboxList(state)}
+      </div>
+    </div>`;
+}
+
+function miniRow(state, r, i, myId) {
+  return `<tr class="${r.clubId === myId ? 'mine' : ''}"><td>${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === myId)}</td><td>${r.played}</td><td><strong>${r.points}</strong></td></tr>`;
+}
+
+function inboxList(state) {
+  if (!state.inbox.length) return '<p class="muted">메시지가 없습니다.</p>';
+  return `<ul class="inbox">${state.inbox.slice(0, 12).map((m) => `
+    <li class="${m.read ? '' : 'unread'} ${m.important ? 'important' : ''}">
+      <div class="inbox-head"><strong>${esc(m.title)}</strong><span class="muted small">${formatShortDate(m.date)}</span></div>
+      <div>${esc(m.body)}</div>
+    </li>`).join('')}</ul>`;
+}
+
+// ---- 선수단 ----
+
+export function squadView(state, ui) {
+  const club = userClub(state);
+  const players = club.squad.map((id) => state.players[id]);
+  const order = Object.keys(POSITIONS);
+  const sort = ui.squadSort ?? 'pos';
+  const sorted = players.slice().sort((a, b) => {
+    if (sort === 'ovr') return overall(b) - overall(a);
+    if (sort === 'age') return age(a, state.date) - age(b, state.date);
+    return order.indexOf(a.position) - order.indexOf(b.position) || overall(b) - overall(a);
+  });
+  const selected = ui.playerId ? state.players[ui.playerId] : null;
+  const sortBtn = (key, label) => `<button class="btn small ${sort === key ? 'primary' : ''}" data-action="squadSort" data-sort="${key}">${label}</button>`;
+
+  return `
+    <div class="squad ${selected ? 'with-detail' : ''}">
+      <div class="card">
+        <div class="card-head"><h3>선수단 (${players.length}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
+        <table class="table clickable">
+          <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
+          <tbody>
+            ${sorted.map((p) => {
+              const s = seasonStats(p, state.season, 'ENG1');
+              const banned = isUnavailable(state, 'ENG1', p.id);
+              return `<tr class="${ui.playerId === p.id ? 'selected' : ''}" data-action="selectPlayer" data-id="${p.id}">
+                <td>${posLabel(p.position)}${p.secondary.length ? `<span class="muted small"> ${p.secondary.join(' ')}</span>` : ''}</td>
+                <td>${esc(p.name)}</td>
+                <td>${age(p, state.date)}</td>
+                <td>${esc(nationName(p.nation))}</td>
+                <td>${ovrCell(p)}</td>
+                <td class="muted">${p.potential}</td>
+                <td>${conditionBar(p.condition)}</td>
+                <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
+                <td>${banned ? '<span class="tag red">출전 정지</span>' : ''}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${selected ? playerDetail(state, selected) : ''}
+    </div>`;
+}
+
+const nationName = (code) => NATIONS[code]?.name ?? code;
+
+export function playerDetail(state, p) {
+  const groups = { technical: '기술', mental: '정신', physical: '신체', goalkeeping: '골키퍼' };
+  const s = seasonStats(p, state.season, 'ENG1');
+  const record = state.discipline.ENG1?.[p.id];
+  return `
+    <div class="card detail">
+      <div class="card-head"><h3>${esc(p.name)}</h3><button class="btn small" data-action="selectPlayer" data-id="">닫기</button></div>
+      <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${age(p, state.date)}세 · ${esc(nationName(p.nation))}</p>
+      <p>능력 ${ovrCell(p)} · 잠재 ${p.potential} · 컨디션 ${Math.round(p.condition)}%</p>
+      ${p.secondary.length ? `<p class="muted">가능 포지션: ${p.secondary.map((x) => `${x} (${ratingAt(p, x)})`).join(', ')}</p>` : ''}
+      <div class="attrs">
+        ${Object.entries(groups).map(([g, name]) => {
+          if (g === 'goalkeeping' && p.position !== 'GK') return '';
+          return `<div><h4>${name}</h4>${ATTRIBUTES.filter((a) => a.group === g).map((a) =>
+            `<div class="attr"><span>${a.name}</span><span class="${attrClass(p.attrs[a.key])}">${p.attrs[a.key]}</span></div>`).join('')}</div>`;
+        }).join('')}
+      </div>
+      <h4>이번 시즌</h4>
+      <p>${s ? `${s.apps}경기 (선발 ${s.starts}) · ${s.minutes}분 · ${s.goals}골 ${s.assists}도움 · 평점 ${avgRating(s)} · 경고 ${s.yellows} 퇴장 ${s.reds}` : '출전 기록이 없습니다.'}</p>
+      ${record ? `<p class="muted">리그 누적 경고 ${record.yellows}장${record.ban ? ` · 출전 정지 ${record.ban}경기 남음` : ''}</p>` : ''}
+    </div>`;
+}
+
+// ---- 전술 ----
+
+export function tacticsView(state) {
+  const club = userClub(state);
+  const t = club.tactics;
+  const slots = FORMATIONS[t.formation];
+  const lineup = resolveLineup(club, state.players, { unavailable: unavailableFor(state.discipline, 'ENG1') });
+  const squad = club.squad.map((id) => state.players[id]);
+  const inLineup = new Set(lineup.lineup.filter(Boolean).map((e) => e.playerId));
+
+  const slotRows = slots.map((pos, i) => {
+    const entry = lineup.lineup[i];
+    const current = entry ? state.players[entry.playerId] : null;
+    const candidates = squad.slice().sort((a, b) => ratingAt(b, pos) - ratingAt(a, pos));
+    return `<tr>
+      <td>${posLabel(pos)}</td>
+      <td><select data-change="setSlotPlayer" data-slot="${i}">
+        ${candidates.map((p) => {
+          const banned = isUnavailable(state, 'ENG1', p.id);
+          const mark = p.id !== entry?.playerId && inLineup.has(p.id) ? ' (선발)' : '';
+          return `<option value="${p.id}" ${p.id === entry?.playerId ? 'selected' : ''} ${banned ? 'disabled' : ''}>${esc(p.name)} · ${p.position} · ${ratingAt(p, pos)}${banned ? ' · 정지' : ''}${mark}</option>`;
+        }).join('')}
+      </select></td>
+      <td><select data-change="setSlotRole" data-slot="${i}">
+        ${rolesForPosition(pos).map((r) => `<option value="${r}" ${r === entry?.role ? 'selected' : ''}>${esc(ROLES[r].name)}</option>`).join('')}
+      </select></td>
+      <td>${current ? conditionBar(current.condition) : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const bench = lineup.bench.map((id) => state.players[id]);
+  const takers = squad.filter((p) => p.position !== 'GK').sort((a, b) => (b.attrs.finishing + b.attrs.composure * 2) - (a.attrs.finishing + a.attrs.composure * 2));
+
+  return `
+    <div class="grid two wide-left">
+      <div class="card">
+        <div class="card-head">
+          <h3>선발 명단</h3>
+          <div>
+            <label class="check"><input type="checkbox" data-change="toggleAutoLineup" ${t.lineup ? '' : 'checked'}> 매 경기 자동 선발</label>
+            <button class="btn small" data-action="autoLineupNow">지금 자동으로 채우기</button>
+          </div>
+        </div>
+        ${t.lineup ? '' : '<p class="muted small">자동 선발이 켜져 있으면 경기마다 컨디션과 출전 정지를 고려해 다시 고릅니다. 선수를 직접 바꾸면 자동 선발이 꺼집니다.</p>'}
+        <table class="table"><thead><tr><th>자리</th><th>선수 · 포지션 · 이 자리 능력</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
+        <h4>교체 명단</h4>
+        <p class="small">${bench.map((p) => `${posLabel(p.position)} ${esc(p.name)}`).join(' · ')}</p>
+      </div>
+      <div class="card">
+        <h3>팀 전술</h3>
+        <div class="form-col">
+          <label>포메이션 <select data-change="setTactic" data-key="formation">${FORMATION_KEYS.map((f) => `<option ${f === t.formation ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
+          <label>팀 성향 <select data-change="setTactic" data-key="mentality">${options(MENTALITIES, t.mentality)}</select></label>
+          <label>압박 강도 <select data-change="setTactic" data-key="pressing">${options(PRESSING, t.pressing)}</select></label>
+          <label>템포 <select data-change="setTactic" data-key="tempo">${options(TEMPO, t.tempo)}</select></label>
+          <label>수비 라인 <select data-change="setTactic" data-key="line">${options(LINE, t.line)}</select></label>
+          <label>페널티킥 키커 <select data-change="setTactic" data-key="setPieceTaker">
+            <option value="">자동 (가장 잘 차는 선수)</option>
+            ${takers.map((p) => `<option value="${p.id}" ${p.id === t.setPieceTaker ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+          </select></label>
+        </div>
+        <div class="tips small muted">
+          <p>공격적: 기회가 늘지만 수비가 약해집니다. 수비적: 그 반대입니다.</p>
+          <p>압박 높음: 중원 장악이 좋아지지만 체력 소모와 반칙이 늘어납니다.</p>
+          <p>수비 라인 높게: 점유에 유리하지만, 센터백이 느리면 뒷공간을 내줍니다.</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---- 일정 ----
+
+export function scheduleView(state, ui) {
+  const club = userClub(state);
+  const fixtures = league(state).fixtures;
+  const mine = fixtures.filter((f) => f.home === club.id || f.away === club.id);
+  const round = ui.round ?? (nextUserFixture(state)?.round ?? 38);
+  const roundFixtures = fixtures.filter((f) => f.round === round);
+
+  const result = (f) => {
+    if (!f.result) return '<span class="muted">-</span>';
+    const my = f.home === club.id ? f.result.home : f.result.away;
+    const their = f.home === club.id ? f.result.away : f.result.home;
+    const cls = my > their ? 'w' : my < their ? 'l' : 'd';
+    return `<span class="form ${cls}">${my > their ? '승' : my < their ? '패' : '무'}</span> ${f.result.home} - ${f.result.away}`;
+  };
+
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>우리 경기</h3>
+        <table class="table compact clickable">
+          <thead><tr><th>R</th><th>날짜</th><th></th><th>상대</th><th>결과</th></tr></thead>
+          <tbody>${mine.map((f) => {
+            const home = f.home === club.id;
+            const opp = state.clubs[home ? f.away : f.home];
+            return `<tr ${f.result ? `data-action="showFixture" data-id="${f.id}"` : ''}>
+              <td>${f.round}</td><td>${formatShortDate(f.date)}</td><td>${home ? '홈' : '원정'}</td><td>${clubLabel(opp)}</td><td>${result(f)}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>${round}라운드 · ${formatShortDate(roundFixtures[0].date)}</h3>
+          <div>
+            <button class="btn small" data-action="setRound" data-round="${Math.max(1, round - 1)}" ${round <= 1 ? 'disabled' : ''}>◀</button>
+            <button class="btn small" data-action="setRound" data-round="${Math.min(38, round + 1)}" ${round >= 38 ? 'disabled' : ''}>▶</button>
+          </div>
+        </div>
+        <table class="table compact clickable">
+          <tbody>${roundFixtures.map((f) => `<tr ${f.result ? `data-action="showFixture" data-id="${f.id}"` : ''}>
+            <td class="right">${clubLabel(state.clubs[f.home], f.home === club.id)}</td>
+            <td class="center"><strong>${f.result ? `${f.result.home} - ${f.result.away}` : 'vs'}</strong></td>
+            <td>${clubLabel(state.clubs[f.away], f.away === club.id)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// 끝난 경기 기록 (골, 카드, 평점)
+export function fixtureDetail(state, fixtureId) {
+  const f = league(state).fixtures.find((x) => x.id === fixtureId);
+  if (!f?.result) return '';
+  const name = (id) => esc(state.players[id]?.name ?? '');
+  const line = (e) => {
+    if (e.type === 'goal') return `⚽ ${e.clock} ${name(e.playerId)}${e.kind === 'penalty' ? ' (PK)' : ''}${e.assistId ? ` <span class="muted">(도움 ${name(e.assistId)})</span>` : ''}`;
+    if (e.type === 'yellow') return `<span class="card-y"></span> ${e.clock} ${name(e.playerId)}`;
+    if (e.type === 'secondYellow' || e.type === 'red') return `<span class="card-r"></span> ${e.clock} ${name(e.playerId)}${e.type === 'secondYellow' ? ' (경고 2회)' : ''}`;
+    return '';
+  };
+  const side = (s) => f.result.events.filter((e) => e.side === s && e.type !== 'sub').map(line).filter(Boolean).map((x) => `<div>${x}</div>`).join('') || '<div class="muted">-</div>';
+  const ratings = (clubId) => {
+    const club = state.clubs[clubId];
+    return Object.entries(f.result.ratings ?? {})
+      .filter(([pid]) => state.players[pid]?.clubId === club.id)
+      .sort((a, b) => b[1] - a[1])
+      .map(([pid, r]) => `<div class="attr"><span>${name(pid)}</span><span class="${r >= 7.5 ? 'a-high' : r >= 6.8 ? 'a-good' : r >= 6 ? 'a-mid' : 'a-low'}">${r.toFixed(1)}</span></div>`)
+      .join('');
+  };
+  const st = f.result.stats;
+  const poss = (i) => Math.round((st[i].possession / Math.max(1, st[0].possession + st[1].possession)) * 100);
+  return `
+    <div class="modal-bg" data-action="closeModal">
+      <div class="modal" data-stop>
+        <div class="card-head"><h3>${formatShortDate(f.date)} · ${f.round}라운드</h3><button class="btn small" data-action="closeModal">닫기</button></div>
+        <div class="score-line">${clubLabel(state.clubs[f.home])} <strong>${f.result.home} - ${f.result.away}</strong> ${clubLabel(state.clubs[f.away])}</div>
+        <div class="grid two">${side(0)}${side(1)}</div>
+        <table class="table compact stats">
+          <tr><td>${st[0].shots} (${st[0].onTarget})</td><th>슈팅 (유효)</th><td>${st[1].shots} (${st[1].onTarget})</td></tr>
+          <tr><td>${poss(0)}%</td><th>점유율</th><td>${poss(1)}%</td></tr>
+          <tr><td>${st[0].fouls}</td><th>반칙</th><td>${st[1].fouls}</td></tr>
+        </table>
+        <div class="grid two"><div><h4>평점</h4>${ratings(f.home)}</div><div><h4>평점</h4>${ratings(f.away)}</div></div>
+      </div>
+    </div>`;
+}
+
+// ---- 순위표 ----
+
+export function tableView(state) {
+  const club = userClub(state);
+  const table = standings(state);
+  const scorers = topScorers(state, 'ENG1', 10);
+  const assists = Object.values(state.players)
+    .map((p) => ({ p, s: seasonStats(p, state.season, 'ENG1') }))
+    .filter((x) => x.s?.assists)
+    .sort((a, b) => b.s.assists - a.s.assists || b.s.goals - a.s.goals)
+    .slice(0, 10);
+  const person = (p) => `${esc(p.name)} <span class="muted small">${esc(state.clubs[p.clubId].name)}</span>`;
+  return `
+    <div class="grid two wide-left">
+      <div class="card">
+        <h3>${esc(league(state).name)} ${state.season}-${String(state.season + 1).slice(2)}</h3>
+        <table class="table compact">
+          <thead><tr><th>#</th><th>구단</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득</th><th>실</th><th>득실</th><th>승점</th><th>최근</th></tr></thead>
+          <tbody>${table.map((r, i) => `<tr class="${r.clubId === club.id ? 'mine' : ''} ${i === 3 ? 'line-below' : ''} ${i === table.length - 4 ? 'line-below red' : ''}">
+            <td>${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === club.id)}</td>
+            <td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td>${r.goalsFor}</td><td>${r.goalsAgainst}</td>
+            <td>${r.goalDiff > 0 ? '+' : ''}${r.goalDiff}</td><td><strong>${r.points}</strong></td><td>${formBadges(r.form)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div>
+        <div class="card"><h3>득점 순위</h3><table class="table compact">${scorers.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.player)}</td><td><strong>${x.s.goals}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
+        <div class="card"><h3>도움 순위</h3><table class="table compact">${assists.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.p)}</td><td><strong>${x.s.assists}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
+      </div>
+    </div>`;
+}
+
+// ---- 설정 ----
+
+export const PAUSE_NAMES = {
+  halftime: '하프타임',
+  conceded: '우리 팀 실점 직후',
+  ourRed: '우리 팀 선수 퇴장',
+  losingAt60: '60분에 지고 있을 때',
+  drawingAt75: '75분에 비기고 있을 때',
+  theirRed: '상대 팀 퇴장',
+  lowEnergy: '주전 체력이 크게 떨어졌을 때',
+};
+
+export const VIEW_MODES = { result: '결과만', highlights: '하이라이트', full: '전체 중계' };
+
+export function settingsView(state) {
+  const s = state.settings;
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>경기 보기</h3>
+        <div class="form-col">
+          <label>기본 보기 방식 <select data-change="setViewMode">${options(VIEW_MODES, s.viewMode)}</select></label>
+          <label class="check"><input type="checkbox" data-change="toggleAutoSubs" ${s.autoSubs ? 'checked' : ''}> 경기 중 교체를 수석코치에게 맡기기 (직접 교체도 가능)</label>
+        </div>
+        <h4>결정 순간에 멈춤 (하이라이트·전체 중계)</h4>
+        <div class="form-col">
+          ${Object.entries(PAUSE_NAMES).map(([k, name]) => `<label class="check"><input type="checkbox" data-change="togglePause" data-key="${k}" ${s.pauses[k] ? 'checked' : ''}> ${name}</label>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <h3>저장</h3>
+        <p class="muted small">진행 상황은 이 브라우저에 자동 저장됩니다. 백업하거나 다른 기기에서 이어 하려면 파일로 내보내세요.</p>
+        <div class="form-col">
+          <button class="btn" data-action="exportSave">세이브 파일 내보내기</button>
+          <label class="btn file">세이브 파일 불러오기<input type="file" accept=".json" data-change="importSave" hidden></label>
+          <button class="btn danger" data-action="newGame">새 게임 시작 (현재 진행 삭제)</button>
+        </div>
+        <p class="muted small">세계 시드: <code>${esc(state.seed)}</code></p>
+      </div>
+    </div>`;
+}
+
+// ---- 시즌 종료 ----
+
+export function seasonEndBanner(state) {
+  const club = userClub(state);
+  const table = standings(state);
+  const pos = table.findIndex((r) => r.clubId === club.id) + 1;
+  const [top] = topScorers(state, 'ENG1', 1);
+  const myBest = club.squad.map((id) => state.players[id])
+    .map((p) => ({ p, s: seasonStats(p, state.season, 'ENG1') }))
+    .filter((x) => x.s?.ratingCount >= 10)
+    .sort((a, b) => b.s.ratingSum / b.s.ratingCount - a.s.ratingSum / a.s.ratingCount)[0];
+  return `
+    <div class="card season-end">
+      <h2>2026-27 시즌 종료</h2>
+      <p>우승: ${clubLabel(state.clubs[table[0].clubId])} (승점 ${table[0].points})</p>
+      <p>우리 팀: <strong>${pos}위</strong> · 승점 ${table[pos - 1].points} · ${table[pos - 1].won}승 ${table[pos - 1].drawn}무 ${table[pos - 1].lost}패</p>
+      ${top ? `<p>득점왕: ${esc(top.player.name)} (${esc(state.clubs[top.player.clubId].name)}) ${top.s.goals}골</p>` : ''}
+      ${myBest ? `<p>우리 팀 최고 평점: ${esc(myBest.p.name)} ${avgRating(myBest.s)}</p>` : ''}
+      <p class="muted small">다음 시즌 진행은 2단계에서 추가됩니다.</p>
+      <button class="btn danger" data-action="newGame">새 게임</button>
+    </div>`;
+}

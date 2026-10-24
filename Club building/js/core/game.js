@@ -167,11 +167,11 @@ export function advance(state) {
   }
 }
 
-function matchSetup(state, club, compId, auto) {
+function matchSetup(state, club, compId, auto, aiTactics) {
   const rule = RULES[state.competitions[compId].ruleId];
   const unavailable = unavailableFor(state.discipline, compId);
   const { lineup, bench } = resolveLineup(club, state.players, { unavailable, benchSize: rule.benchSize });
-  return { clubId: club.id, tactics: club.tactics, lineup, bench, auto };
+  return { clubId: club.id, tactics: club.tactics, lineup, bench, auto, aiTactics };
 }
 
 function buildMatch(state, fixture, userAuto) {
@@ -183,8 +183,8 @@ function buildMatch(state, fixture, userAuto) {
     id: fixture.id,
     competitionId: fixture.competitionId,
     date: fixture.date,
-    home: matchSetup(state, home, fixture.competitionId, home.id === userId ? userAuto : true),
-    away: matchSetup(state, away, fixture.competitionId, away.id === userId ? userAuto : true),
+    home: matchSetup(state, home, fixture.competitionId, home.id === userId ? userAuto : true, home.id !== userId),
+    away: matchSetup(state, away, fixture.competitionId, away.id === userId ? userAuto : true, away.id !== userId),
     players: state.players,
     maxSubs: rule.maxSubs,
   });

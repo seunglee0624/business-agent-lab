@@ -1,1 +1,3 @@
-document.getElementById('app').textContent = '축구구단 키우기';
+import { App } from './ui/app.js';
+
+new App(document.getElementById('app')).start();

@@ -51,7 +51,8 @@ function buildSide(setup, players, maxSubs) {
     used: [],
     subsUsed: 0,
     maxSubs,
-    auto: setup.auto !== false,
+    auto: setup.auto !== false, // 교체를 자동으로
+    aiTactics: setup.aiTactics !== false, // 스코어에 따라 성향을 자동으로 바꿈 (AI 구단만)
     score: 0,
     shots: 0,
     onTarget: 0,
@@ -68,7 +69,7 @@ function emptyStats(side, started) {
   };
 }
 
-// setup: { clubId, tactics, lineup(포메이션 슬롯 순서), bench, auto }
+// setup: { clubId, tactics, lineup(포메이션 슬롯 순서), bench, auto, aiTactics }
 export function createMatch({ id, competitionId, date, home, away, players, maxSubs = 5 }) {
   const snap = {};
   const stats = {};
@@ -319,7 +320,7 @@ function autoSubs(match, rng, newEvents) {
 function autoMentality(match) {
   if (match.minute < 70) return;
   match.sides.forEach((side, s) => {
-    if (!side.auto) return;
+    if (!side.aiTactics) return;
     const diff = side.score - match.sides[1 - s].score;
     if (diff < 0) side.tactics.mentality = 'attacking';
     else if (diff === 1 && match.minute >= 80) side.tactics.mentality = 'defensive';
