@@ -2,7 +2,7 @@
 
 import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
-  simulateToSeasonEnd, userClub, userLeagueId, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth,
+  simulateToSeasonEnd, userClub, userLeagueId, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
 } from '../core/game.js';
 import { unavailableSet } from '../core/state.js';
 import { autoLineup, resolveLineup } from '../core/tactics.js';
@@ -28,6 +28,10 @@ export class App {
   async start() {
     try {
       this.state = (await loadState()) ?? null;
+      if (this.state && this.state.version !== STATE_VERSION) {
+        this.state = null;
+        this.ui.error = '이전 버전에서 저장한 게임이라 이어서 할 수 없습니다. 새 게임을 시작해 주세요.';
+      }
     } catch (err) {
       console.error(err);
       this.ui.error = '저장된 게임을 불러오지 못했습니다.';
@@ -290,6 +294,7 @@ export class App {
         if (!file) return;
         importState(file)
           .then((loaded) => {
+            if (loaded.version !== STATE_VERSION) throw new Error('이전 버전에서 저장한 파일이라 불러올 수 없습니다.');
             this.state = loaded;
             this.ui = { view: 'home' };
             this.persist();
