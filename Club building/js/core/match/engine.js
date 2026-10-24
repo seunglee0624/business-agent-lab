@@ -8,7 +8,7 @@ import { teamStrength, energyFactor, PRESSING_ENERGY, PRESSING_FOULS } from './s
 
 const HOME_BONUS = 1.06;
 const POSSESSION_POWER = 1.6;
-const ATTACK_RATE = 0.48;
+const ATTACK_RATE = 0.46;
 // 같은 수준의 두 팀이 붙을 때 (창출 / 수비) 비율의 평균. 이 값으로 나눠 1 근처가 되게 한다.
 export const BASE_RATIO = 0.49;
 
@@ -172,7 +172,7 @@ function shot(match, rng, a, d, shooter, kind, quality, str, newEvents, outfield
     assistId = helper?.playerId ?? null;
   }
 
-  const xg = kind === 'penalty' ? 0.76 : XG[kind];
+  const xg = kind === 'penalty' ? 0.72 : XG[kind];
   const power = kind === 'penalty' ? 0.3 : 1.2;
   const pGoal = clamp(xg * (quality / keeper) ** power, 0.005, 0.9);
 
@@ -219,7 +219,7 @@ function fouls(match, rng, attacking, str, newEvents) {
 
     if (rng.chance(0.003)) {
       sendOff(match, s, fouler, st, false, newEvents);
-    } else if (rng.chance(fouler.yellow ? 0.09 : 0.15)) {
+    } else if (rng.chance(fouler.yellow ? 0.09 : 0.185)) {
       if (fouler.yellow >= 1) {
         fouler.yellow++;
         st.yellow++;
@@ -232,7 +232,7 @@ function fouls(match, rng, attacking, str, newEvents) {
     }
 
     // 수비 중 페널티 박스 안 반칙 → 페널티킥
-    if (defending && rng.chance(0.016)) {
+    if (defending && rng.chance(0.022)) {
       const opp = 1 - s;
       const takers = active(match.sides[opp]).filter((x) => x.pos !== 'GK');
       const chosen = takers.find((x) => x.playerId === match.sides[opp].setPieceTaker)
