@@ -150,7 +150,10 @@ export function layout(state, ui, content) {
     </aside>
     <div class="main">
       <header class="top">
-        <div class="date">${formatDate(state.date)}</div>
+        <div class="board">
+          <div class="date">${formatDate(state.date)}</div>
+          ${boardNext(state, club)}
+        </div>
         <div class="top-actions">
           ${ui.busy ? '<span class="muted">진행 중...</span>' : ''}
           ${!inMatch && !ended ? `
@@ -161,6 +164,15 @@ export function layout(state, ui, content) {
       </header>
       <section class="content" id="content">${content}</section>
     </div>`;
+}
+
+// 위쪽 전광판 띠에 다음 경기를 짧게 보여 준다
+function boardNext(state, club) {
+  const next = nextUserFixture(state);
+  if (!next) return '';
+  const home = next.home === club.id;
+  const opp = state.clubs[home ? next.away : next.home];
+  return `<div class="board-next"><span class="board-label">다음 경기 ${formatShortDate(next.date)}</span> ${home ? '홈' : '원정'} vs ${clubLabel(opp)}</div>`;
 }
 
 // ---- 홈 ----
@@ -439,7 +451,7 @@ export function tacticsView(state) {
         ${t.lineup ? '' : '<p class="muted small">자동 선발이 켜져 있으면 경기마다 컨디션과 출전 정지를 고려해 다시 고릅니다. 선수를 직접 바꾸면 자동 선발이 꺼집니다.</p>'}
         <table class="table"><thead><tr><th>자리</th><th>선수 · 포지션 · 이 자리 능력</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
         <h4>교체 명단</h4>
-        <p class="small">${bench.map((p) => `${posLabel(p.position)} ${esc(p.name)}`).join(' · ')}</p>
+        <p class="chips small">${bench.map((p) => `<span class="chip">${posLabel(p.position)} ${esc(p.name)}</span>`).join('')}</p>
       </div>
     </div>`;
 }
