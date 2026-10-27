@@ -32,3 +32,13 @@ test('모든 이벤트에 빈칸 없는 중계 문장이 나온다', () => {
     }
   }
 });
+
+test('중계에 선수 포지션이 같이 나온다', () => {
+  const { clubs, players } = generateLeague(Rng.fromSeed('c'), PREMIER_LEAGUE, { seasonStart: '2026-07-01' });
+  const byId = Object.fromEntries(players.map((p) => [p.id, p]));
+  const setup = (c) => ({ clubId: c.id, tactics: c.tactics, ...autoLineup(c.squad.map((i) => byId[i]), c.tactics.formation) });
+  const m = simulateMatch(createMatch({ id: 'm', home: setup(clubs[0]), away: setup(clubs[1]), players: byId }), Rng.fromSeed('p'));
+  const e = m.events.find((x) => x.type === 'goal' || x.type === 'save' || x.type === 'miss');
+  const text = commentary(m, e, { home: 'A', away: 'B' });
+  assert.match(text, new RegExp(`(GK|CB|LB|RB|DM|CM|LM|RM|AM|LW|RW|ST) ${m.players[e.playerId].name}`));
+});

@@ -58,7 +58,10 @@ const T = {
 // names: { home, away } 구단 이름
 export function commentary(match, event, names) {
   const team = event.side === 0 ? names.home : event.side === 1 ? names.away : '';
-  const name = (id) => (id ? match.players[id]?.name ?? '' : '');
+  const name = (id) => {
+    const p = id ? match.players[id] : null;
+    return p ? `${positionOf(match, id)} ${p.name}` : '';
+  };
   const keeperId = event.otherId;
   const vars = {
     home: names.home,
@@ -80,6 +83,15 @@ export function commentary(match, event, names) {
     text += ` [${scoreAt(match, event)}]`;
   }
   return text;
+}
+
+// 지금 뛰는 자리 (경기장에 없으면 주 포지션). 세부 역할은 적지 않는다.
+function positionOf(match, id) {
+  for (const side of match.sides) {
+    const slot = side.onPitch.find((x) => x.playerId === id);
+    if (slot) return slot.pos;
+  }
+  return match.players[id].position;
 }
 
 // 해당 골 시점의 스코어 "1 - 0"

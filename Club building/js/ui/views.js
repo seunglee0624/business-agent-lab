@@ -12,6 +12,7 @@ import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, jobOffers, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
+import { pitchHtml, shortName } from './pitch.js';
 import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass } from './format.js';
 
 const options = (map, current) =>
@@ -300,6 +301,18 @@ export function tacticsView(state) {
     </tr>`;
   }).join('');
 
+  const spots = slots.map((pos, i) => {
+    const entry = lineup.lineup[i];
+    const p = entry ? state.players[entry.playerId] : null;
+    if (!p) return { pos, cls: 'empty', html: `${posLabel(pos)}<div class="spot-name">비어 있음</div>` };
+    return {
+      pos,
+      cls: p.position === pos || p.secondary?.includes(pos) ? '' : 'offpos',
+      html: `${posLabel(pos)}<div class="spot-name" title="${esc(p.name)}">${esc(shortName(p.name))} <b>${ratingAt(p, pos)}</b></div>
+        <div class="spot-role">${esc(ROLES[entry.role].name)}</div>${conditionBar(p.condition)}`,
+    };
+  });
+
   const bench = lineup.bench.map((id) => state.players[id]);
   const takers = squad.filter((p) => p.position !== 'GK').sort((a, b) => (b.attrs.finishing + b.attrs.composure * 2) - (a.attrs.finishing + a.attrs.composure * 2));
 
@@ -317,6 +330,12 @@ export function tacticsView(state) {
         <table class="table"><thead><tr><th>자리</th><th>선수 · 포지션 · 이 자리 능력</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
         <h4>교체 명단</h4>
         <p class="small">${bench.map((p) => `${posLabel(p.position)} ${esc(p.name)}`).join(' · ')}</p>
+      </div>
+      <div>
+      <div class="card">
+        <h3>포메이션 <span class="muted small">${t.formation}</span></h3>
+        ${pitchHtml(spots)}
+        <p class="muted small">숫자는 그 자리에서의 능력입니다. 주황 테두리는 익숙하지 않은 자리입니다.</p>
       </div>
       <div class="card">
         <h3>팀 전술</h3>
@@ -336,6 +355,7 @@ export function tacticsView(state) {
           <p>압박 높음: 중원 장악이 좋아지지만 체력 소모와 반칙이 늘어납니다.</p>
           <p>수비 라인 높게: 점유에 유리하지만, 센터백이 느리면 뒷공간을 내줍니다.</p>
         </div>
+      </div>
       </div>
     </div>`;
 }

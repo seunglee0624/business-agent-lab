@@ -7,7 +7,7 @@ import { LEAGUES } from '../js/data/countries/index.js';
 const PREMIER_LEAGUE = LEAGUES.ENG1;
 import { autoLineup } from '../js/core/tactics.js';
 import { overall } from '../js/core/player.js';
-import { createMatch, simulateMatch, stepMinute, substitute, isFinished, summarize } from '../js/core/match/engine.js';
+import { createMatch, simulateMatch, stepMinute, substitute, isFinished, summarize, liveRating } from '../js/core/match/engine.js';
 
 const world = generateLeague(Rng.fromSeed('engine'), PREMIER_LEAGUE, { seasonStart: '2026-07-01' });
 const byId = Object.fromEntries(world.players.map((p) => [p.id, p]));
@@ -111,4 +111,16 @@ test('통계: 평균 득점, 홈 이점, 강팀 우세', () => {
   assert.ok(gpg > 2.3 && gpg < 3.3, `경기당 ${gpg}골`);
   assert.ok(home / n > away / n + 0.08, `홈 ${home / n} 원정 ${away / n}`);
   assert.ok(strongWins / strongN > 0.6, `강팀 승률 ${strongWins / strongN}`);
+});
+
+test('경기 중 평점: 출전 선수만, 골을 넣으면 오른다', () => {
+  const m = newMatch(world.clubs[0], world.clubs[1]);
+  const rng = Rng.fromSeed('live');
+  while (m.minute < 30) stepMinute(m, rng);
+  const starter = m.sides[0].onPitch[5].playerId;
+  assert.ok(liveRating(m, starter) >= 3 && liveRating(m, starter) <= 10);
+  assert.equal(liveRating(m, m.sides[0].bench[0]), null);
+  const before = liveRating(m, starter);
+  m.stats[starter].goals++;
+  assert.ok(liveRating(m, starter) > before);
 });

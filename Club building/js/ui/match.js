@@ -1,6 +1,6 @@
 // 내 경기 화면: 하이라이트 / 전체 중계 재생, 결정 순간 멈춤, 교체와 전술 변경
 
-import { stepMinute, isFinished, substitute, changeTactics, clockLabel } from '../core/match/engine.js';
+import { stepMinute, isFinished, substitute, changeTactics, clockLabel, liveRating } from '../core/match/engine.js';
 import { commentary } from '../core/match/commentary.js';
 import { isHighlight, pauseReason } from '../core/match/viewing.js';
 import { withMatchRng } from '../core/game.js';
@@ -9,6 +9,7 @@ import { MENTALITIES, PRESSING, TEMPO, LINE } from '../core/tactics.js';
 import { ROLES } from '../data/roles.js';
 import { esc, clubLabel, posLabel, conditionBar } from './format.js';
 import { VIEW_MODES } from './views.js';
+import { pitchHtml, shortName } from './pitch.js';
 
 // 재생 속도 (밀리초)
 const SPEED = {
@@ -20,6 +21,8 @@ const ICON = {
   injury: '🚑', goal: '⚽', yellow: '🟨', secondYellow: '🟥', red: '🟥', sub: '🔁', save: '🧤', woodwork: '🥅',
   penalty: '❗', halftime: '⏸', fulltime: '🏁', kickoff: '▶', secondHalf: '▶',
 };
+
+const ratingClass = (r) => (r >= 7.5 ? 'a-high' : r >= 6.8 ? 'a-good' : r >= 6 ? 'a-mid' : 'a-low');
 
 const options = (map, current) =>
   Object.entries(map).map(([k, v]) => `<option value="${k}" ${k === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -200,9 +203,37 @@ export class LiveMatchView {
   lineupHtml() {
     const side = this.match.sides[this.userSide];
     const p = this.match.players;
+    const stats = this.match.stats;
+    const rating = (id) => {
+      const r = liveRating(this.match, id);
+      return r === null ? '-' : `<span class="${ratingClass(r)}">${r.toFixed(1)}</span>`;
+    };
+    const marks = (st, slot) => `${'⚽'.repeat(st.goals)}${slot?.yellow && !slot.sentOff ? '<span class="card-y"></span>' : ''}${st.red ? '<span class="card-r"></span>' : ''}${st.injured ? '🚑' : ''}`;
+    const spots = side.onPitch.map((slot) => ({
+      pos: slot.pos,
+      cls: slot.sentOff || slot.injured ? 'off' : '',
+      html: `${posLabel(slot.pos)}<div class="spot-name" title="${esc(p[slot.playerId].name)}">${esc(shortName(p[slot.playerId].name))} <b>${rating(slot.playerId)}</b></div>
+        <div class="spot-role">${esc(ROLES[slot.role].name)} ${marks(stats[slot.playerId], slot)}</div>${conditionBar(slot.energy)}`,
+    }));
+    // 지금 뛰는 선수 → 교체로 나간 선수 순서
+    const onIds = side.onPitch.map((x) => x.playerId);
+    const outIds = Object.keys(stats).filter((id) => stats[id].side === this.userSide && stats[id].minuteOn !== null && !onIds.includes(id));
+    const row = (id, slot) => {
+      const st = stats[id];
+      const energy = slot ? slot.energy : st.energyEnd ?? 0;
+      return `<tr class="${slot && !slot.sentOff && !slot.injured ? '' : 'off'}">
+        <td>${posLabel(slot ? slot.pos : p[id].position)}</td>
+        <td>${esc(p[id].name)} ${marks(st, slot)}</td>
+        <td>${conditionBar(energy)} <span class="small">${Math.round(energy)}</span></td>
+        <td>${rating(id)}</td><td>${st.goals}</td><td>${st.assists}</td><td>${st.shots}(${st.onTarget})</td>
+      </tr>`;
+    };
     return `<div class="my-lineup">
-      <h4>우리 팀 <span class="muted small">교체 ${side.subsUsed}/${side.maxSubs}</span></h4>
-      ${side.onPitch.map((s) => `<div class="lu ${s.sentOff || s.injured ? 'off' : ''}">${posLabel(s.pos)} <span>${esc(p[s.playerId].name)}</span>${s.yellow ? '<span class="card-y"></span>' : ''}${s.sentOff ? '<span class="card-r"></span>' : ''}${s.injured ? '🚑' : ''}${conditionBar(s.energy)}</div>`).join('')}
+      <h4>우리 팀 <span class="muted small">${side.tactics.formation} · 교체 ${side.subsUsed}/${side.maxSubs}</span></h4>
+      ${pitchHtml(spots)}
+      <table class="table compact"><thead><tr><th>자리</th><th>선수</th><th>체력</th><th>평점</th><th>골</th><th>도움</th><th>슈팅</th></tr></thead>
+        <tbody>${side.onPitch.map((slot) => row(slot.playerId, slot)).join('')}${outIds.map((id) => row(id, null)).join('')}</tbody></table>
+      <p class="small muted">대기: ${side.bench.map((id) => `${p[id].position} ${esc(p[id].name)}`).join(' · ') || '없음'}</p>
     </div>`;
   }
 
@@ -239,7 +270,7 @@ export class LiveMatchView {
       .sort((a, b) => b[1].rating - a[1].rating);
     return `<div class="card match-summary">
       <h3>경기 종료</h3>
-      <div class="attrs">${mine.map(([pid, st]) => `<div class="attr"><span>${esc(m.players[pid].name)} <span class="muted small">${st.minutes}분${st.goals ? ` · ${st.goals}골` : ''}${st.assists ? ` · ${st.assists}도움` : ''}</span></span><span class="${st.rating >= 7.5 ? 'a-high' : st.rating >= 6.8 ? 'a-good' : st.rating >= 6 ? 'a-mid' : 'a-low'}">${st.rating.toFixed(1)}</span></div>`).join('')}</div>
+      <div class="attrs">${mine.map(([pid, st]) => `<div class="attr"><span>${esc(m.players[pid].name)} <span class="muted small">${st.minutes}분${st.goals ? ` · ${st.goals}골` : ''}${st.assists ? ` · ${st.assists}도움` : ''}</span></span><span class="${ratingClass(st.rating)}">${st.rating.toFixed(1)}</span></div>`).join('')}</div>
       <button class="btn primary" data-m="finish">결과 확인하고 계속 ▶</button>
     </div>`;
   }

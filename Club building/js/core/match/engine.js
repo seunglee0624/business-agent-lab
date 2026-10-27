@@ -452,31 +452,44 @@ function finalize(match, rng) {
   for (const side of match.sides) {
     for (const slot of side.onPitch) match.stats[slot.playerId].energyEnd ??= Math.round(slot.energy);
   }
-  const [h, a] = [match.sides[0].score, match.sides[1].score];
   for (const [pid, st] of Object.entries(match.stats)) {
     if (st.minuteOn === null) continue;
     if (st.minuteOff === null) st.minuteOff = end;
     const minutes = Math.max(0, st.minuteOff - st.minuteOn);
-    const p = match.players[pid];
-    const line = p.position === 'GK' ? 'gk' : ['CB', 'LB', 'RB'].includes(p.position) ? 'def' : ['DM', 'CM', 'LM', 'RM', 'AM'].includes(p.position) ? 'mid' : 'att';
-    const scored = st.side === 0 ? h : a;
-    const against = st.side === 0 ? a : h;
-
-    let r = 6.5 + rng.normal(0, 0.3);
-    r += st.goals * 1.0 + st.assists * 0.6 + st.onTarget * 0.1 - (st.shots - st.onTarget) * 0.05;
-    r += st.involvement;
-    r += st.saves * 0.25;
-    if (line === 'gk') r -= st.conceded * 0.45;
-    else if (line === 'def') r -= st.conceded * 0.25;
-    else if (line === 'mid') r -= st.conceded * 0.1;
-    if (st.conceded === 0 && minutes >= 60) r += line === 'gk' || line === 'def' ? 0.6 : line === 'mid' ? 0.2 : 0;
-    r += scored > against ? 0.35 : scored < against ? -0.35 : 0;
-    r -= st.yellow > 0 && !st.secondYellow ? 0.3 : 0;
-    if (st.red) r -= st.secondYellow ? 1.2 : 1.5;
-    if (minutes < 20) r = 6.5 + (r - 6.5) * 0.6;
     st.minutes = minutes;
-    st.rating = Math.round(clamp(r, 3, 10) * 10) / 10;
+    st.rating = ratingFrom(match, pid, st, minutes, 6.5 + rng.normal(0, 0.3));
   }
+}
+
+// 경기 중 지금까지의 평점 (난수 없이)
+export function liveRating(match, pid) {
+  const st = match.stats[pid];
+  if (!st || st.minuteOn === null) return null;
+  if (st.rating !== null) return st.rating;
+  const minutes = Math.max(0, (st.minuteOff ?? match.minute) - st.minuteOn);
+  return ratingFrom(match, pid, st, minutes, 6.5);
+}
+
+function ratingFrom(match, pid, st, minutes, start) {
+  const [h, a] = [match.sides[0].score, match.sides[1].score];
+  const p = match.players[pid];
+  const line = p.position === 'GK' ? 'gk' : ['CB', 'LB', 'RB'].includes(p.position) ? 'def' : ['DM', 'CM', 'LM', 'RM', 'AM'].includes(p.position) ? 'mid' : 'att';
+  const scored = st.side === 0 ? h : a;
+  const against = st.side === 0 ? a : h;
+
+  let r = start;
+  r += st.goals * 1.0 + st.assists * 0.6 + st.onTarget * 0.1 - (st.shots - st.onTarget) * 0.05;
+  r += st.involvement;
+  r += st.saves * 0.25;
+  if (line === 'gk') r -= st.conceded * 0.45;
+  else if (line === 'def') r -= st.conceded * 0.25;
+  else if (line === 'mid') r -= st.conceded * 0.1;
+  if (st.conceded === 0 && minutes >= 60) r += line === 'gk' || line === 'def' ? 0.6 : line === 'mid' ? 0.2 : 0;
+  r += scored > against ? 0.35 : scored < against ? -0.35 : 0;
+  r -= st.yellow > 0 && !st.secondYellow ? 0.3 : 0;
+  if (st.red) r -= st.secondYellow ? 1.2 : 1.5;
+  if (minutes < 20) r = 6.5 + (r - 6.5) * 0.6;
+  return Math.round(clamp(r, 3, 10) * 10) / 10;
 }
 
 const SUMMARY_EVENTS = new Set(['goal', 'yellow', 'secondYellow', 'red', 'injury']);

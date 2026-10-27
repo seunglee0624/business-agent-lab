@@ -152,7 +152,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .scoreboard .mini-stats { grid-column: 1 / -1; text-align: center; }
 .match-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .pause-reason { background: rgba(210, 153, 34, 0.15); color: var(--yellow); padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-.match-body { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+.match-body { display: grid; grid-template-columns: 1fr 460px; gap: 16px; align-items: start; }
 .commentary { height: 60vh; overflow-y: auto; }
 .c-line { display: flex; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 .c-clock { width: 46px; color: var(--muted); flex-shrink: 0; text-align: right; }
@@ -162,15 +162,39 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .c-line.goal.theirs { background: rgba(248, 81, 73, 0.12); }
 .c-line.halftime, .c-line.fulltime { color: var(--yellow); font-weight: 600; }
 .c-line.tactics { color: var(--muted); }
-.my-lineup .lu { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
-.my-lineup .lu span:nth-child(2) { flex: 1; }
-.my-lineup .lu.off { opacity: 0.4; text-decoration: line-through; }
+.my-lineup .table { font-size: 12px; margin-top: 10px; }
+.my-lineup .table td { padding: 4px 5px; white-space: nowrap; }
+.my-lineup .table tr.off td { opacity: 0.45; }
+.my-lineup .cond { width: 40px; }
+
+/* 포메이션 그림 */
+.pitch { position: relative; aspect-ratio: 68 / 90; max-width: 440px; margin: 0 auto; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.25);
+  background: repeating-linear-gradient(180deg, #1e5e34 0 10%, #22683a 10% 20%); overflow: hidden; }
+.pitch-mark { position: absolute; border: 2px solid rgba(255, 255, 255, 0.22); }
+.pitch-mark.half { left: -2px; right: -2px; top: 50%; height: 0; border-width: 2px 0 0; }
+.pitch-mark.circle { left: 50%; top: 50%; width: 22%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
+.pitch-mark.box { left: 25%; width: 50%; height: 13%; }
+.pitch-mark.box.top { top: -2px; }
+.pitch-mark.box.bottom { bottom: -2px; }
+.spot { position: absolute; transform: translate(-50%, -50%); width: 80px; text-align: center; padding: 3px 2px 4px; border-radius: 6px;
+  background: rgba(13, 17, 23, 0.82); border: 1px solid rgba(255, 255, 255, 0.15); font-size: 11px; line-height: 1.25; }
+.spot .spot-name { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.spot .spot-role { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot .cond { width: 100%; margin-top: 3px; }
+.spot.off { opacity: 0.4; }
+.spot.empty { border-style: dashed; color: var(--muted); }
+.spot.offpos { border-color: var(--yellow); }
 .match-panel { border-color: var(--yellow); }
 .match-summary { border-color: var(--accent); }
 
 @media (max-width: 1000px) {
   .grid.two, .grid.two.wide-left, .squad.with-detail, .match-body { grid-template-columns: 1fr; }
   .side { width: 150px; }
+}
+@media (max-width: 520px) {
+  .spot { width: 66px; font-size: 10px; }
+  .spot .spot-role { display: none; }
+  .my-lineup { overflow-x: auto; }
 }
 
 /* 2단계: 탭, 순위 구역 */

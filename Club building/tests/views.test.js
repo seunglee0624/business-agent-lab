@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
+import { FORMATIONS } from '../js/data/formations.js';
+import { pitchLayout } from '../js/ui/pitch.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
   seasonEndBanner, youthView, historyView, chooseJobView,
@@ -66,4 +68,26 @@ test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 �
     g.chooseNewClub(state, g.jobOffers(state)[0].id);
   }
   check(renderAll(state));
+});
+
+test('포메이션 그림: 모든 포메이션에서 선수 칸이 겹치지 않는다', () => {
+  // 칸 크기 80px × 66px, 경기장 440px × 582px 기준
+  for (const [name, slots] of Object.entries(FORMATIONS)) {
+    const at = pitchLayout(slots);
+    for (let i = 0; i < at.length; i++) {
+      for (let j = i + 1; j < at.length; j++) {
+        const dx = Math.abs(at[i].x - at[j].x) * 4.4;
+        const dy = Math.abs(at[i].y - at[j].y) * 5.82;
+        assert.ok(dx >= 80 || dy >= 66, `${name}: ${slots[i]}와 ${slots[j]}가 겹침`);
+      }
+    }
+  }
+});
+
+test('전술 화면에 포메이션 그림과 역할이 나온다', () => {
+  const state = g.createNewGame('p');
+  g.chooseClub(state, Object.keys(state.clubs)[0], '테스트');
+  const html = tacticsView(state, {});
+  assert.equal((html.match(/class="spot /g) ?? []).length, 11);
+  assert.ok(html.includes('spot-role'));
 });
