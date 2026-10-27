@@ -96,3 +96,45 @@ export function resolveLineup(club, playersById, { unavailable = new Set(), benc
   }
   return { lineup, bench: bench.slice(0, benchSize), replaced };
 }
+
+// 감독이 전술을 바꾼다. change 하나만 적용한다:
+// { formation } | { key, value } | { slot, playerId } | { slot, role } | { manual: true } | { auto: true } | { autoPick: true }
+export function applyTacticsChange(club, playersById, change, { unavailable = new Set() } = {}) {
+  const t = club.tactics;
+  // 지금 보이는 선발을 그대로 고정한다
+  const freeze = () => {
+    t.lineup = resolveLineup(club, playersById, { unavailable }).lineup.map((e) => (e ? { ...e } : null));
+    t.bench = null;
+  };
+  if (change.manual) {
+    freeze();
+  } else if (change.auto) {
+    t.lineup = null;
+    t.bench = null;
+  } else if (change.autoPick) {
+    const squad = club.squad.map((id) => playersById[id]);
+    Object.assign(t, autoLineup(squad, t.formation, { unavailable }));
+  } else if ('role' in change) {
+    freeze();
+    t.lineup[change.slot].role = change.role;
+  } else if ('key' in change) {
+    t[change.key] = change.value || null;
+  } else if ('playerId' in change) {
+    freeze();
+    const i = change.slot;
+    const other = t.lineup.findIndex((e) => e?.playerId === change.playerId);
+    // 이미 선발인 선수를 고르면 두 자리를 맞바꾼다
+    if (other >= 0) t.lineup[other] = t.lineup[i] && { ...t.lineup[i], role: t.lineup[other].role };
+    t.lineup[i] = { playerId: change.playerId, role: t.lineup[i]?.role ?? DEFAULT_ROLE[FORMATIONS[t.formation][i]] };
+  } else if ('formation' in change) {
+    t.formation = change.formation;
+    if (t.lineup) {
+      // 같은 선수들을 새 포메이션 자리에 다시 배치한다
+      const slots = FORMATIONS[change.formation];
+      t.lineup = t.lineup.map((e, i) => e && {
+        playerId: e.playerId,
+        role: ROLES[e.role]?.positions.includes(slots[i]) ? e.role : DEFAULT_ROLE[slots[i]],
+      });
+    }
+  }
+}

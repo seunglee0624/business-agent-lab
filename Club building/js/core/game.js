@@ -4,7 +4,7 @@ import { Rng } from './rng.js';
 import { generateWorld, newIds } from './worldgen.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { seasonStart, addDays, addMonths, formatDate } from './calendar.js';
-import { resolveLineup } from './tactics.js';
+import { resolveLineup, applyTacticsChange } from './tactics.js';
 import { ageOn } from './player.js';
 import { createMatch, simulateMatch, summarize, isFinished } from './match/engine.js';
 import { applyMatchDiscipline } from './discipline.js';
@@ -473,6 +473,13 @@ export function sendDownToYouth(state, playerId) {
 }
 
 export { registeredCount };
+
+// ---- 전술 (내 구단) ----
+
+export function changeTactics(state, change) {
+  const club = userClub(state);
+  applyTacticsChange(club, state.players, change, { unavailable: unavailableSet(state, userLeagueId(state), club) });
+}
 
 // ---- 계약·시설·스태프 (내 구단) ----
 

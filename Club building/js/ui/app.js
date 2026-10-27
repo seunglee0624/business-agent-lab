@@ -2,15 +2,11 @@
 
 import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
-  simulateToSeasonEnd, userClub, userLeagueId, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
-  renewContract, upgradeFacility, setStaffLevel,
+  simulateToSeasonEnd, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
+  renewContract, upgradeFacility, setStaffLevel, changeTactics,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
-import { unavailableSet } from '../core/state.js';
-import { autoLineup, resolveLineup } from '../core/tactics.js';
-import { FORMATIONS } from '../data/formations.js';
-import { DEFAULT_ROLE, ROLES } from '../data/roles.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
@@ -166,13 +162,8 @@ export class App {
 
   // ---- 전술 편집 ----
 
-  editLineup(fn) {
-    const club = userClub(this.state);
-    const t = club.tactics;
-    const current = resolveLineup(club, this.state.players, { unavailable: unavailableSet(this.state, userLeagueId(this.state), club) });
-    t.lineup = current.lineup.map((e) => (e ? { ...e } : null));
-    t.bench = null;
-    fn(t);
+  tactics(change) {
+    changeTactics(this.state, change);
     this.persist();
     this.render();
   }
@@ -300,16 +291,9 @@ export class App {
         this.ui.round = Number(d.round);
         this.render();
         break;
-      case 'autoLineupNow': {
-        const club = userClub(s);
-        const squad = club.squad.map((id) => s.players[id]);
-        const { lineup, bench } = autoLineup(squad, club.tactics.formation, { unavailable: unavailableSet(s, userLeagueId(s), club) });
-        club.tactics.lineup = lineup;
-        club.tactics.bench = bench;
-        this.persist();
-        this.render();
+      case 'autoLineupNow':
+        this.tactics({ autoPick: true });
         break;
-      }
       case 'exportSave':
         exportState(s);
         break;
@@ -348,52 +332,18 @@ export class App {
           });
         break;
       }
-      case 'setTactic': {
-        const club = userClub(s);
-        const value = el.value || null;
-        if (d.key === 'formation') {
-          club.tactics.formation = value;
-          if (club.tactics.lineup) {
-            // 같은 선수들을 새 포메이션 자리에 다시 배치한다
-            const slots = FORMATIONS[value];
-            club.tactics.lineup = club.tactics.lineup.map((e, i) => e && {
-              playerId: e.playerId,
-              role: ROLES[e.role]?.positions.includes(slots[i]) ? e.role : DEFAULT_ROLE[slots[i]],
-            });
-          }
-        } else {
-          club.tactics[d.key] = value;
-        }
-        this.persist();
-        this.render();
+      case 'setTactic':
+        this.tactics(d.key === 'formation' ? { formation: el.value } : { key: d.key, value: el.value });
         break;
-      }
       case 'setSlotPlayer':
-        this.editLineup((t) => {
-          const i = Number(d.slot);
-          const other = t.lineup.findIndex((e) => e?.playerId === el.value);
-          // 이미 선발인 선수를 고르면 두 자리를 맞바꾼다
-          if (other >= 0) t.lineup[other] = t.lineup[i] && { ...t.lineup[i], role: t.lineup[other].role };
-          t.lineup[i] = { playerId: el.value, role: t.lineup[i]?.role ?? DEFAULT_ROLE[FORMATIONS[t.formation][i]] };
-        });
+        this.tactics({ slot: Number(d.slot), playerId: el.value });
         break;
       case 'setSlotRole':
-        this.editLineup((t) => {
-          t.lineup[Number(d.slot)].role = el.value;
-        });
+        this.tactics({ slot: Number(d.slot), role: el.value });
         break;
-      case 'toggleAutoLineup': {
-        const club = userClub(s);
-        if (el.checked) {
-          club.tactics.lineup = null;
-          club.tactics.bench = null;
-          this.persist();
-          this.render();
-        } else {
-          this.editLineup(() => {});
-        }
+      case 'toggleAutoLineup':
+        this.tactics(el.checked ? { auto: true } : { manual: true });
         break;
-      }
       case 'setViewMode':
         s.settings.viewMode = el.value;
         this.persist();
