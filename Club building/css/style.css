@@ -66,6 +66,8 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .card-head h3 { margin: 0; }
 .grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .grid.two.wide-left { grid-template-columns: 3fr 2fr; }
+.grid.two.pitch-left { grid-template-columns: minmax(380px, 2fr) 3fr; }
+.tactics-row label { display: flex; flex-direction: column; gap: 4px; }
 .grid.two > .card { margin-bottom: 0; }
 
 .table { width: 100%; border-collapse: collapse; }
@@ -170,13 +172,13 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 /* 포메이션 그림 */
 .pitch { position: relative; aspect-ratio: 68 / 90; max-width: 440px; margin: 0 auto; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.25);
   background: repeating-linear-gradient(180deg, #1e5e34 0 10%, #22683a 10% 20%); overflow: hidden; }
-.pitch-mark { position: absolute; border: 2px solid rgba(255, 255, 255, 0.22); }
-.pitch-mark.half { left: -2px; right: -2px; top: 50%; height: 0; border-width: 2px 0 0; }
-.pitch-mark.circle { left: 50%; top: 50%; width: 22%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
-.pitch-mark.box { left: 25%; width: 50%; height: 13%; }
-.pitch-mark.box.top { top: -2px; }
-.pitch-mark.box.bottom { bottom: -2px; }
-.spot { position: absolute; transform: translate(-50%, -50%); width: 80px; text-align: center; padding: 3px 2px 4px; border-radius: 6px;
+.pm-half, .pm-circle, .pm-box { position: absolute; border: 2px solid rgba(255, 255, 255, 0.22); pointer-events: none; }
+.pm-half { left: 0; right: 0; top: 50%; height: 0; border-width: 2px 0 0; }
+.pm-circle { left: 50%; top: 50%; width: 22%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
+.pm-box { left: 25%; width: 50%; height: 13%; }
+.pm-far { top: -2px; }
+.pm-near { bottom: -2px; }
+.spot { position: absolute; transform: translate(-50%, -50%); width: 18%; min-width: 58px; text-align: center; padding: 3px 2px 4px; border-radius: 6px;
   background: rgba(13, 17, 23, 0.82); border: 1px solid rgba(255, 255, 255, 0.15); font-size: 11px; line-height: 1.25; }
 .spot .spot-name { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .spot .spot-role { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -188,11 +190,11 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .match-summary { border-color: var(--accent); }
 
 @media (max-width: 1000px) {
-  .grid.two, .grid.two.wide-left, .squad.with-detail, .match-body { grid-template-columns: 1fr; }
+  .grid.two, .grid.two.wide-left, .grid.two.pitch-left, .squad.with-detail, .match-body { grid-template-columns: 1fr; }
   .side { width: 150px; }
 }
 @media (max-width: 520px) {
-  .spot { width: 66px; font-size: 10px; }
+  .spot { font-size: 10px; }
   .spot .spot-role { display: none; }
   .my-lineup { overflow-x: auto; }
 }

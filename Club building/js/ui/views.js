@@ -317,7 +317,29 @@ export function tacticsView(state) {
   const takers = squad.filter((p) => p.position !== 'GK').sort((a, b) => (b.attrs.finishing + b.attrs.composure * 2) - (a.attrs.finishing + a.attrs.composure * 2));
 
   return `
-    <div class="grid two wide-left">
+    <div class="card">
+      <h3>팀 전술</h3>
+      <div class="form-row tactics-row">
+        <label>포메이션 <select data-change="setTactic" data-key="formation">${FORMATION_KEYS.map((f) => `<option ${f === t.formation ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
+        <label>팀 성향 <select data-change="setTactic" data-key="mentality">${options(MENTALITIES, t.mentality)}</select></label>
+        <label>압박 강도 <select data-change="setTactic" data-key="pressing">${options(PRESSING, t.pressing)}</select></label>
+        <label>템포 <select data-change="setTactic" data-key="tempo">${options(TEMPO, t.tempo)}</select></label>
+        <label>수비 라인 <select data-change="setTactic" data-key="line">${options(LINE, t.line)}</select></label>
+        <label>페널티킥 키커 <select data-change="setTactic" data-key="setPieceTaker">
+          <option value="">자동 (가장 잘 차는 선수)</option>
+          ${takers.map((p) => `<option value="${p.id}" ${p.id === t.setPieceTaker ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select></label>
+      </div>
+      <div class="tips small muted">
+        <p>공격적: 기회가 늘지만 수비가 약해집니다. 수비적: 그 반대입니다. · 압박 높음: 중원 장악이 좋아지지만 체력 소모와 반칙이 늘어납니다. · 수비 라인 높게: 점유에 유리하지만, 센터백이 느리면 뒷공간을 내줍니다.</p>
+      </div>
+    </div>
+    <div class="grid two pitch-left">
+      <div class="card">
+        <h3>포메이션 <span class="muted small">${t.formation}</span></h3>
+        ${pitchHtml(spots)}
+        <p class="muted small">숫자는 그 자리에서의 능력입니다. 주황 테두리는 익숙하지 않은 자리입니다.</p>
+      </div>
       <div class="card">
         <div class="card-head">
           <h3>선발 명단</h3>
@@ -330,32 +352,6 @@ export function tacticsView(state) {
         <table class="table"><thead><tr><th>자리</th><th>선수 · 포지션 · 이 자리 능력</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
         <h4>교체 명단</h4>
         <p class="small">${bench.map((p) => `${posLabel(p.position)} ${esc(p.name)}`).join(' · ')}</p>
-      </div>
-      <div>
-      <div class="card">
-        <h3>포메이션 <span class="muted small">${t.formation}</span></h3>
-        ${pitchHtml(spots)}
-        <p class="muted small">숫자는 그 자리에서의 능력입니다. 주황 테두리는 익숙하지 않은 자리입니다.</p>
-      </div>
-      <div class="card">
-        <h3>팀 전술</h3>
-        <div class="form-col">
-          <label>포메이션 <select data-change="setTactic" data-key="formation">${FORMATION_KEYS.map((f) => `<option ${f === t.formation ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
-          <label>팀 성향 <select data-change="setTactic" data-key="mentality">${options(MENTALITIES, t.mentality)}</select></label>
-          <label>압박 강도 <select data-change="setTactic" data-key="pressing">${options(PRESSING, t.pressing)}</select></label>
-          <label>템포 <select data-change="setTactic" data-key="tempo">${options(TEMPO, t.tempo)}</select></label>
-          <label>수비 라인 <select data-change="setTactic" data-key="line">${options(LINE, t.line)}</select></label>
-          <label>페널티킥 키커 <select data-change="setTactic" data-key="setPieceTaker">
-            <option value="">자동 (가장 잘 차는 선수)</option>
-            ${takers.map((p) => `<option value="${p.id}" ${p.id === t.setPieceTaker ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-          </select></label>
-        </div>
-        <div class="tips small muted">
-          <p>공격적: 기회가 늘지만 수비가 약해집니다. 수비적: 그 반대입니다.</p>
-          <p>압박 높음: 중원 장악이 좋아지지만 체력 소모와 반칙이 늘어납니다.</p>
-          <p>수비 라인 높게: 점유에 유리하지만, 센터백이 느리면 뒷공간을 내줍니다.</p>
-        </div>
-      </div>
       </div>
     </div>`;
 }

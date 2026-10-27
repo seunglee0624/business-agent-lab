@@ -1,13 +1,13 @@
 // 포메이션 그림: 자리(포지션) 목록을 경기장 위 좌표로 바꿔 선수 칸을 배치한다.
 
 // 위(공격)에서 아래(골키퍼)로 0~100
-const Y = { ST: 11, LW: 21, RW: 21, AM: 32, LM: 45, RM: 45, CM: 48, DM: 61, LB: 72, RB: 72, CB: 77, GK: 91 };
+const Y = { ST: 11, LW: 21, RW: 21, AM: 32, LM: 45, RM: 45, CM: 48, DM: 61, LB: 72, RB: 72, CB: 76, GK: 92 };
 // 측면 자리는 고정, 가운데 자리는 같은 포지션끼리 고르게 나눈다
 const SIDE_X = { LB: 9, LM: 9, LW: 13, RB: 91, RM: 91, RW: 87 };
 
 function spread(n) {
   if (n === 1) return [50];
-  if (n === 2) return [34, 66];
+  if (n === 2) return [32, 68];
   return Array.from({ length: n }, (_, i) => 30 + (40 * i) / (n - 1));
 }
 
@@ -25,8 +25,7 @@ export function pitchLayout(positions) {
 export function pitchHtml(spots) {
   const at = pitchLayout(spots.map((s) => s.pos));
   return `<div class="pitch">
-    <div class="pitch-mark half"></div><div class="pitch-mark circle"></div>
-    <div class="pitch-mark box top"></div><div class="pitch-mark box bottom"></div>
+    <div class="pm-half"></div><div class="pm-circle"></div><div class="pm-box pm-far"></div><div class="pm-box pm-near"></div>
     ${spots.map((s, i) => `<div class="spot ${s.cls ?? ''}" style="left:${at[i].x}%;top:${at[i].y}%">${s.html}</div>`).join('')}
   </div>`;
 }
