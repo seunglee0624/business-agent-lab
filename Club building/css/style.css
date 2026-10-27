@@ -230,3 +230,12 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .offer-actions input { width: 80px; }
 .search-form input[type="number"] { width: 72px; }
 .search-form .check { display: flex; align-items: center; gap: 4px; }
+.search-form label { display: flex; flex-direction: column; gap: 4px; }
+.search-form .inline { display: flex; align-items: center; gap: 6px; }
+.search-form #sMaxValue { width: 110px; }
+.search-form .check { flex-direction: row; align-self: flex-end; padding-bottom: 6px; }
+/* 선수단 표: 상세 창이 열려도 이름·주급·표시가 두 줄로 깨지지 않게 */
+.squad .table td { white-space: nowrap; }
+.squad .table th { white-space: nowrap; }
+.squad.with-detail > .card:first-child { overflow-x: auto; }
+.tag { white-space: nowrap; display: inline-block; }

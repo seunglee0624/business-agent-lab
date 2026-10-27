@@ -57,7 +57,7 @@ function incomingCard(state) {
           <td class="offer-actions">
             <button class="btn small primary" data-action="respondOffer" data-id="${o.id}" data-answer="accept">수락</button>
             <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="reject">거절</button>
-            <input id="counter-${o.id}" type="number" min="0" step="0.1" value="${eok(o.fee * 1.15)}" title="역제안 금액 (억 원)"><span class="small">억</span>
+            <input id="counter-${o.id}" type="number" min="0" step="0.1" value="${Math.round(o.fee * 1.15 / 1e7) / 10}" title="역제안 금액 (억 원)"><span class="small">억</span>
             <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="counter">역제안</button>
           </td></tr>`;
       }).join('')}</tbody></table>
@@ -91,8 +91,8 @@ function searchCard(state, ui) {
       <div class="form-row search-form">
         <label>포지션 <select id="sPosition">${options(positions, q.position)}</select></label>
         <label>리그 <select id="sLeague">${options(leagues, q.leagueId)}</select></label>
-        <label>나이 <input id="sMinAge" type="number" min="15" max="40" value="${q.minAge ?? ''}" placeholder="최소"> ~ <input id="sMaxAge" type="number" min="15" max="40" value="${q.maxAge ?? ''}" placeholder="최대"></label>
-        <label>몸값 최대 <input id="sMaxValue" type="number" min="0" step="1" value="${q.maxValue ? eok(q.maxValue) : ''}" placeholder="억"> 억</label>
+        <label>나이 <span class="inline"><input id="sMinAge" type="number" min="15" max="40" value="${q.minAge ?? ''}" placeholder="최소"> ~ <input id="sMaxAge" type="number" min="15" max="40" value="${q.maxAge ?? ''}" placeholder="최대"></span></label>
+        <label>몸값 최대 (억 원) <input id="sMaxValue" type="number" min="0" step="1" value="${q.maxValue ? eok(q.maxValue) : ''}" placeholder="제한 없음"></label>
         <label class="check"><input id="sFree" type="checkbox" ${q.freeOnly ? 'checked' : ''}> 자유계약만</label>
         <button class="btn primary small" data-action="searchPlayers">검색</button>
       </div>
