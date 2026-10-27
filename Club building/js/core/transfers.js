@@ -9,6 +9,7 @@ import { withParticle } from './korean.js';
 import { contractEnd, transferDemand, requiredWage, signNew } from './contracts.js';
 import { weeklyWageBill, recordTransfer } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
+import { SQUAD_TEMPLATE } from './worldgen.js';
 
 // ---- 선수 정보 ----
 
@@ -48,7 +49,7 @@ export const SEARCH_LIMIT = 100;
 export function searchPlayers(state, club, filters = {}) {
   const rows = [];
   for (const p of Object.values(state.players)) {
-    if (p.retired || p.clubId === club.id) continue;
+    if (p.retired || p.clubId === club.id || p.loan) continue;
     if (filters.freeOnly ? p.clubId : !p.clubId) continue;
     if (filters.position && p.position !== filters.position) continue;
     if (filters.leagueId && state.clubs[p.clubId]?.leagueId !== filters.leagueId) continue;
@@ -96,6 +97,7 @@ const dealOf = (state, p) => {
 // 이적료 제안. 돌려주는 값: { ok: true, stage: 'terms', fee } | { ok: false, reason, counter? }
 export function bidForPlayer(state, club, p, fee) {
   if (!p.clubId || p.clubId === club.id) return { ok: false, reason: '다른 구단 선수에게만 이적료를 제안할 수 있습니다.' };
+  if (p.loan) return { ok: false, reason: '임대 중인 선수는 데려올 수 없습니다.' };
   if (!windowEnd(state.date)) return { ok: false, reason: '이적시장이 닫혀 있습니다. (여름 7/1~8/31, 겨울 1월)' };
   fee = roundMoney(fee);
   if (fee > club.finance.transferBudget) return { ok: false, reason: '이적 예산을 넘습니다.' };
@@ -191,7 +193,7 @@ export function dailyOffers(state, rng, club) {
   const squad = club.squad.map((id) => state.players[id]);
   const keen = squad.filter((p) => p.transferListed || p.transferRequest);
   if (!rng.chance(Math.min(0.3, 0.02 + 0.04 * keen.length))) return null;
-  const candidates = squad.filter((p) => !p.injury && !t.incoming.some((o) => o.playerId === p.id));
+  const candidates = squad.filter((p) => !p.injury && !p.loan && !t.incoming.some((o) => o.playerId === p.id));
   if (!candidates.length) return null;
   const p = rng.weighted(candidates, (q) => (q.transferListed || q.transferRequest ? 5 : 1));
   const ovr = overall(p);
@@ -233,11 +235,67 @@ export function respondToOffer(state, rng, club, offerId, answer) {
 }
 
 // AI 구단은 등록 인원을 넘으면 가장 약한 선수를 내보낸다
-function trimSquad(state, club) {
+export function trimSquad(state, club) {
   while (registeredCount(state, club, state.date) > MAX_SQUAD) {
-    const worst = club.squad.map((id) => state.players[id]).sort((a, b) => overall(a) - overall(b))[0];
+    const worst = club.squad.map((id) => state.players[id]).filter((p) => !p.loan).sort((a, b) => overall(a) - overall(b))[0];
     club.squad = club.squad.filter((id) => id !== worst.id);
     if (club.tactics.lineup) club.tactics.lineup = null;
     Object.assign(worst, { clubId: null, lastClubId: club.id, contract: null, transferRequest: false, freeSince: state.date });
   }
+}
+
+// ---- AI 구단끼리 이적 ----
+
+// 시장마다 한 구단이 사는 최대 인원과 하루 시도 확률 (여름 약 1.5명, 겨울 약 0.3명)
+const AI_BUYS = { summer: { max: 3, chance: 0.025 }, winter: { max: 1, chance: 0.01 } };
+
+// 이적시장 중 매일: AI 구단 몇 곳이 약한 자리를 자유계약 선수 → 다른 구단 선수 순으로 보강한다
+export function dailyAiTransfers(state, rng, userId) {
+  const end = windowEnd(state.date);
+  if (!end) return;
+  const rule = end.endsWith('08-31') ? AI_BUYS.summer : AI_BUYS.winter;
+  for (const club of Object.values(state.clubs)) {
+    if (club.status !== 'active' || club.id === userId) continue;
+    const buys = club.windowBuys?.until === end ? club.windowBuys : (club.windowBuys = { until: end, n: 0 });
+    if (buys.n >= rule.max || !rng.chance(rule.chance)) continue;
+    if (aiSign(state, rng, club, userId)) buys.n++;
+  }
+}
+
+// 가장 보강이 필요한 자리: 그 자리 최고 선수가 구단 수준보다 많이 낮은 곳
+function neediestPosition(state, club) {
+  const best = Object.fromEntries(Object.keys(SQUAD_TEMPLATE).map((pos) => [pos, 0]));
+  for (const id of club.squad) {
+    const p = state.players[id];
+    best[p.position] = Math.max(best[p.position], overall(p));
+  }
+  return Object.keys(best).sort((a, b) => best[a] - best[b])[0];
+}
+
+function aiSign(state, rng, club, userId) {
+  const pos = neediestPosition(state, club);
+  const fits = (p) => p.position === pos && !p.retired && !p.injury && !p.loan && ageOn(p, state.date) <= 31
+    && overall(p) >= club.level - 3 && overall(p) <= club.level + 6;
+  const all = Object.values(state.players);
+  const free = all.filter((p) => !p.clubId && fits(p));
+  if (free.length) {
+    const p = rng.pick(free);
+    completeTransfer(state, p, null, club, 0, null);
+    signNew(rng, state, club, p);
+    trimSquad(state, club);
+    return true;
+  }
+  const bought = all.filter((p) => {
+    if (!p.clubId || p.clubId === club.id || p.clubId === userId || !fits(p)) return false;
+    const seller = state.clubs[p.clubId];
+    if (seller.status !== 'active' || seller.youth.includes(p.id) || seller.reputation - club.reputation > REPUTATION_GAP) return false;
+    return askingPrice(state, p) <= club.finance.transferBudget;
+  });
+  if (!bought.length) return false;
+  const p = rng.pick(bought);
+  const seller = state.clubs[p.clubId];
+  completeTransfer(state, p, seller, club, askingPrice(state, p), null);
+  signNew(rng, state, club, p);
+  trimSquad(state, club);
+  return true;
 }

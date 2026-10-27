@@ -4,10 +4,11 @@ import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
   renewContract, upgradeFacility, setStaffLevel, changeTactics,
-  bidForPlayer, offerTerms, respondToOffer, setTransferListed,
+  bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
+import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
@@ -285,6 +286,32 @@ export class App {
         const answer = d.answer === 'counter' ? { counter: Number(this.root.querySelector(`#counter-${id}`).value) * 1e8 } : d.answer;
         const res = respondToOffer(s, id, answer);
         this.ui.transferMsg = { ok: res.ok, text: res.ok ? (d.answer === 'reject' ? '제안을 거절했습니다.' : `이적료 ${won(res.fee)}에 선수를 보냈습니다.`) : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'loanOut': {
+        const name = s.players[d.id].name;
+        const res = loanOut(s, d.id);
+        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `${name} 임대가 정해졌습니다. 시즌이 끝나면 돌아옵니다.` : res.reason };
+        if (res.ok) this.ui.playerId = null;
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'offerLoan': {
+        const wageShare = Number(this.root.querySelector('#loanShare').value);
+        const name = s.players[d.id].name;
+        const res = offerLoan(s, d.id, { wageShare });
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? `${withParticle(name, '를')} 시즌 끝까지 임대로 데려왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.` : res.reason };
+        if (res.ok) this.ui.targetId = null;
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'buyLoaned': {
+        const res = buyLoanedPlayer(s, d.id);
+        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `옵션 금액 ${won(res.fee)}을 내고 완전 영입했습니다.` : res.reason };
         this.persist();
         this.render();
         break;

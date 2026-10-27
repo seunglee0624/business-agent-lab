@@ -58,9 +58,11 @@ test('새 시즌: 날짜·시즌·기록·누적 경고', () => {
   assert.ok(state.previousCompetitions.ENG1.fixtures.every((f) => f.result));
 });
 
-test('선수단: 모든 구단 25명, 유스는 정원 이하·21세 이하, 은퇴 선수는 구단 없음', () => {
+test('선수단: AI 구단 25명, 내 구단 18명 이상, 유스는 정원 이하·21세 이하, 은퇴 선수는 구단 없음', () => {
   for (const club of Object.values(state.clubs).filter((c) => c.status === 'active')) {
-    assert.equal(club.squad.length, 25, club.name);
+    if (club.id === state.manager.clubId) assert.ok(club.squad.length >= 18 && club.squad.length <= 25, club.name);
+    // 7월 1일 이적시장이 열리자마자 AI끼리 사고팔 수 있어 한두 명 차이는 있다
+    else assert.ok(club.squad.length >= 23 && club.squad.length <= 25, `${club.name} ${club.squad.length}`);
     assert.ok(club.youth.length <= YOUTH_CAP);
     for (const id of club.youth) assert.ok(ageOn(state.players[id], state.date) <= 22);
     for (const id of [...club.squad, ...club.youth]) assert.equal(state.players[id].clubId, club.id);
@@ -116,7 +118,9 @@ test('부상 선수는 경기 명단에 없다', () => {
 test('계약 만료 선수는 자유계약 선수로 남고, 자유계약 1년이 지나면 사라진다', () => {
   const free = Object.values(state.players).filter((p) => !p.clubId && !p.retired);
   assert.ok(free.length > 50, `자유계약 ${free.length}명`);
-  assert.ok(free.every((p) => p.freeSince === `${before.season + 1}-06-30` && !p.contract));
-  assert.ok(summary.leaving.every((p) => state.players[p.id]?.freeSince));
+  // 시즌 끝 만료 선수, 또는 시즌 중 AI 구단이 정리한 선수
+  assert.ok(free.every((p) => p.freeSince > `${before.season}-06-30` && p.freeSince <= state.date && !p.contract));
+  // 떠난 선수는 자유계약으로 남거나, 다른 구단이 자유계약으로 데려갔다
+  assert.ok(summary.leaving.every((p) => state.players[p.id]?.freeSince || state.players[p.id]?.clubId));
   assert.equal(state.players.oldFree, undefined);
 });

@@ -7,6 +7,7 @@ import { PROMISES } from '../data/economy.js';
 import { userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD } from '../core/game.js';
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
+import { loanOptionFee } from '../core/loans.js';
 import { weeklyWageBill } from '../core/finance.js';
 import { formatDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
@@ -41,7 +42,8 @@ export function transfersView(state, ui) {
       ${searchCard(state, ui)}
       ${target ? targetDetail(state, target) : ''}
     </div>
-    ${listedCard(state, club)}`;
+    ${listedCard(state, club)}
+    ${loanedOutCard(state, club)}`;
 }
 
 function incomingCard(state) {
@@ -148,6 +150,31 @@ function targetDetail(state, p) {
       ${p.transferRequest ? '<p class="error small">이적을 요청한 선수라 조금 싸게 살 수 있습니다.</p>' : ''}
       ${p.injury ? `<p class="error small">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
       <div class="renew">${box}</div>
+      ${loanBox(state, p)}
+    </div>`;
+}
+
+// 주전이 아닌 다른 구단 선수는 시즌 끝까지 임대로 데려올 수 있다
+function loanBox(state, p) {
+  if (!p.clubId || p.loan || !['rotation', 'backup'].includes(p.contract?.promise)) return '';
+  return `
+    <div class="renew">
+      <p><strong>임대로 데려오기</strong> <span class="muted small">시즌 끝까지 · 완전 이적 옵션 약 ${won(loanOptionFee(state, p))}</span></p>
+      <div class="form-row">
+        <label>우리가 낼 주급 비율 <select id="loanShare">${[0.5, 0.75, 1].map((v) => `<option value="${v}" ${v === 1 ? 'selected' : ''}>${v * 100}%</option>`).join('')}</select></label>
+        <button class="btn small" data-action="offerLoan" data-id="${p.id}">임대 제안</button>
+      </div>
+    </div>`;
+}
+
+function loanedOutCard(state, club) {
+  const out = (club.loanedOut ?? []).map((id) => state.players[id]).filter(Boolean);
+  if (!out.length) return '';
+  return `
+    <div class="card">
+      <h3>임대 보낸 선수</h3>
+      <table class="table compact"><tbody>${out.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td>
+        <td>${esc(clubName(state, p.clubId))}</td><td class="small">상대 구단이 주급 ${p.loan.wageShare * 100}% 부담</td></tr>`).join('')}</tbody></table>
     </div>`;
 }
 

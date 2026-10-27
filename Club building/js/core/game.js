@@ -6,6 +6,8 @@ import { LEAGUES } from '../data/countries/index.js';
 import { seasonStart, addDays, addMonths, formatDate } from './calendar.js';
 import { resolveLineup, applyTacticsChange } from './tactics.js';
 import * as transfers from './transfers.js';
+import * as loans from './loans.js';
+import { returnLoans } from './loans.js';
 import { ageOn } from './player.js';
 import { createMatch, simulateMatch, summarize, isFinished } from './match/engine.js';
 import { applyMatchDiscipline } from './discipline.js';
@@ -169,6 +171,7 @@ function dailyTick(state, rng, date) {
     }
   }
   if (date.endsWith('-01')) monthlyTick(state, rng, date);
+  transfers.dailyAiTransfers(state, rng, userId);
   const offer = userId ? transfers.dailyOffers(state, rng, state.clubs[userId]) : null;
   // 재정은 매달 마지막 날 정산한다 (6월분이 그 시즌 장부에 들어가도록)
   if (addDays(date, 1).endsWith('-01')) for (const club of activeClubs(state)) monthlySettlement(state, club);
@@ -399,6 +402,7 @@ function endSeason(state) {
 // 시즌 종료 처리 → 7월 1일 새 시즌. 돌려주는 값: 시즌 요약
 function runSeasonTransition(state) {
   moveTo(state, `${state.season + 1}-06-30`);
+  returnLoans(state);
   const summary = withRng(state, (rng) => processSeasonEnd(state, rng));
   seasonEndMessages(state, summary);
   const m = state.manager;
@@ -525,6 +529,25 @@ export function respondToOffer(state, offerId, answer) {
 
 export function setTransferListed(state, playerId, listed) {
   if (userClub(state).squad.includes(playerId)) transfers.setTransferListed(state.players[playerId], listed);
+}
+
+export function loanOut(state, playerId) {
+  const p = state.players[playerId];
+  const res = loans.loanOut(state, userClub(state), p);
+  if (res.ok) addMessage(state, { title: `${p.name} 임대`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[res.clubId].name}에서 뜁니다. 상대 구단이 주급의 ${res.wageShare * 100}%를 냅니다.` });
+  return res;
+}
+
+export function offerLoan(state, playerId, offer) {
+  const p = state.players[playerId];
+  const from = p.clubId;
+  const res = loans.offerLoan(state, userClub(state), p, offer);
+  if (res.ok) addMessage(state, { title: `${p.name} 임대 영입`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[from].name}에서 임대로 왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.` });
+  return res;
+}
+
+export function buyLoanedPlayer(state, playerId) {
+  return loans.buyLoanedPlayer(state, userClub(state), state.players[playerId]);
 }
 
 export function searchPlayers(state, filters) {

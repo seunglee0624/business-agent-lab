@@ -185,42 +185,74 @@ function releaseYouth(state, date) {
   return released;
 }
 
-// 6. 포지션별 빈자리를 유스 → 자유계약 선수 순으로 채워 25명을 맞춘다
+// 6. 포지션별 빈자리를 채운다. AI 구단: 유스 → 자유계약 선수 → 새 선수 순으로 25명.
+// 내 구단은 직접 영입하므로 18명·골키퍼 2명에 못 미칠 때만 그만큼 채운다
+export const USER_MIN_SQUAD = 18;
+export const USER_MIN_GK = 2;
+
 export function fillSquads(state, rng, clubs, date) {
   const report = new Map();
+  const userId = state.manager?.clubId;
   for (const club of clubs) {
     const log = { promoted: [], signed: [] };
     const counts = Object.fromEntries(POSITIONS.map((p) => [p, 0]));
     for (const id of club.squad) counts[state.players[id].position]++;
-    for (const pos of POSITIONS) {
-      while (counts[pos] < SQUAD_TEMPLATE[pos] && registeredCount(state, club, date) < 25) {
-        const youth = club.youth
-          .map((id) => state.players[id])
-          .filter((p) => p.position === pos)
-          .sort((a, b) => overall(b) - overall(a))[0];
-        if (youth && overall(youth) >= club.level - 18) {
-          club.youth = club.youth.filter((id) => id !== youth.id);
-          club.squad.push(youth.id);
-          signNew(rng, state, club, youth, { youth: true });
-          log.promoted.push(youth);
-        } else {
-          const age = Math.max(19, Math.min(31, Math.round(rng.normal(24, 3))));
-          const p = generatePlayer(rng, {
-            id: `p${state.ids.player++}`, pos, target: club.level - 4 + rng.normal(0, 3), age,
-            country: club.country, seasonStart: seasonStart(state.season + 1),
-          });
-          p.clubId = club.id;
-          state.players[p.id] = p;
-          club.squad.push(p.id);
-          signNew(rng, state, club, p);
-          log.signed.push(p);
+    const user = club.id === userId;
+    const wants = (pos) => (user
+      ? (pos === 'GK' ? counts.GK < USER_MIN_GK : club.squad.length < USER_MIN_SQUAD && counts[pos] < SQUAD_TEMPLATE[pos])
+      : counts[pos] < SQUAD_TEMPLATE[pos] && registeredCount(state, club, date) < 25);
+    // 내 구단은 한 바퀴에 자리마다 한 명씩, 18명이 될 때까지 템플릿 부족분을 돌아가며 채운다
+    for (let round = 0; round < (user ? 5 : 1); round++) {
+      for (const pos of POSITIONS) {
+        while (wants(pos)) {
+          signForPosition(state, rng, club, pos, date, log, !user);
+          counts[pos]++;
+          if (user) break;
         }
-        counts[pos]++;
       }
+    }
+    // 이적으로 자리 구성이 템플릿과 달라졌으면, 남는 등록 자리를 가장 약한 자리부터 채운다
+    while (!user && registeredCount(state, club, date) < 25) {
+      const pos = POSITIONS.slice().sort((a, b) => counts[a] / SQUAD_TEMPLATE[a] - counts[b] / SQUAD_TEMPLATE[b])[0];
+      signForPosition(state, rng, club, pos, date, log, true);
+      counts[pos]++;
     }
     report.set(club.id, log);
   }
   return report;
+}
+
+function signForPosition(state, rng, club, pos, date, log, useYouth) {
+  const youth = useYouth && club.youth
+    .map((id) => state.players[id])
+    .filter((p) => p.position === pos)
+    .sort((a, b) => overall(b) - overall(a))[0];
+  if (youth && overall(youth) >= club.level - 18) {
+    club.youth = club.youth.filter((id) => id !== youth.id);
+    club.squad.push(youth.id);
+    signNew(rng, state, club, youth, { youth: true });
+    log.promoted.push(youth);
+    return;
+  }
+  const free = Object.values(state.players)
+    .filter((p) => !p.clubId && !p.retired && p.position === pos && ageOn(p, date) <= 32 && overall(p) >= club.level - 8)
+    .sort((a, b) => overall(b) - overall(a))[0];
+  let p = free;
+  if (p) {
+    (p.transfers ??= []).push({ date: state.date, from: null, to: club.id, fee: 0 });
+    delete p.freeSince;
+  } else {
+    const age = Math.max(19, Math.min(31, Math.round(rng.normal(24, 3))));
+    p = generatePlayer(rng, {
+      id: `p${state.ids.player++}`, pos, target: club.level - 4 + rng.normal(0, 3), age,
+      country: club.country, seasonStart: seasonStart(state.season + 1),
+    });
+    state.players[p.id] = p;
+  }
+  p.clubId = club.id;
+  club.squad.push(p.id);
+  signNew(rng, state, club, p);
+  log.signed.push(p);
 }
 
 export function registeredCount(state, club, date) {

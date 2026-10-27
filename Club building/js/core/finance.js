@@ -41,7 +41,10 @@ export function gatePerMatch(club, position, teams) {
 
 // ---- 지출 기준 ----
 
-export const playerWageBill = (state, club) => club.squad.reduce((s, id) => s + (state.players[id].contract?.wage ?? 0), 0);
+// 임대 선수는 주급을 나눠 낸다 (데려온 구단 wageShare, 원래 구단 나머지)
+const loanShare = (p, club) => (!p.loan ? 1 : p.loan.to === club.id ? p.loan.wageShare : 1 - p.loan.wageShare);
+export const playerWageBill = (state, club) => [...club.squad, ...(club.loanedOut ?? [])]
+  .reduce((s, id) => { const p = state.players[id]; return s + roundMoney((p.contract?.wage ?? 0) * loanShare(p, club)); }, 0);
 export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + roundMoney(staffWage(club.staff[k]) * EUR), 0);
 // 주급 예산에 들어가는 주간 지출 (선수 + 스태프)
 export const weeklyWageBill = (state, club) => playerWageBill(state, club) + staffWageBill(club);
