@@ -19,7 +19,7 @@ const ASSIST_CHANCE = { big: 0.85, normal: 0.75, header: 0.95, long: 0.3 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function snapshot(p) {
-  return { id: p.id, name: p.name, position: p.position, secondary: p.secondary, attrs: p.attrs };
+  return { id: p.id, name: p.name, position: p.position, secondary: p.secondary, attrs: p.attrs, morale: p.morale };
 }
 
 function buildSide(setup, players, maxSubs) {
@@ -54,6 +54,7 @@ function buildSide(setup, players, maxSubs) {
     maxSubs,
     auto: setup.auto !== false, // 교체를 자동으로
     aiTactics: setup.aiTactics !== false, // 스코어에 따라 성향을 자동으로 바꿈 (AI 구단만)
+    injuryFactor: setup.injuryFactor ?? 1, // 스포츠 과학 센터·의료진 보정
     score: 0,
     shots: 0,
     onTarget: 0,
@@ -303,7 +304,7 @@ const INJURY_RATE = 1.1e-4;
 function injuries(match, rng, newEvents) {
   match.sides.forEach((side, s) => {
     for (const slot of active(side)) {
-      const p = INJURY_RATE * (1 + (100 - slot.energy) / 60) * (slot.pos === 'GK' ? 0.3 : 1);
+      const p = INJURY_RATE * side.injuryFactor * (1 + (100 - slot.energy) / 60) * (slot.pos === 'GK' ? 0.3 : 1);
       if (!rng.chance(p)) continue;
       slot.injured = true;
       match.stats[slot.playerId].injured = true;

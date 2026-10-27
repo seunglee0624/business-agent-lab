@@ -68,7 +68,7 @@ test('선수단: 모든 구단 25명, 유스는 정원 이하·21세 이하, 은
 test('3부 하위로 끝난 내 구단: 강등이면 새 구단 선택, 아니면 계속', () => {
   const myPos = tablesBefore.ENG3.findIndex((r) => r.clubId === userId);
   if (myPos >= tablesBefore.ENG3.length - 3) {
-    assert.equal(state.phase, 'chooseJob');
+    assert.equal(state.phase, 'unemployed');
     const offers = g.jobOffers(state);
     assert.ok(offers.length > 0 && offers.every((c) => LEAGUES[c.leagueId].tier === 3));
     g.chooseNewClub(state, offers[0].id);

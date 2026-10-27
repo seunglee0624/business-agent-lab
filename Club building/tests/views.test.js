@@ -5,7 +5,7 @@ import { FORMATIONS } from '../js/data/formations.js';
 import { pitchLayout } from '../js/ui/pitch.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
-  seasonEndBanner, youthView, historyView, chooseJobView,
+  seasonEndBanner, youthView, historyView, unemployedView, clubView, financeView,
 } from '../js/ui/views.js';
 
 const BAD = /undefined|NaN|\[object Object\]|null<\/|>null</;
@@ -23,6 +23,8 @@ function renderAll(state, ui = {}) {
     tableOther: tableView(state, { tableLeague: 'GER3' }),
     history: historyView(state, ui),
     settings: settingsView(state, ui),
+    club: clubView(state, ui),
+    finance: financeView(state, ui),
   };
   pages.layout = layout(state, { view: 'home' }, pages.home);
   const played = g.league(state).fixtures.find((f) => f.result);
@@ -63,8 +65,8 @@ test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 �
   end.seasonEnd = seasonEndBanner(state);
   check(end);
   g.startNextSeason(state);
-  if (state.phase === 'chooseJob') {
-    check({ job: chooseJobView(state, {}) });
+  if (state.phase === 'unemployed') {
+    check({ job: unemployedView(state, {}) });
     g.chooseNewClub(state, g.jobOffers(state)[0].id);
   }
   check(renderAll(state));
@@ -90,4 +92,21 @@ test('전술 화면에 포메이션 그림과 역할이 나온다', () => {
   const html = tacticsView(state, {});
   assert.equal((html.match(/class="spot /g) ?? []).length, 11);
   assert.ok(html.includes('spot-role'));
+});
+
+test('재계약 협상 화면, 구단·재정 화면, 해고 뒤 실업 화면', async () => {
+  const { fireManager } = await import('../js/core/board.js');
+  const state = g.createNewGame('jobs');
+  g.chooseClub(state, Object.keys(state.clubs)[5], '테스트');
+  const club = g.userClub(state);
+  const expiring = club.squad.find((id) => state.players[id].contract.until === '2027-06-30');
+  const html = squadView(state, { playerId: expiring });
+  assert.ok(html.includes('data-action="offerRenewal"'));
+  check({ renew: html, club: clubView(state, { clubMsg: { ok: false, text: '거절' } }), finance: financeView(state) });
+  fireManager(state, '테스트');
+  check({ waiting: unemployedView(state, {}) });
+  g.advance(state);
+  const offers = unemployedView(state, {});
+  assert.ok(offers.includes('data-action="takeJob"'));
+  check({ offers });
 });

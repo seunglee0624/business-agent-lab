@@ -3,7 +3,10 @@
 import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, userClub, userLeagueId, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
+  renewContract, upgradeFacility, setStaffLevel,
 } from '../core/game.js';
+import { FACILITIES, PROMISES } from '../data/economy.js';
+import { won } from './format.js';
 import { unavailableSet } from '../core/state.js';
 import { autoLineup, resolveLineup } from '../core/tactics.js';
 import { FORMATIONS } from '../data/formations.js';
@@ -11,7 +14,7 @@ import { DEFAULT_ROLE, ROLES } from '../data/roles.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, chooseJobView, youthView, historyView,
+  fixtureDetail, seasonEndBanner, unemployedView, youthView, historyView, clubView, financeView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 
@@ -55,9 +58,9 @@ export class App {
       this.root.innerHTML = newGameView(s, this.ui);
       return;
     }
-    if (s.phase === 'chooseJob') {
+    if (s.phase === 'unemployed') {
       this.root.className = 'app newgame-root';
-      this.root.innerHTML = chooseJobView(s, this.ui);
+      this.root.innerHTML = unemployedView(s, this.ui);
       return;
     }
     this.root.className = 'app';
@@ -73,7 +76,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -86,6 +89,17 @@ export class App {
   continue() {
     const s = this.state;
     if (s.liveMatch) return this.openMatch();
+    if (s.phase === 'unemployed') {
+      this.ui.busy = true;
+      this.render();
+      setTimeout(() => {
+        advance(s);
+        this.ui.busy = false;
+        this.persist();
+        this.render();
+      }, 30);
+      return;
+    }
     const res = advance(s);
     if (res.stop === 'userMatch') {
       if (s.settings.viewMode === 'result') {
@@ -200,8 +214,35 @@ export class App {
       case 'nav':
         this.ui.view = d.view;
         this.ui.fixtureId = null;
+        this.ui.clubMsg = null;
         this.render();
         break;
+      case 'upgradeFacility': {
+        const name = FACILITIES[d.key].name;
+        if (!confirm(`${name} 업그레이드를 수뇌부에 요청할까요? 승인되면 공사비가 바로 나갑니다.`)) return;
+        const res = upgradeFacility(s, d.key);
+        this.ui.clubMsg = { ok: res.ok, text: res.ok ? `${name} 공사를 시작합니다. 공사비 ${won(res.cost)}, ${res.months}개월 뒤 완료됩니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'staffLevel': {
+        const res = setStaffLevel(s, d.key, Number(d.level));
+        this.ui.clubMsg = res.ok ? null : { ok: false, text: res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'offerRenewal': {
+        const wage = Number(this.root.querySelector('#offerWage').value) * 1e4;
+        const years = Number(this.root.querySelector('#offerYears').value);
+        const promise = this.root.querySelector('#offerPromise').value;
+        const res = renewContract(s, d.id, { wage, years, promise });
+        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `${years}년, 주급 ${won(wage)}, ${PROMISES[promise].name} 약속으로 재계약했습니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
       case 'continue':
         this.continue();
         break;
@@ -248,6 +289,7 @@ export class App {
         break;
       case 'selectPlayer':
         this.ui.playerId = d.id || null;
+        this.ui.contractMsg = null;
         this.render();
         break;
       case 'squadSort':

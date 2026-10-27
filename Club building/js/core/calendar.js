@@ -9,6 +9,19 @@ export function addDays(iso, days) {
   return toIso(d);
 }
 
+// 몇 달 뒤 1일 (공사 완료일 등)
+export function addMonths(iso, months) {
+  const [y, m] = iso.split('-').map(Number);
+  const total = y * 12 + (m - 1) + months;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+}
+
+// 날짜가 속한 시즌 (7월에 시작)
+export function seasonOf(iso) {
+  const [y, m] = iso.split('-').map(Number);
+  return m >= 7 ? y : y - 1;
+}
+
 export function daysBetween(a, b) {
   return Math.round((toDate(b) - toDate(a)) / 86400000);
 }

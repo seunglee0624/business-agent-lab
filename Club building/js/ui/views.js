@@ -12,8 +12,14 @@ import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, jobOffers, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
+import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
+import { upgradeInfo, capacity } from '../core/facilities.js';
+import { weeklyWageBill, playerWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
+import { marketValue, roundMoney } from '../core/money.js';
+import { canRenew, renewalDemand } from '../core/contracts.js';
+import { moraleLabel } from '../core/morale.js';
 import { pitchHtml, shortName } from './pitch.js';
-import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass } from './format.js';
+import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won } from './format.js';
 
 const options = (map, current) =>
   Object.entries(map).map(([k, v]) => `<option value="${k}" ${k === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -76,20 +82,42 @@ export function newGameView(state, ui) {
     </div>`;
 }
 
-// 3부에서 강등되어 계약이 끝났을 때
-export function chooseJobView(state, ui) {
-  const offers = jobOffers(state);
-  const leagueId = ui.jobLeague && LEAGUES[ui.jobLeague].tier === 3 ? ui.jobLeague : `${offers[0] ? state.clubs[offers[0].id].country : 'ENG'}3`;
-  const clubs = offers.filter((c) => c.leagueId === leagueId).sort((a, b) => b.level - a.level);
-  const last = state.manager.history.at(-1);
+// 실업 상태: 받은 제의 중에서 고르거나, 제의를 더 기다린다
+export function unemployedView(state, ui) {
+  const m = state.manager;
+  const offers = jobOffers(state).sort((a, b) => LEAGUES[a.leagueId].tier - LEAGUES[b.leagueId].tier || b.level - a.level);
+  const last = m.history.at(-1);
+  const many = offers.length > 30;
+  const leagueId = many ? (ui.jobLeague && offers.some((c) => c.leagueId === ui.jobLeague) ? ui.jobLeague : offers[0].leagueId) : null;
+  const shown = many ? offers.filter((c) => c.leagueId === leagueId) : offers;
+  const leagues = [...new Set(offers.map((c) => c.leagueId))];
   return `
     <div class="newgame">
-      <h1>감독 계약 종료</h1>
-      <p>${esc(last?.clubName ?? '')}에서의 시즌이 강등으로 끝났습니다. ${state.season}-${String(state.season + 1).slice(2)} 시즌에 맡을 구단을 고르세요.</p>
-      <p class="muted">지금은 모든 나라의 3부 구단을 고를 수 있습니다. 감독 커리어 기록은 이어집니다.</p>
-      <div class="tabs">${Object.values(COUNTRIES).map((c) => `<button class="tab ${`${c.code}3` === leagueId ? 'active' : ''}" data-action="jobLeague" data-league="${c.code}3">${esc(c.name)} ${esc(c.leagues[2].name)}</button>`).join('')}</div>
-      ${clubPickTable(state, clubs, 'takeJob', '이 구단 맡기')}
+      <h1>${esc(m.name)} 감독 · 실업 중</h1>
+      <p>${last ? `${esc(last.clubName)}에서 ${last.fired ? '경질되었습니다' : '계약이 끝났습니다'}. ` : ''}${formatDate(state.date)} · 감독 평판 ${m.reputation}</p>
+      ${offers.length ? `
+        <h2>받은 제의 (${offers.length})</h2>
+        ${many ? `<div class="tabs">${leagues.map((id) => `<button class="tab ${id === leagueId ? 'active' : ''}" data-action="jobLeague" data-league="${id}">${esc(COUNTRIES[LEAGUES[id].country].name)} ${esc(LEAGUES[id].name)}</button>`).join('')}</div>` : ''}
+        ${jobTable(state, shown)}`
+        : '<p class="muted">아직 받은 제의가 없습니다. 시간을 보내며 제의를 기다리세요. 성적이 나쁜 구단이 감독을 바꾸면 평판이 맞는 구단에서 연락이 옵니다.</p>'}
+      <p><button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>제의 기다리기 ▶</button> <span class="muted small">${ui.busy ? '진행 중...' : '새 제의가 올 때까지 시간이 흐릅니다.'}</span></p>
+      <div class="card"><h3>메시지</h3>${inboxList(state)}</div>
     </div>`;
+}
+
+function jobTable(state, clubs) {
+  const rows = clubs.map((c) => {
+    const table = standings(state, c.leagueId);
+    const pos = table.findIndex((r) => r.clubId === c.id) + 1;
+    const offer = state.offers.find((o) => o.clubId === c.id);
+    return `<tr>
+      <td>${clubLabel(c)}</td><td>${esc(LEAGUES[c.leagueId].name)}</td><td>${table[0].played ? `${pos}위` : '-'}</td>
+      <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td><td>${esc(c.goal.text)}</td><td>${won(c.finance.balance)}</td>
+      <td class="muted small">${formatShortDate(offer.until)}까지</td>
+      <td><button class="btn primary small" data-action="takeJob" data-id="${c.id}">수락</button></td>
+    </tr>`;
+  }).join('');
+  return `<table class="table"><thead><tr><th>구단</th><th>리그</th><th>순위</th><th>전력</th><th>수뇌부 목표</th><th>잔고</th><th>답변 기한</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ---- 공통 틀 ----
@@ -101,6 +129,8 @@ const NAV = [
   ['youth', '유스'],
   ['schedule', '일정'],
   ['table', '순위표'],
+  ['club', '구단'],
+  ['finance', '재정'],
   ['history', '기록'],
   ['settings', '설정'],
 ];
@@ -175,10 +205,31 @@ export function homeView(state) {
         <button class="btn small" data-action="nav" data-view="table">전체 순위</button>
       </div>
       <div class="card">
+        <h3>구단 상황</h3>
+        ${boardSummary(state, club, myPos + 1)}
+        <button class="btn small" data-action="nav" data-view="club">구단 운영</button> <button class="btn small" data-action="nav" data-view="finance">재정</button>
+      </div>
+      <div class="card">
         <h3>메시지</h3>
         ${inboxList(state)}
       </div>
     </div>`;
+}
+
+function meter(value, label) {
+  const cls = value >= 60 ? 'good' : value >= 35 ? 'mid' : 'low';
+  return `<span class="meter ${cls}" title="${esc(label)} ${value}"><span style="width:${value}%"></span></span> <strong>${value}</strong>`;
+}
+
+function boardSummary(state, club, pos) {
+  const m = state.manager;
+  const f = club.finance;
+  return `<table class="table compact">
+    <tr><td>수뇌부 목표</td><td><strong>${esc(club.goal.text)}</strong> <span class="muted small">(지금 ${pos}위)</span></td></tr>
+    <tr><td>신뢰도</td><td>${meter(m.trust, '신뢰도')}</td></tr>
+    <tr><td>잔고</td><td class="${f.balance < 0 ? 'error' : ''}">${won(f.balance)}</td></tr>
+    <tr><td>주급 (예산)</td><td>${won(weeklyWageBill(state, club))} <span class="muted small">/ ${won(f.wageBudget)}</span></td></tr>
+  </table>`;
 }
 
 function miniRow(state, r, i, myId) {
@@ -217,7 +268,7 @@ export function squadView(state, ui) {
       <div class="card">
         <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
-          <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
+          <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>사기</th><th>주급</th><th>계약</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
           <tbody>
             ${sorted.map((p) => {
               const s = seasonStats(p, state.season, leagueId);
@@ -230,20 +281,24 @@ export function squadView(state, ui) {
                 <td>${ovrCell(p)}</td>
                 <td class="muted">${p.potential}</td>
                 <td>${conditionBar(p.condition)}</td>
+                <td class="${moraleClass(p.morale)}" title="${moraleLabel(p.morale)}">${p.morale}</td>
+                <td class="small">${p.contract ? won(p.contract.wage) : '-'}</td>
+                <td class="small ${p.contract && canRenew(state, p) ? 'error' : ''}">${p.contract ? `${p.contract.until.slice(0, 4)}.6` : '-'}</td>
                 <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
-                <td>${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
+                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>
-      ${selected ? playerDetail(state, selected) : ''}
+      ${selected ? playerDetail(state, selected, ui) : ''}
     </div>`;
 }
 
 const nationName = (code) => NATIONS[code]?.name ?? code;
+const moraleClass = (m) => (m >= 70 ? 'a-high' : m >= 50 ? 'a-good' : m >= 30 ? 'a-mid' : 'a-low');
 
-export function playerDetail(state, p) {
+export function playerDetail(state, p, ui = {}) {
   const groups = { technical: '기술', mental: '정신', physical: '신체', goalkeeping: '골키퍼' };
   const leagueId = userLeagueId(state);
   const s = seasonStats(p, state.season, leagueId);
@@ -266,8 +321,39 @@ export function playerDetail(state, p) {
       <p>${s ? `${s.apps}경기 (선발 ${s.starts}) · ${s.minutes}분 · ${s.goals}골 ${s.assists}도움 · 평점 ${avgRating(s)} · 경고 ${s.yellows} 퇴장 ${s.reds}` : '출전 기록이 없습니다.'}</p>
       ${record ? `<p class="muted">리그 누적 경고 ${record.yellows}장${record.ban ? ` · 출전 정지 ${record.ban}경기 남음` : ''}</p>` : ''}
       ${p.injury ? `<p class="error">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
+      ${contractBox(state, p, ui)}
       ${career.length > 1 ? `<h4>통산 기록</h4><table class="table compact">${career.map(({ season, comp, x }) => `<tr><td>${season}-${String(Number(season) + 1).slice(2)}</td><td>${esc(LEAGUES[comp]?.name ?? comp)}</td><td>${x.apps}경기</td><td>${x.goals}골</td><td>${x.assists}도움</td><td>${avgRating(x)}</td></tr>`).join('')}</table>` : ''}
     </div>`;
+}
+
+// 계약 정보와 재계약 협상
+function contractBox(state, p, ui) {
+  if (!p.contract) return '';
+  const c = p.contract;
+  const club = userClub(state);
+  let talk = '';
+  if (canRenew(state, p) && club.squad.includes(p.id)) {
+    const d = renewalDemand(state, club, p);
+    const tries = p.talks?.month === state.date.slice(0, 7) ? p.talks.tries : 0;
+    talk = `
+      <div class="renew">
+        <p><strong>재계약 협상</strong> <span class="muted small">이번 달 ${tries}/3번</span></p>
+        <p class="small">선수 요구: 주급 ${won(d.wage)} · ${d.years}년 · ${PROMISES[d.promise].name}</p>
+        <div class="form-row">
+          <label>주급 (만 원) <input id="offerWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}"></label>
+          <label>기간 <select id="offerYears">${[1, 2, 3, 4, 5].map((y) => `<option value="${y}" ${y === d.years ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
+          <label>출전 약속 <select id="offerPromise">${Object.entries(PROMISES).map(([k, v]) => `<option value="${k}" ${k === d.promise ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
+          <button class="btn primary small" data-action="offerRenewal" data-id="${p.id}">제안</button>
+        </div>
+        <p class="muted small">약속을 낮추면 주급을 더 원하고, 높여 주면 조금 덜 받아도 됩니다. 주급 예산(${won(club.finance.wageBudget)}) 안에서만 제안할 수 있습니다.</p>
+        ${ui.contractMsg ? `<p class="${ui.contractMsg.ok ? 'good' : 'error'} small">${esc(ui.contractMsg.text)}</p>` : ''}
+      </div>`;
+  }
+  return `
+    <h4>계약</h4>
+    <p>주급 ${won(c.wage)} · ${formatDate(c.until)}까지 · 출전 약속 ${PROMISES[c.promise].name} · 몸값 약 ${won(marketValue(p, state.date))}</p>
+    <p class="muted small">사기 ${p.morale} (${moraleLabel(p.morale)})${p.transferRequest ? ' · <span class="error">이적을 요청했습니다</span>' : ''}</p>
+    ${talk}`;
 }
 
 // ---- 전술 ----
@@ -618,5 +704,132 @@ export function seasonEndBanner(state, ui = {}) {
       ${myBest ? `<p>우리 팀 최고 평점: ${esc(myBest.p.name)} ${avgRating(myBest.s)}</p>` : ''}
       <p class="muted small">다음 시즌으로 넘어가면 승강, 은퇴, 선수단 정리가 처리되고 7월 1일에 새 시즌이 시작됩니다.</p>
       <button class="btn primary" data-action="nextSeason" ${ui.busy ? 'disabled' : ''}>다음 시즌 시작 ▶</button>
+    </div>`;
+}
+
+// ---- 구단 운영: 수뇌부, 시설, 스태프 ----
+
+export function clubView(state, ui) {
+  const club = userClub(state);
+  const m = state.manager;
+  const table = standings(state);
+  const pos = table.findIndex((r) => r.clubId === club.id) + 1;
+  const f = club.finance;
+
+  const facilityRows = FACILITY_KEYS.map((key) => {
+    const level = club.facilities[key];
+    const building = club.construction.find((c) => c.key === key);
+    const info = upgradeInfo(club, key);
+    let action = '<span class="muted small">최고 레벨</span>';
+    if (building) action = `<span class="tag">공사 중 · ${formatShortDate(building.done)} 완료</span>`;
+    else if (info) action = `<button class="btn small" data-action="upgradeFacility" data-key="${key}">업그레이드</button> <span class="muted small">${won(info.cost)} · ${info.months}개월</span>`;
+    return `<tr>
+      <td>${esc(FACILITIES[key].name)}</td>
+      <td>${'★'.repeat(level)}<span class="muted">${'☆'.repeat(5 - level)}</span></td>
+      <td class="muted small">${esc(FACILITIES[key].effect)}${key === 'stadium' ? ` · ${capacity(club).toLocaleString('ko-KR')}석` : ''}</td>
+      <td>${action}</td>
+    </tr>`;
+  }).join('');
+
+  const staffRows = STAFF_KEYS.map((key) => {
+    const level = club.staff[key];
+    const wage = roundMoney(staffWage(level) * EUR);
+    return `<tr>
+      <td>${esc(STAFF[key].name)}</td>
+      <td><button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level - 1}" ${level <= 1 ? 'disabled' : ''}>−</button>
+        <strong class="staff-level">${level}</strong>
+        <button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level + 1}" ${level >= MAX_STAFF ? 'disabled' : ''}>+</button></td>
+      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(roundMoney(staffWage(level + 1) * EUR) - wage)}</div>` : ''}</td>
+      <td class="muted small">${esc(STAFF[key].effect)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    ${ui.clubMsg ? `<p class="${ui.clubMsg.ok ? 'good' : 'error'}">${esc(ui.clubMsg.text)}</p>` : ''}
+    <div class="grid two">
+      <div class="card">
+        <h3>수뇌부</h3>
+        <table class="table compact">
+          <tr><td>시즌 목표</td><td><strong>${esc(club.goal.text)}</strong></td></tr>
+          <tr><td>지금 순위</td><td>${table[0].played ? `${pos}위` : '개막 전'}</td></tr>
+          <tr><td>신뢰도</td><td>${meter(m.trust, '신뢰도')}</td></tr>
+          <tr><td>감독 평판</td><td>${m.reputation}</td></tr>
+        </table>
+        <p class="muted small">신뢰도는 매달 순위와 목표, 재정(잔고가 마이너스인지)으로 변합니다. 11월부터 15 아래로 떨어지면 시즌 중에도 해고되고, 시즌이 끝나면 목표 달성 여부로 크게 평가합니다.</p>
+      </div>
+      <div class="card">
+        <h3>구단 정보</h3>
+        <table class="table compact">
+          <tr><td>연고지</td><td>${esc(club.city)}</td></tr>
+          <tr><td>구단 평판</td><td>${club.reputation}</td></tr>
+          <tr><td>경기장</td><td>${capacity(club).toLocaleString('ko-KR')}석 · 예상 관중 비율 ${Math.round(attendanceRate(club, pos || null, table.length) * 100)}%</td></tr>
+          <tr><td>잔고</td><td>${won(f.balance)}</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>시설</h3>
+      <p class="muted small">업그레이드는 수뇌부 승인이 필요합니다. 잔고가 공사비의 1.3배 이상이고 신뢰도가 40 이상이어야 승인됩니다. 공사비는 바로 나가고, 레벨이 높을수록 매달 유지비가 늘어납니다.</p>
+      <table class="table"><thead><tr><th>시설</th><th>레벨</th><th>효과</th><th></th></tr></thead><tbody>${facilityRows}</tbody></table>
+    </div>
+    <div class="card">
+      <h3>스태프</h3>
+      <p class="muted small">수준(1~20)을 올리면 스태프 주급이 늘어납니다. 주급 예산(${won(f.wageBudget)}) 안에서만 올릴 수 있습니다.</p>
+      <table class="table"><thead><tr><th>분야</th><th>수준</th><th>주급</th><th>효과</th></tr></thead><tbody>${staffRows}</tbody></table>
+    </div>`;
+}
+
+// ---- 재정 ----
+
+const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', transfers: '선수 판매' };
+const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', transfers: '선수 영입' };
+
+function ledgerTable(ledger) {
+  const rows = (names, part, sign) => Object.entries(names)
+    .map(([k, name]) => `<tr><td>${name}</td><td class="num">${part[k] ? `${sign}${won(part[k])}` : '-'}</td></tr>`).join('');
+  const net = ledgerTotal(ledger.income) - ledgerTotal(ledger.expense);
+  return `<table class="table compact">
+    <tr class="line-below"><th>수입</th><th class="num">${won(ledgerTotal(ledger.income))}</th></tr>${rows(INCOME_NAMES, ledger.income, '')}
+    <tr class="line-below"><th>지출</th><th class="num">${won(ledgerTotal(ledger.expense))}</th></tr>${rows(EXPENSE_NAMES, ledger.expense, '-')}
+    <tr><th>수지</th><th class="num ${net < 0 ? 'error' : 'good'}">${won(net)}</th></tr>
+  </table>`;
+}
+
+export function financeView(state) {
+  const club = userClub(state);
+  const f = club.finance;
+  const bill = weeklyWageBill(state, club);
+  const players = playerWageBill(state, club);
+  const top = club.squad.map((id) => state.players[id]).sort((a, b) => b.contract.wage - a.contract.wage).slice(0, 8);
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>잔고와 예산</h3>
+        <table class="table compact">
+          <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
+          <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
+          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
+          <tr><td>지금 주급 (주)</td><td class="num ${bill > f.wageBudget ? 'error' : ''}">${won(bill)} <span class="muted small">선수 ${won(players)} + 스태프 ${won(bill - players)}</span></td></tr>
+          <tr><td>남은 주급 여유</td><td class="num">${won(f.wageBudget - bill)}</td></tr>
+          <tr><td>시설 유지비 (월)</td><td class="num">${won(monthlyUpkeep(club))}</td></tr>
+        </table>
+        <p class="muted small">예산은 시즌이 시작할 때 수뇌부가 정합니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
+      </div>
+      <div class="card">
+        <h3>이번 시즌 장부</h3>
+        ${ledgerTable(f.season)}
+      </div>
+      <div class="card">
+        <h3>주급 상위 선수</h3>
+        <table class="table compact">${top.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td><td class="num">${won(p.contract.wage)}</td><td class="muted small">${p.contract.until.slice(0, 4)}년 6월까지</td></tr>`).join('')}</table>
+      </div>
+      <div class="card">
+        <h3>지난 시즌</h3>
+        ${f.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">수입</th><th class="num">지출</th><th class="num">수지</th><th class="num">시즌 끝 잔고</th></tr></thead><tbody>
+          ${f.history.map((h) => {
+            const net = ledgerTotal(h.income) - ledgerTotal(h.expense);
+            return `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td class="num">${won(ledgerTotal(h.income))}</td><td class="num">${won(ledgerTotal(h.expense))}</td><td class="num ${net < 0 ? 'error' : 'good'}">${won(net)}</td><td class="num">${won(h.balance)}</td></tr>`;
+          }).join('')}</tbody></table>` : '<p class="muted">아직 지난 시즌 기록이 없습니다.</p>'}
+      </div>
     </div>`;
 }

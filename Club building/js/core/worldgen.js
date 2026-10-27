@@ -5,6 +5,8 @@ import { NATIONS, formatName } from '../data/nations.js';
 import { COUNTRIES } from '../data/countries/index.js';
 import { overallAt } from './player.js';
 import { defaultTactics } from './tactics.js';
+import { assignInitialContracts } from './contracts.js';
+import { initClubOps } from './facilities.js';
 
 // 구단당 25명 구성
 export const SQUAD_TEMPLATE = {
@@ -54,13 +56,14 @@ export function clubName(rng, country, cityName, usedNames) {
   return null;
 }
 
-function makeClub(rng, { id, name, city, country, rule, tier }) {
+function makeClub(rng, { id, name, city, citySize, country, rule, tier }) {
   const [primary, secondary] = rng.shuffle(CLUB_COLORS);
   const level = rule.tierLevel[tier] + rng.normal(0, 1.5);
   return {
     id,
     name,
     city,
+    citySize,
     country: country.code,
     leagueId: rule.id,
     status: 'active', // active | archived(3부에서 강등되어 보관 중)
@@ -97,7 +100,7 @@ function generateCountryClubs(rng, country, ids, usedNames) {
       const tier = i < rule.tiers.strong ? 'strong' : i < rule.tiers.strong + rule.tiers.mid ? 'mid' : 'weak';
       const name = clubName(rng, country, city.name, usedNames) ?? `${city.name} ${ids.club}`;
       usedNames.add(name);
-      clubs.push(makeClub(rng, { id: `c${ids.club++}`, name, city: city.name, country, rule, tier }));
+      clubs.push(makeClub(rng, { id: `c${ids.club++}`, name, city: city.name, citySize: city.size, country, rule, tier }));
     });
     offset += rule.teams;
   }
@@ -115,8 +118,10 @@ export function generatePromotedClub(rng, country, rule, { ids, usedNames, taken
   }
   if (!name) name = `${city.name} ${ids.club}`;
   usedNames.add(name);
-  const club = makeClub(rng, { id: `c${ids.club++}`, name, city: city.name, country, rule, tier: 'weak' });
+  const club = makeClub(rng, { id: `c${ids.club++}`, name, city: city.name, citySize: city.size, country, rule, tier: 'weak' });
   const players = generateSquad(rng, club, { ids, seasonStart });
+  assignInitialContracts(rng, club, players, seasonStart);
+  initClubOps(rng, club);
   return { club, players };
 }
 
@@ -243,7 +248,10 @@ export function generateWorld(rng, { seasonStart, ids = newIds() }) {
   for (const country of Object.values(COUNTRIES)) {
     for (const club of generateCountryClubs(rng, country, ids, usedNames)) {
       clubs.push(club);
-      players.push(...generateSquad(rng, club, { ids, seasonStart }));
+      const squad = generateSquad(rng, club, { ids, seasonStart });
+      assignInitialContracts(rng, club, squad, seasonStart);
+      initClubOps(rng, club);
+      players.push(...squad);
     }
   }
   return { clubs, players, ids };

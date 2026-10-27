@@ -1,5 +1,6 @@
 // 선수와 팀의 경기 중 전력 계산
 
+import { moraleFactor } from '../morale.js';
 import { ROLES } from '../../data/roles.js';
 import { familiarity } from '../player.js';
 
@@ -56,7 +57,7 @@ export function playerEfficiency(slot, player) {
     slot.famKey = `${slot.playerId}|${slot.pos}`;
     slot.fam = familiarity(player, slot.pos);
   }
-  return energyFactor(slot.energy) * slot.fam;
+  return energyFactor(slot.energy) * slot.fam * moraleFactor(player.morale);
 }
 
 const MENTALITY = {

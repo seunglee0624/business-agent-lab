@@ -64,3 +64,22 @@ export function formBadges(form) {
 export function avgRating(s) {
   return s && s.ratingCount ? (s.ratingSum / s.ratingCount).toFixed(2) : '-';
 }
+
+// 금액(원) 표시: "1,520억 원", "3억 2,000만 원", "4,500만 원"
+export function won(amount) {
+  const sign = amount < 0 ? '-' : '';
+  const a = Math.round(Math.abs(amount));
+  const n = (x) => x.toLocaleString('ko-KR');
+  if (a >= 1e10) return `${sign}${n(Math.round(a / 1e8))}억 원`;
+  if (a >= 1e8) {
+    let eok = Math.floor(a / 1e8);
+    let man = Math.round((a % 1e8) / 1e6) * 100;
+    if (man >= 10000) {
+      eok++;
+      man = 0;
+    }
+    return `${sign}${eok}억${man ? ` ${n(man)}만` : ''} 원`;
+  }
+  if (a >= 1e4) return `${sign}${n(Math.round(a / 1e4))}만 원`;
+  return `${sign}${n(a)}원`;
+}

@@ -10,6 +10,11 @@ import { resetSeasonYellows } from './discipline.js';
 import { retirementChance, isHomegrownYouth } from './development.js';
 import { withParticle } from './korean.js';
 import { addMessage, standings, topScorers, clubStrength } from './state.js';
+import { initFinance, payPrizeMoney, closeLedger, setBudgets } from './finance.js';
+import { signNew, expiringContracts } from './contracts.js';
+import { setSeasonGoals, seasonEndReview } from './board.js';
+import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
+import { FACILITY_KEYS } from '../data/economy.js';
 
 export const RETURN_CHANCE = 0.3;
 export const RETURN_AFTER_SEASONS = 2;
@@ -109,6 +114,7 @@ function fillBottomTier(state, rng, moves) {
         });
         state.clubs[club.id] = club;
         for (const p of players) state.players[p.id] = p;
+        initFinance(rng, state, club);
         added.push({ club, returned: false });
       }
     }
@@ -130,6 +136,8 @@ function release(state, club, p) {
   club.youth = club.youth.filter((id) => id !== p.id);
   p.lastClubId = club.id;
   p.clubId = null;
+  p.contract = null;
+  p.transferRequest = false;
   if (club.tactics.lineup) club.tactics.lineup = null;
 }
 
@@ -192,6 +200,7 @@ export function fillSquads(state, rng, clubs, date) {
         if (youth && overall(youth) >= club.level - 18) {
           club.youth = club.youth.filter((id) => id !== youth.id);
           club.squad.push(youth.id);
+          signNew(rng, state, club, youth, { youth: true });
           log.promoted.push(youth);
         } else {
           const age = Math.max(19, Math.min(31, Math.round(rng.normal(24, 3))));
@@ -202,6 +211,7 @@ export function fillSquads(state, rng, clubs, date) {
           p.clubId = club.id;
           state.players[p.id] = p;
           club.squad.push(p.id);
+          signNew(rng, state, club, p);
           log.signed.push(p);
         }
         counts[pos]++;
@@ -235,20 +245,29 @@ function rotateCompetitions(state) {
   state.previousCompetitions = state.competitions;
 }
 
-// 시즌 종료 처리 전체. 돌려주는 값: 내 구단 관련 요약
+// 시즌 종료 처리 전체. 돌려주는 값: 내 구단 관련 요약 (실업 중이면 userPos 등은 null)
 export function processSeasonEnd(state, rng) {
   const endDate = `${state.season + 1}-06-30`;
   const userId = state.manager.clubId;
-  const userLeague = state.clubs[userId].leagueId;
-  const userTable = standings(state, userLeague);
-  const userPos = userTable.findIndex((r) => r.clubId === userId) + 1;
+  const userLeague = userId ? state.clubs[userId].leagueId : null;
+  const userPos = userId ? standings(state, userLeague).findIndex((r) => r.clubId === userId) + 1 : null;
 
   recordHistory(state);
-  state.manager.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
+  for (const comp of Object.values(state.competitions)) {
+    const table = standings(state, comp.id);
+    table.forEach((r, i) => payPrizeMoney(state, state.clubs[r.clubId], i + 1, table.length));
+  }
+  let review = null;
+  if (userId) {
+    review = seasonEndReview(state, state.clubs[userId], userPos);
+    state.manager.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos, goal: state.clubs[userId].goal.text, met: review.met });
+  }
 
   const moves = promoteAndRelegate(state, rng);
   const added = fillBottomTier(state, rng, moves);
   const retired = retirements(state, rng, endDate);
+  const leaving = expiringContracts(state, rng, endDate, userId);
+  for (const { club, player } of leaving) release(state, club, player);
   for (const p of Object.values(state.players)) {
     if (!p.clubId && !p.retired) delete state.players[p.id]; // 자유계약 선수는 이적이 생기기 전까지 보관하지 않는다
   }
@@ -258,24 +277,48 @@ export function processSeasonEnd(state, rng) {
   rerateClubs(state);
   resetSeasonYellows(state.discipline);
   rotateCompetitions(state);
+  for (const club of Object.values(state.clubs)) if (club.finance) closeLedger(club, state.season);
 
   // 내 구단 메시지
   const myMove = moves.find((m) => m.clubId === userId);
   const myRetired = retired.filter((p) => p.lastClubId === userId);
+  const myLeaving = leaving.filter((x) => x.club.id === userId).map((x) => x.player);
   const myFill = fill.get(userId);
-  return { userPos, userLeague, move: myMove ?? null, retired: myRetired, fill: myFill, added, moves };
+  return { userPos, userLeague, move: myMove ?? null, retired: myRetired, leaving: myLeaving, fill: myFill, added, moves, review };
 }
 
-// 새 시즌을 시작한다 (7월 1일, 일정 생성)
+// 새 시즌을 시작한다 (7월 1일, 일정 생성, 목표와 예산)
 export function startSeason(state, rng) {
   state.season++;
   state.competitions = newCompetitions(rng, state, state.season);
   for (const p of Object.values(state.players)) p.condition = 100;
+  setSeasonGoals(state);
+  for (const club of Object.values(state.clubs)) {
+    if (club.status !== 'active') continue;
+    if (club.id !== state.manager.clubId) aiFacilityUpgrade(state, rng, club);
+    setBudgets(state, club);
+  }
+}
+
+// AI 구단은 돈이 넉넉하면 가끔 시설 하나를 올린다
+function aiFacilityUpgrade(state, rng, club) {
+  if (!rng.chance(0.25)) return;
+  const options = FACILITY_KEYS.filter((k) => upgradeInfo(club, k) && !isBuilding(club, k));
+  if (!options.length) return;
+  const key = options.sort((a, b) => club.facilities[a] - club.facilities[b])[0];
+  if (club.finance.balance >= upgradeInfo(club, key).cost * 2) requestUpgrade(state, club, key);
 }
 
 export function seasonEndMessages(state, summary) {
-  const club = state.clubs[state.manager.clubId];
+  if (!summary.userLeague) return;
+  const last = state.manager.history.at(-1);
+  const club = state.clubs[last.clubId];
   const leagueName = LEAGUES[summary.userLeague].name;
+  addMessage(state, {
+    title: last.met ? '수뇌부 평가: 목표 달성' : '수뇌부 평가: 목표 미달',
+    body: `${leagueName} ${summary.userPos}위로 시즌을 마쳤습니다. (목표: ${last.goal} · 신뢰도 ${state.manager.trust} · 감독 평판 ${state.manager.reputation})`,
+    important: true,
+  });
   if (summary.move?.to === null) {
     addMessage(state, {
       title: '감독 계약 종료',
@@ -291,12 +334,12 @@ export function seasonEndMessages(state, summary) {
     });
   }
   const f = summary.fill;
-  if (summary.retired.length || f?.promoted.length || f?.signed.length) {
+  if (summary.retired.length || summary.leaving.length || f?.promoted.length || f?.signed.length) {
     const parts = [];
     if (summary.retired.length) parts.push(`은퇴: ${summary.retired.map((p) => p.name).join(', ')}`);
+    if (summary.leaving.length) parts.push(`계약 만료로 떠남: ${summary.leaving.map((p) => p.name).join(', ')}`);
     if (f?.promoted.length) parts.push(`유스에서 1군 승격: ${f.promoted.map((p) => p.name).join(', ')}`);
     if (f?.signed.length) parts.push(`빈자리 보강(자유계약): ${f.signed.map((p) => `${p.name}(${p.position})`).join(', ')}`);
     addMessage(state, { title: '선수단 정리', body: parts.join(' / ') });
   }
 }
-

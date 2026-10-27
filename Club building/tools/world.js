@@ -17,7 +17,7 @@ for (let i = 0; i < N; i++) {
   const seasonMs = performance.now() - t0;
   const [top] = g.topScorers(state, 'ENG1', 1);
   const summary = g.startNextSeason(state);
-  if (state.phase === 'chooseJob') g.chooseNewClub(state, g.jobOffers(state)[0].id);
+  if (state.phase === 'unemployed') g.chooseNewClub(state, g.jobOffers(state)[0].id);
 
   const active = Object.values(state.clubs).filter((c) => c.status === 'active');
   const squadPlayers = active.flatMap((c) => c.squad.map((id) => state.players[id]));

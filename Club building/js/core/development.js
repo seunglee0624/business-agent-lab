@@ -3,11 +3,12 @@
 import { ATTRIBUTE_KEYS, POSITION_WEIGHTS } from '../data/positions.js';
 import { overall, ageOn } from './player.js';
 import { generatePlayer, SQUAD_TEMPLATE } from './worldgen.js';
+import { growthFactor, youthAbilityOffset, youthPotentialBoost } from './facilities.js';
 
 const PHYSICAL = new Set(['pace', 'stamina', 'strength']);
 
-// 한 달 동안의 종합 능력 변화량 (소수)
-export function monthlyDelta(rng, player, age, { minutes = 0, youth = false } = {}) {
+// 한 달 동안의 종합 능력 변화량 (소수). growth: 훈련장·코치 보정 (성장에만 곱한다)
+export function monthlyDelta(rng, player, age, { minutes = 0, youth = false, growth = 1 } = {}) {
   const gap = Math.max(0, player.potential - overall(player));
   const play = Math.min(1, minutes / 360);
   let delta;
@@ -15,6 +16,7 @@ export function monthlyDelta(rng, player, age, { minutes = 0, youth = false } = 
   else if (age <= 27) delta = gap * (0.015 + 0.025 * play);
   else if (age <= 29) delta = gap * 0.005;
   else delta = -((age - 29) * 0.12 + (age >= 33 ? 0.2 : 0));
+  if (delta > 0) delta *= growth;
   return delta * (0.7 + rng.next() * 0.6);
 }
 
@@ -42,11 +44,12 @@ export function monthlyDevelopment(state, rng) {
     if (club.status === 'archived') for (const id of club.squad) archivedIds.add(id);
     else for (const id of club.youth) youthIds.add(id);
   }
+  const growth = new Map(Object.values(state.clubs).map((c) => [c.id, growthFactor(c)]));
   for (const p of Object.values(state.players)) {
     if (p.retired || !p.clubId) continue;
     const age = ageOn(p, state.date);
     if (archivedIds.has(p.id) && age < 31) continue;
-    const delta = monthlyDelta(rng, p, age, { minutes: p.minutesMonth ?? 0, youth: youthIds.has(p.id) });
+    const delta = monthlyDelta(rng, p, age, { minutes: p.minutesMonth ?? 0, youth: youthIds.has(p.id), growth: growth.get(p.clubId) });
     applyDelta(p, delta);
     p.minutesMonth = 0;
   }
@@ -61,7 +64,7 @@ export function retirementChance(age, ovr) {
 
 const POSITION_POOL = Object.entries(SQUAD_TEMPLATE);
 
-// 유스 입단: 아카데미(지금은 구단 수준)가 높을수록 현재 능력, 유스 코치(지금은 평판)가 높을수록 잠재력이 높다
+// 유스 입단: 아카데미가 높을수록 현재 능력, 유스 코치가 높을수록 잠재력이 높다
 export function youthIntake(state, rng, club) {
   const n = rng.int(4, 8);
   const golden = rng.chance(0.05);
@@ -69,8 +72,8 @@ export function youthIntake(state, rng, club) {
   for (let i = 0; i < n; i++) {
     const pos = rng.weighted(POSITION_POOL, ([, count]) => count)[0];
     const age = rng.int(15, 16);
-    const target = Math.max(28, club.level - 24 + rng.normal(0, 4));
-    const boost = (club.reputation - 65) * 0.4 + (golden ? 8 : 0) + rng.normal(0, 3);
+    const target = Math.max(28, club.level + youthAbilityOffset(club) + rng.normal(0, 4));
+    const boost = youthPotentialBoost(club) + (golden ? 8 : 0) + rng.normal(0, 3);
     const p = generatePlayer(rng, {
       id: `p${state.ids.player++}`, pos, target, age, country: club.country,
       seasonStart: `${state.season}-07-01`, potentialBoost: boost,

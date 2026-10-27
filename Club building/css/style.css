@@ -104,6 +104,15 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .cond.good span { background: var(--high); }
 .cond.mid span { background: var(--yellow); }
 .cond.low span { background: var(--red); }
+.meter { display: inline-block; width: 90px; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+.meter span { display: block; height: 100%; }
+.meter.good span { background: var(--high); }
+.meter.mid span { background: var(--yellow); }
+.meter.low span { background: var(--red); }
+.num { text-align: right; white-space: nowrap; }
+.renew { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+.renew input { width: 110px; }
+.staff-level { display: inline-block; min-width: 26px; text-align: center; }
 .form { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 2px; color: #fff; }
 .form.w { background: var(--accent); }
 .form.d { background: #6e7781; }
