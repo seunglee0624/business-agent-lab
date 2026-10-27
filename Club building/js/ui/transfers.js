@@ -94,7 +94,7 @@ function searchCard(state, ui) {
         <label>나이 <span class="inline"><input id="sMinAge" type="number" min="15" max="40" value="${q.minAge ?? ''}" placeholder="최소"> ~ <input id="sMaxAge" type="number" min="15" max="40" value="${q.maxAge ?? ''}" placeholder="최대"></span></label>
         <label>몸값 최대 (억 원) <input id="sMaxValue" type="number" min="0" step="1" value="${q.maxValue ? eok(q.maxValue) : ''}" placeholder="제한 없음"></label>
         <label class="check"><input id="sFree" type="checkbox" ${q.freeOnly ? 'checked' : ''}> 자유계약만</label>
-        <button class="btn primary small" data-action="searchPlayers">검색</button>
+        <button class="btn primary" data-action="searchPlayers">검색</button>
       </div>
       ${!ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수는 현재 능력과 자리별 능력만 보이고, 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
         : rows.length ? `<table class="table clickable"><thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>구단</th><th>능력</th><th>잠재</th><th class="num">몸값</th><th class="num">주급</th><th>계약</th><th></th></tr></thead><tbody>

@@ -233,7 +233,7 @@ export class LiveMatchView {
       ${pitchHtml(spots)}
       <table class="table compact"><thead><tr><th>자리</th><th>선수</th><th>체력</th><th>평점</th><th>골</th><th>도움</th><th>슈팅</th></tr></thead>
         <tbody>${side.onPitch.map((slot) => row(slot.playerId, slot)).join('')}${outIds.map((id) => row(id, null)).join('')}</tbody></table>
-      <p class="small muted">대기: ${side.bench.map((id) => `${p[id].position} ${esc(p[id].name)}`).join(' · ') || '없음'}</p>
+      <p class="chips small muted">대기: ${side.bench.map((id) => `<span class="chip">${p[id].position} ${esc(p[id].name)}</span>`).join('') || '없음'}</p>
     </div>`;
   }
 
@@ -259,7 +259,7 @@ export class LiveMatchView {
         <label>템포 <select data-mt="tempo">${options(TEMPO, t.tempo)}</select></label>
         <label>라인 <select data-mt="line">${options(LINE, t.line)}</select></label>
       </div>
-      <p class="muted small">역할: ${side.onPitch.filter((s) => !s.sentOff).map((s) => `${s.pos} ${esc(ROLES[s.role].name)}`).join(' · ')}</p>
+      <p class="chips muted small">역할: ${side.onPitch.filter((s) => !s.sentOff).map((s) => `<span class="chip">${s.pos} ${esc(ROLES[s.role].name)}</span>`).join('')}</p>
     </div>`;
   }
 

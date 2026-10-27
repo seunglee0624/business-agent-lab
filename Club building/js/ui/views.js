@@ -611,7 +611,7 @@ export function youthView(state) {
       </table>
       ${(() => {
         const down = club.squad.map((id) => state.players[id]).filter((p) => p.youthSince && age(p, state.date) <= 21);
-        return down.length ? `<h4>U-21 팀으로 내릴 수 있는 1군 선수</h4><p>${down.map((p) => `${posLabel(p.position)} ${esc(p.name)} <button class="btn small" data-action="sendDown" data-id="${p.id}">내리기</button>`).join(' · ')}</p>` : '';
+        return down.length ? `<h4>U-21 팀으로 내릴 수 있는 1군 선수</h4><p class="chips">${down.map((p) => `<span class="chip">${posLabel(p.position)} ${esc(p.name)} <button class="btn small" data-action="sendDown" data-id="${p.id}">내리기</button></span>`).join('')}</p>` : '';
       })()}
     </div>`;
 }

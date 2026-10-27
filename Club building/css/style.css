@@ -357,3 +357,5 @@ input, select { background: var(--panel); }
 .grid.two > * { min-width: 0; }
 .content { min-width: 0; overflow-x: hidden; }
 .card { max-width: 100%; overflow-x: auto; }
+.search-form .btn { align-self: flex-end; }
+@media (max-width: 700px) { .top-actions { width: 100%; } .top-actions .btn.primary { margin-left: auto; } }
