@@ -4,6 +4,7 @@ import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
   renewContract, upgradeFacility, setStaffLevel, changeTactics,
+  bidForPlayer, offerTerms, respondToOffer, setTransferListed,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -13,6 +14,7 @@ import {
   fixtureDetail, seasonEndBanner, unemployedView, youthView, historyView, clubView, financeView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
+import { transfersView } from './transfers.js';
 
 export class App {
   constructor(root) {
@@ -72,7 +74,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -109,7 +111,7 @@ export class App {
       return;
     }
     this.persist();
-    this.ui.view = 'home';
+    this.ui.view = res.stop === 'transferOffer' ? 'transfers' : 'home';
     this.render();
   }
 
@@ -152,9 +154,9 @@ export class App {
         simulateUserMatch(this.state);
         finishUserMatch(this.state);
       }
-      simulateToSeasonEnd(this.state);
+      const res = simulateToSeasonEnd(this.state, { skipOffers: false });
       this.ui.busy = false;
-      this.ui.view = 'home';
+      this.ui.view = res.stop === 'transferOffer' ? 'transfers' : 'home';
       this.persist();
       this.render();
     }, 30);
@@ -206,6 +208,7 @@ export class App {
         this.ui.view = d.view;
         this.ui.fixtureId = null;
         this.ui.clubMsg = null;
+        this.ui.transferMsg = null;
         this.render();
         break;
       case 'upgradeFacility': {
@@ -236,6 +239,60 @@ export class App {
       }
       case 'continue':
         this.continue();
+        break;
+      case 'searchPlayers': {
+        const val = (id) => this.root.querySelector(id).value;
+        const num = (id) => (val(id) === '' ? undefined : Number(val(id)));
+        this.ui.search = {
+          position: val('#sPosition') || undefined,
+          leagueId: val('#sLeague') || undefined,
+          minAge: num('#sMinAge'),
+          maxAge: num('#sMaxAge'),
+          maxValue: num('#sMaxValue') === undefined ? undefined : num('#sMaxValue') * 1e8,
+          freeOnly: this.root.querySelector('#sFree').checked,
+        };
+        this.ui.transferMsg = null;
+        this.render();
+        break;
+      }
+      case 'selectTarget':
+        this.ui.targetId = d.id || null;
+        this.ui.transferMsg = null;
+        this.render();
+        break;
+      case 'bidForPlayer': {
+        const fee = Number(this.root.querySelector('#bidFee').value) * 1e8;
+        const res = bidForPlayer(s, d.id, fee);
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? `이적료 ${won(res.fee)}에 합의했습니다. 이제 선수와 개인 조건을 협상하세요.` : `${res.reason}${res.counter ? ` (${won(res.counter)})` : ''}` };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'offerTerms': {
+        const wage = Number(this.root.querySelector('#termWage').value) * 1e4;
+        const years = Number(this.root.querySelector('#termYears').value);
+        const promise = this.root.querySelector('#termPromise').value;
+        const name = s.players[d.id].name;
+        const res = offerTerms(s, d.id, { wage, years, promise });
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? `${name} 영입을 마쳤습니다. (${years}년, 주급 ${won(wage)})` : res.reason };
+        if (res.ok) this.ui.targetId = null;
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'respondOffer': {
+        const id = Number(d.id);
+        const answer = d.answer === 'counter' ? { counter: Number(this.root.querySelector(`#counter-${id}`).value) * 1e8 } : d.answer;
+        const res = respondToOffer(s, id, answer);
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? (d.answer === 'reject' ? '제안을 거절했습니다.' : `이적료 ${won(res.fee)}에 선수를 보냈습니다.`) : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'toggleListed':
+        setTransferListed(s, d.id, !s.players[d.id].transferListed);
+        this.persist();
+        this.render();
         break;
       case 'toSeasonEnd':
         this.toSeasonEnd();

@@ -103,11 +103,11 @@ test('스태프: 주급 예산을 넘는 수준으로는 올릴 수 없다', () 
 test('한 달이 지나면 수입·지출이 장부에 쌓이고, 홈 경기마다 입장 수입이 생긴다', () => {
   const s = structuredClone(state);
   for (let i = 0; i < 4; i++) {
-    g.advance(s);
+    g.advance(s, { skipOffers: true });
     g.simulateUserMatch(s);
     g.finishUserMatch(s);
   }
-  g.advance(s);
+  g.advance(s, { skipOffers: true });
   const club = g.userClub(s);
   const f = club.finance.season;
   assert.ok(f.income.gate > 0 && f.income.tv > 0 && f.income.commercial > 0);
@@ -122,7 +122,7 @@ test('해고되면 실업 상태로 시간이 흐르고, 제의를 받아 새 �
   fireManager(s, '테스트');
   assert.equal(s.phase, 'unemployed');
   assert.equal(g.userClub(s), undefined);
-  const res = g.advance(s);
+  const res = g.advance(s, { skipOffers: true });
   assert.equal(res.stop, 'offer');
   const offers = g.jobOffers(s);
   assert.ok(offers.length > 0);

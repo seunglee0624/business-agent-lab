@@ -10,7 +10,7 @@ export const RENEWAL_MONTHS = 12; // 계약이 이만큼 남으면 재계약 협
 export const MAX_TALKS_PER_MONTH = 3;
 
 // 계약 기간은 다음 날이 속한 시즌부터 센다 (6월 30일 계약은 새 시즌부터)
-const contractEnd = (date, years) => `${seasonOf(addDays(date, 1)) + years}-06-30`;
+export const contractEnd = (date, years) => `${seasonOf(addDays(date, 1)) + years}-06-30`;
 
 export function newContract(p, { date, years, promise, wageMult = 1 }) {
   return {
@@ -69,6 +69,12 @@ export function renewalDemand(state, club, p) {
 export function requiredWage(demand, promise) {
   const diff = PROMISES[promise].rank - PROMISES[demand.promise].rank;
   return demand.wage * (diff < 0 ? 1 + 0.25 * -diff : 1 - 0.08 * diff);
+}
+
+// 이적해 올 선수의 요구 조건: 지금 주급보다 10%, 능력 기준값보다 15% 더 원한다
+export function transferDemand(state, club, p) {
+  const wage = roundMoney(Math.max(wageFor(overall(p)) * 1.15, (p.contract?.wage ?? 0) * 1.1));
+  return { wage, promise: promiseForRank(squadRank(state, club, p)) };
 }
 
 // offer: { wage, years, promise }. 돌려주는 값: { ok, reason }

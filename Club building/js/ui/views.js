@@ -131,6 +131,7 @@ const NAV = [
   ['table', '순위표'],
   ['club', '구단'],
   ['finance', '재정'],
+  ['transfers', '이적'],
   ['history', '기록'],
   ['settings', '설정'],
 ];
@@ -285,7 +286,7 @@ export function squadView(state, ui) {
                 <td class="small">${p.contract ? won(p.contract.wage) : '-'}</td>
                 <td class="small ${p.contract && canRenew(state, p) ? 'error' : ''}">${p.contract ? `${p.contract.until.slice(0, 4)}.6` : '-'}</td>
                 <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
-                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
+                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${p.transferListed ? '<span class="tag">이적 목록</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -353,6 +354,7 @@ function contractBox(state, p, ui) {
     <h4>계약</h4>
     <p>주급 ${won(c.wage)} · ${formatDate(c.until)}까지 · 출전 약속 ${PROMISES[c.promise].name} · 몸값 약 ${won(marketValue(p, state.date))}</p>
     <p class="muted small">사기 ${p.morale} (${moraleLabel(p.morale)})${p.transferRequest ? ' · <span class="error">이적을 요청했습니다</span>' : ''}</p>
+    ${club.squad.includes(p.id) ? `<p><button class="btn small" data-action="toggleListed" data-id="${p.id}">${p.transferListed ? '이적 목록에서 내리기' : '이적 목록에 올리기'}</button> <span class="muted small">목록에 올리면 이적시장 동안 다른 구단 제안이 더 자주 옵니다.</span></p>` : ''}
     ${talk}`;
 }
 

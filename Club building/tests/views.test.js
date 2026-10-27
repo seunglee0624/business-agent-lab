@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
 import { FORMATIONS } from '../js/data/formations.js';
 import { pitchLayout } from '../js/ui/pitch.js';
+import { transfersView } from '../js/ui/transfers.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
   seasonEndBanner, youthView, historyView, unemployedView, clubView, financeView,
@@ -25,6 +26,7 @@ function renderAll(state, ui = {}) {
     settings: settingsView(state, ui),
     club: clubView(state, ui),
     finance: financeView(state, ui),
+    transfers: transfersView(state, ui),
   };
   pages.layout = layout(state, { view: 'home' }, pages.home);
   const played = g.league(state).fixtures.find((f) => f.result);
@@ -55,7 +57,7 @@ test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 �
   g.chooseClub(state, Object.values(state.clubs).find((c) => c.leagueId === 'ESP3').id, '테스트');
   check(renderAll(state));
   for (let i = 0; i < 12; i++) {
-    g.advance(state);
+    g.advance(state, { skipOffers: true });
     g.simulateUserMatch(state);
     g.finishUserMatch(state);
   }
@@ -105,8 +107,39 @@ test('재계약 협상 화면, 구단·재정 화면, 해고 뒤 실업 화면',
   check({ renew: html, club: clubView(state, { clubMsg: { ok: false, text: '거절' } }), finance: financeView(state) });
   fireManager(state, '테스트');
   check({ waiting: unemployedView(state, {}) });
-  g.advance(state);
+  g.advance(state, { skipOffers: true });
   const offers = unemployedView(state, {});
   assert.ok(offers.includes('data-action="takeJob"'));
   check({ offers });
+});
+
+test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개인 조건), 자유계약 선수, 받은 제안', () => {
+  const state = g.createNewGame('view-tr');
+  g.chooseClub(state, Object.keys(state.clubs)[4], '테스트');
+  const me = g.userClub(state);
+  me.finance.transferBudget = 1e13;
+  me.finance.wageBudget = 1e13;
+  me.squad.pop();
+  const search = { position: 'ST', maxAge: 25 };
+  const [first, second] = g.searchPlayers(state, search);
+  const feeStage = transfersView(state, { search, targetId: first.id });
+  assert.match(feeStage, /1단계: 이적료/);
+  assert.match(feeStage, new RegExp(`잠재 ${first.potentialRange[0]}~${first.potentialRange[1]}`));
+  assert.doesNotMatch(feeStage, /마무리|중거리/); // 세부 능력치는 숨긴다
+  const { counter } = g.bidForPlayer(state, second.id, 1e6);
+  g.bidForPlayer(state, second.id, counter);
+  const termsStage = transfersView(state, { search, targetId: second.id });
+  assert.match(termsStage, /2단계: 개인 조건/);
+  assert.match(termsStage, /진행 중인 협상/);
+  const free = state.players[first.id];
+  state.clubs[free.clubId].squad = state.clubs[free.clubId].squad.filter((id) => id !== free.id);
+  Object.assign(free, { clubId: null, contract: null, freeSince: '2026-06-30' });
+  const freeView = transfersView(state, { search: { freeOnly: true }, targetId: free.id });
+  assert.match(freeView, /자유계약: 개인 조건/);
+  g.setTransferListed(state, me.squad[0], true);
+  state.transfers.incoming.push({ id: 1, playerId: me.squad[0], clubId: second.clubId, fee: 5e9, date: state.date, expires: '2026-07-08' });
+  const offerView = transfersView(state, {});
+  assert.match(offerView, /수락/);
+  assert.match(offerView, /50억 원/);
+  check({ feeStage, termsStage, freeView, offerView, squad: squadView(state, { playerId: me.squad[0] }) });
 });

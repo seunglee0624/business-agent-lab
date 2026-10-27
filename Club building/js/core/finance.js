@@ -109,6 +109,17 @@ export function payPrizeMoney(state, club, position, teams) {
   return amount;
 }
 
+// 이적료: 사는 구단은 이적 예산에서 빼고, 파는 구단은 판 돈을 예산에 더한다 (적자면 빚을 먼저 갚고 남는 만큼)
+export function recordTransfer(buyer, seller, fee) {
+  if (!fee) return 0;
+  expense(buyer, 'transfers', fee);
+  buyer.finance.transferBudget = Math.max(0, buyer.finance.transferBudget - fee);
+  income(seller, 'transfers', fee);
+  const added = Math.min(fee, Math.max(0, seller.finance.balance));
+  seller.finance.transferBudget += added;
+  return added;
+}
+
 // 시즌 장부를 기록으로 넘긴다
 export function closeLedger(club, season) {
   const f = club.finance;

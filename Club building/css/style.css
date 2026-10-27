@@ -223,3 +223,10 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .legend.zone-down { background: var(--red); }
 .good { color: var(--accent-2); font-weight: 700; }
 .tag { background: var(--panel-2); }
+
+/* 이적 */
+.transfer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.offer-actions { white-space: nowrap; }
+.offer-actions input { width: 80px; }
+.search-form input[type="number"] { width: 72px; }
+.search-form .check { display: flex; align-items: center; gap: 4px; }

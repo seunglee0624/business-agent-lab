@@ -163,6 +163,7 @@ function retirements(state, rng, date) {
 }
 
 export const YOUTH_CAP = 14;
+export const MAX_SQUAD = 25; // 1군 등록 인원 (홈그로운 유스 제외)
 
 // 5. 21세가 넘었는데 1군에 못 올라간 유스, 그리고 정원(14명)을 넘는 유스는 잠재력 낮은 순으로 방출한다
 // (1군 경기 기록이 없으므로 지운다). 선수단 채우기가 끝난 뒤에 부른다.
@@ -267,9 +268,14 @@ export function processSeasonEnd(state, rng) {
   const added = fillBottomTier(state, rng, moves);
   const retired = retirements(state, rng, endDate);
   const leaving = expiringContracts(state, rng, endDate, userId);
-  for (const { club, player } of leaving) release(state, club, player);
+  // 자유계약 1년이 지난 선수는 은퇴한 것으로 보고 지운다 (저장 크기)
+  const expired = `${state.season}-06-30`;
   for (const p of Object.values(state.players)) {
-    if (!p.clubId && !p.retired) delete state.players[p.id]; // 자유계약 선수는 이적이 생기기 전까지 보관하지 않는다
+    if (!p.clubId && !p.retired && p.freeSince <= expired) delete state.players[p.id];
+  }
+  for (const { club, player } of leaving) {
+    release(state, club, player);
+    player.freeSince = endDate;
   }
   const active = Object.values(state.clubs).filter((c) => c.status === 'active');
   const fill = fillSquads(state, rng, active, endDate);

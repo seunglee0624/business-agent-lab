@@ -12,6 +12,9 @@ const state = g.createNewGame('season-test');
 const userId = Object.values(state.clubs).find((c) => c.leagueId === 'ENG3').id;
 g.chooseClub(state, userId, '테스트');
 g.simulateToSeasonEnd(state);
+// 1년 전에 풀린 자유계약 선수 (이번 시즌 끝에 은퇴 처리돼야 한다)
+const someone = state.players[state.clubs[userId].squad[0]];
+state.players.oldFree = { ...structuredClone(someone), id: 'oldFree', clubId: null, contract: null, freeSince: '2026-06-30' };
 const before = structuredClone(state);
 const tablesBefore = Object.fromEntries(Object.keys(LEAGUES).map((id) => [id, g.standings(before, id)]));
 const summary = g.startNextSeason(state);
@@ -104,8 +107,16 @@ test('부상 선수는 경기 명단에 없다', () => {
   const club = g.userClub(state);
   const hurt = club.squad.slice(0, 3);
   for (const id of hurt) state.players[id].injury = { name: '테스트', since: state.date, until: '2099-01-01', days: 999 };
-  g.advance(state);
+  g.advance(state, { skipOffers: true });
   const match = g.startUserMatch(state);
   const ids = match.sides.flatMap((s) => [...s.onPitch.map((x) => x.playerId), ...s.bench]);
   for (const id of hurt) assert.ok(!ids.includes(id));
+});
+
+test('계약 만료 선수는 자유계약 선수로 남고, 자유계약 1년이 지나면 사라진다', () => {
+  const free = Object.values(state.players).filter((p) => !p.clubId && !p.retired);
+  assert.ok(free.length > 50, `자유계약 ${free.length}명`);
+  assert.ok(free.every((p) => p.freeSince === `${before.season + 1}-06-30` && !p.contract));
+  assert.ok(summary.leaving.every((p) => state.players[p.id]?.freeSince));
+  assert.equal(state.players.oldFree, undefined);
 });

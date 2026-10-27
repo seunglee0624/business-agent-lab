@@ -15,12 +15,12 @@ const fresh = (seed = 'g') => {
 test('새 게임: 구단 선택 전에는 진행하지 않는다', () => {
   const state = createNewGame('g');
   assert.equal(state.phase, 'chooseClub');
-  assert.deepEqual(advance(state), { stop: 'chooseClub' });
+  assert.deepEqual(advance(state, { skipOffers: true }), { stop: 'chooseClub' });
 });
 
 test('계속: 첫 내 경기일에서 멈춘다', () => {
   const state = fresh();
-  const res = advance(state);
+  const res = advance(state, { skipOffers: true });
   assert.equal(res.stop, 'userMatch');
   assert.equal(state.date, league(state).fixtures[0].date);
   assert.ok([res.fixture.home, res.fixture.away].includes(state.manager.clubId));
@@ -28,7 +28,7 @@ test('계속: 첫 내 경기일에서 멈춘다', () => {
 
 test('내 경기를 1분씩 진행해 끝내면 그날 모든 경기 결과가 나온다', () => {
   const state = fresh();
-  advance(state);
+  advance(state, { skipOffers: true });
   const match = startUserMatch(state);
   withMatchRng(state, (rng) => {
     while (!isFinished(match)) stepMinute(match, rng);
@@ -58,7 +58,7 @@ test('시즌 끝까지: 380경기 결과, 시즌 종료, 경기 기록이 쌓인
 
 test('출전 정지 선수는 내 경기 선발과 교체 명단에 없다', () => {
   const state = fresh();
-  advance(state);
+  advance(state, { skipOffers: true });
   const club = userClub(state);
   const banned = club.squad.slice(0, 5);
   state.discipline.ENG1 = Object.fromEntries(banned.map((id) => [id, { yellows: 0, ban: 1 }]));
@@ -82,12 +82,12 @@ test('중간에 저장(JSON)했다 불러와도 결과가 같다', () => {
   const a = fresh('save');
   const b = fresh('save');
   for (let i = 0; i < 10; i++) {
-    advance(a);
+    advance(a, { skipOffers: true });
     simulateUserMatch(a);
     finishUserMatch(a);
   }
   for (let i = 0; i < 10; i++) {
-    advance(b);
+    advance(b, { skipOffers: true });
     simulateUserMatch(b);
     finishUserMatch(b);
   }
