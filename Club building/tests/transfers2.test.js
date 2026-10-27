@@ -137,3 +137,24 @@ test('시즌 끝 보충: AI 구단은 빈자리를 자유계약 선수로 먼저
   const signedFree = Object.values(state.players).filter((p) => (p.transfers ?? []).some((t) => !t.from && t.date >= '2027-06-01' && t.date <= '2027-06-30'));
   assert.ok(signedFree.length >= 10, `${signedFree.length}명`);
 });
+
+test('AI 구단끼리 임대: 여름에 어린 후보 선수를 수준 낮은 구단으로 보내고, 시즌이 끝나면 돌아온다', () => {
+  const state = fresh('ailoan');
+  const me = userClub(state).id;
+  runUntil(state, '2026-09-01');
+  const loaned = Object.values(state.players).filter((p) => p.loan && p.loan.from !== me && p.loan.to !== me);
+  assert.ok(loaned.length >= 10, `AI 임대 ${loaned.length}건`);
+  for (const p of loaned) {
+    assert.ok(state.clubs[p.loan.to].level < state.clubs[p.loan.from].level);
+    assert.ok(state.clubs[p.loan.to].squad.includes(p.id));
+  }
+  const owners = new Map(loaned.map((p) => [p.id, p.loan.from]));
+  toNextSeason(state);
+  // 원래 구단으로 돌아갔다. 돌아온 뒤 정리돼 다른 구단으로 갔다면 이적 기록이 남는다
+  for (const [id, owner] of owners) {
+    const p = state.players[id];
+    if (!p?.clubId || p.loan?.until > '2027-06-30') continue;
+    assert.ok(p.clubId === owner || (p.transfers ?? []).some((t) => t.date >= '2027-06-30'), p.name);
+    assert.ok(!p.loan || p.loan.until > '2027-06-30');
+  }
+});

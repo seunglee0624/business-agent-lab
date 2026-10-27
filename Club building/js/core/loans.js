@@ -1,6 +1,6 @@
 // 임대: 우리 선수 보내기, 다른 구단 선수 데려오기(주급 분담, 완전 이적 옵션), 시즌 끝 복귀
 
-import { overall } from './player.js';
+import { overall, ageOn } from './player.js';
 import { marketValue, roundMoney } from './money.js';
 import { weeklyWageBill, recordTransfer } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
@@ -86,5 +86,35 @@ export function returnLoans(state) {
     const borrower = state.clubs[p.clubId];
     unloan(state, p);
     if (borrower) move(state, p, borrower, owner, null);
+  }
+  // 임대 중에 선수를 채운 AI 구단은 돌아온 인원만큼 정리한다
+  for (const club of Object.values(state.clubs)) {
+    if (club.status === 'active' && club.id !== state.manager?.clubId) trimSquad(state, club);
+  }
+}
+
+// ---- AI 구단끼리 임대 ----
+
+const AI_LOANS = { max: 2, chance: 0.02 }; // 여름 시장에서 구단마다 약 1명
+
+// 여름 이적시장 중 매일: AI 구단이 뛸 자리가 없는 어린 선수를 수준 낮은 구단으로 보낸다
+export function dailyAiLoans(state, rng, userId) {
+  const end = windowEnd(state.date);
+  if (!end?.endsWith('08-31')) return;
+  const clubs = Object.values(state.clubs).filter((c) => c.status === 'active' && c.id !== userId);
+  for (const club of clubs) {
+    const sent = club.windowLoans?.until === end ? club.windowLoans : (club.windowLoans = { until: end, n: 0 });
+    if (sent.n >= AI_LOANS.max || !rng.chance(AI_LOANS.chance)) continue;
+    const young = club.squad.map((id) => state.players[id])
+      .filter((p) => !p.loan && !p.injury && ageOn(p, state.date) <= 21 && overall(p) <= club.level - 5);
+    if (!young.length) continue;
+    const p = rng.pick(young);
+    const ovr = overall(p);
+    const takers = clubs.filter((c) => c.id !== club.id && c.level <= club.level - 3 && c.level >= ovr - 3
+      && registeredCount(state, c, state.date) < MAX_SQUAD);
+    if (!takers.length) continue;
+    const to = rng.pick(takers);
+    move(state, p, club, to, { from: club.id, to: to.id, until: seasonEnd(state), wageShare: 0.5 });
+    sent.n++;
   }
 }

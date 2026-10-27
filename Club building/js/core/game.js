@@ -172,6 +172,7 @@ function dailyTick(state, rng, date) {
   }
   if (date.endsWith('-01')) monthlyTick(state, rng, date);
   transfers.dailyAiTransfers(state, rng, userId);
+  loans.dailyAiLoans(state, rng, userId);
   const offer = userId ? transfers.dailyOffers(state, rng, state.clubs[userId]) : null;
   // 재정은 매달 마지막 날 정산한다 (6월분이 그 시즌 장부에 들어가도록)
   if (addDays(date, 1).endsWith('-01')) for (const club of activeClubs(state)) monthlySettlement(state, club);

@@ -10,6 +10,7 @@ import { contractEnd, transferDemand, requiredWage, signNew } from './contracts.
 import { weeklyWageBill, recordTransfer } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
 import { SQUAD_TEMPLATE } from './worldgen.js';
+import { isHomegrownYouth } from './development.js';
 
 // ---- 선수 정보 ----
 
@@ -237,7 +238,10 @@ export function respondToOffer(state, rng, club, offerId, answer) {
 // AI 구단은 등록 인원을 넘으면 가장 약한 선수를 내보낸다
 export function trimSquad(state, club) {
   while (registeredCount(state, club, state.date) > MAX_SQUAD) {
-    const worst = club.squad.map((id) => state.players[id]).filter((p) => !p.loan).sort((a, b) => overall(a) - overall(b))[0];
+    // 임대 선수와 등록에 안 잡히는 유스 출신은 내보내지 않는다
+    const worst = club.squad.map((id) => state.players[id])
+      .filter((p) => !p.loan && !isHomegrownYouth(p, state.date)).sort((a, b) => overall(a) - overall(b))[0];
+    if (!worst) break;
     club.squad = club.squad.filter((id) => id !== worst.id);
     if (club.tactics.lineup) club.tactics.lineup = null;
     Object.assign(worst, { clubId: null, lastClubId: club.id, contract: null, transferRequest: false, freeSince: state.date });
