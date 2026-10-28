@@ -6,8 +6,17 @@ import { pitchLayout } from '../js/ui/pitch.js';
 import { transfersView } from '../js/ui/transfers.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
-  seasonEndBanner, youthView, historyView, unemployedView, clubView, financeView,
+  seasonEndBanner, youthView, historyView, clubView, financeView,
 } from '../js/ui/views.js';
+import { managerView } from '../js/ui/manager.js';
+
+// 우리 다음 경기 날까지 주 단위로 진행한다
+const toMatch = (s) => {
+  let res;
+  do res = g.advance(s, { skipOffers: true, watchMatches: true }); while (res.stop === 'week');
+  return res;
+};
+
 
 const BAD = /undefined|NaN|\[object Object\]|null<\/|>null</;
 
@@ -27,6 +36,7 @@ function renderAll(state, ui = {}) {
     club: clubView(state, ui),
     finance: financeView(state, ui),
     transfers: transfersView(state, ui),
+    manager: managerView(state, ui),
   };
   pages.layout = layout(state, { view: 'home' }, pages.home);
   const played = g.league(state).fixtures.find((f) => f.result);
@@ -42,22 +52,21 @@ function check(pages) {
   }
 }
 
-test('새 게임 화면: 나라·리그를 바꿔 구단을 고른다', () => {
+test('새 게임 화면: 리그마다 맡게 될 가장 약한 구단을 보여 주고 리그를 고른다', () => {
   assert.ok(newGameView(null, {}).includes('세계 생성'));
   const preview = g.createNewGame('v');
-  const count = (html) => (html.match(/data-action="pickClub"/g) ?? []).length;
-  assert.equal(count(newGameView(null, { preview })), 20);
-  assert.equal(count(newGameView(null, { preview, previewLeague: 'ENG2' })), 24);
-  assert.equal(count(newGameView(null, { preview, previewLeague: 'GER1' })), 18);
-  assert.ok(!BAD.test(newGameView(null, { preview, previewLeague: 'FRA3' })));
+  const html = newGameView(null, { preview });
+  assert.equal((html.match(/data-action="pickLeague"/g) ?? []).length, 15);
+  assert.ok(html.includes(g.weakestClub(preview, 'ENG1').name));
+  assert.ok(!BAD.test(html));
 });
 
 test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 수 있다', () => {
   const state = g.createNewGame('v');
-  g.chooseClub(state, Object.values(state.clubs).find((c) => c.leagueId === 'ESP3').id, '테스트');
+  g.chooseLeague(state, 'ESP3', '테스트');
   check(renderAll(state));
   for (let i = 0; i < 12; i++) {
-    g.advance(state, { skipOffers: true });
+    toMatch(state);
     g.simulateUserMatch(state);
     g.finishUserMatch(state);
   }
@@ -67,10 +76,6 @@ test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 �
   end.seasonEnd = seasonEndBanner(state);
   check(end);
   g.startNextSeason(state);
-  if (state.phase === 'unemployed') {
-    check({ job: unemployedView(state, {}) });
-    g.chooseNewClub(state, g.jobOffers(state)[0].id);
-  }
   check(renderAll(state));
 });
 
@@ -90,32 +95,24 @@ test('포메이션 그림: 모든 포메이션에서 선수 칸이 겹치지 않
 
 test('전술 화면에 포메이션 그림과 역할이 나온다', () => {
   const state = g.createNewGame('p');
-  g.chooseClub(state, Object.keys(state.clubs)[0], '테스트');
+  g.chooseLeague(state, 'ENG1', '테스트');
   const html = tacticsView(state, {});
   assert.equal((html.match(/class="spot /g) ?? []).length, 11);
   assert.ok(html.includes('spot-role'));
 });
 
-test('재계약 협상 화면, 구단·재정 화면, 해고 뒤 실업 화면', async () => {
-  const { fireManager } = await import('../js/core/board.js');
+test('재계약 협상 화면, 구단·재정 화면', () => {
   const state = g.createNewGame('jobs');
-  g.chooseClub(state, Object.keys(state.clubs)[5], '테스트');
+  g.chooseLeague(state, 'ENG1', '테스트');
   const club = g.userClub(state);
   const expiring = club.squad.find((id) => state.players[id].contract.until === '2027-06-30');
   const html = squadView(state, { playerId: expiring });
   assert.ok(html.includes('data-action="offerRenewal"'));
   check({ renew: html, club: clubView(state, { clubMsg: { ok: false, text: '거절' } }), finance: financeView(state) });
-  fireManager(state, '테스트');
-  check({ waiting: unemployedView(state, {}) });
-  g.advance(state, { skipOffers: true });
-  const offers = unemployedView(state, {});
-  assert.ok(offers.includes('data-action="takeJob"'));
-  check({ offers });
 });
-
 test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개인 조건), 자유계약 선수, 받은 제안', () => {
   const state = g.createNewGame('view-tr');
-  g.chooseClub(state, Object.keys(state.clubs)[4], '테스트');
+  g.chooseLeague(state, 'ENG1', '테스트');
   const me = g.userClub(state);
   me.finance.transferBudget = 1e13;
   me.finance.wageBudget = 1e13;

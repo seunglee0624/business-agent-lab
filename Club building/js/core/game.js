@@ -4,13 +4,15 @@ import { Rng } from './rng.js';
 import { generateWorld, newIds } from './worldgen.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { seasonStart, addDays, addMonths, formatDate, formatShortDate, daysBetween } from './calendar.js';
-import { resolveLineup, applyTacticsChange } from './tactics.js';
+import { resolveLineup } from './tactics.js';
 import * as transfers from './transfers.js';
 import * as loans from './loans.js';
-import * as training from './training.js';
 import { intensityOf } from './training.js';
-import * as delegation from './delegation.js';
+import * as staffwork from './staffwork.js';
 import { returnLoans } from './loans.js';
+import * as coaches from './coaches.js';
+import * as requests from './requests.js';
+import { assignInitialCoaches } from './coaches.js';
 import { ageOn, overall } from './player.js';
 import { createMatch, simulateMatch, summarize, isFinished } from './match/engine.js';
 import { applyMatchDiscipline } from './discipline.js';
@@ -22,27 +24,23 @@ import { initFinance, monthlySettlement, recordGate, weeklyWageBill } from './fi
 import { signNew, offerRenewal } from './contracts.js';
 import { monthlyMorale } from './morale.js';
 import {
-  setSeasonGoals, announceGoal, monthlyBoard, jobOffers, acceptJob, initialReputation, offseasonManagerChanges, fallbackOffers,
-  START_TRUST,
-} from './board.js';
-import {
   completeConstruction, requestUpgrade, injuryChanceFactor, injuryDaysFactor, recoveryFactor,
 } from './facilities.js';
 import { FACILITIES, STAFF, MAX_STAFF, staffWage, EUR } from '../data/economy.js';
 import { roundMoney, won } from './money.js';
 import { addNotice,
   withRng, addMessage, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable,
-  unavailableSet, activeClubs,
+  unavailableSet, activeClubs, clubStrength,
 } from './state.js';
 
-export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, jobOffers };
+export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage };
 
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 export const START_YEAR = 2026;
 export const YOUTH_INTAKE_DAY = '03-15';
 
 export const DEFAULT_SETTINGS = {
-  viewMode: 'highlights', // result | highlights | full
+  viewMode: 'result', // result | highlights | full (단장은 기본으로 결과만, 원하면 중계)
   autoSubs: true, // 경기 중 수석코치가 교체 (직접 교체도 가능)
   pauses: {
     halftime: true,
@@ -68,8 +66,8 @@ export function createNewGame(seed = String(Date.now())) {
     rngState: 0,
     season: START_YEAR,
     date: start,
-    phase: 'chooseClub', // chooseClub | season | seasonEnd | unemployed
-    manager: null,
+    phase: 'chooseClub', // chooseClub | season | seasonEnd
+    user: null, // 단장 { name, clubId }
     settings: structuredClone(DEFAULT_SETTINGS),
     ids,
     clubs: Object.fromEntries(clubs.map((c) => [c.id, c])),
@@ -79,33 +77,36 @@ export function createNewGame(seed = String(Date.now())) {
     history: [],
     discipline: {},
     inbox: [],
-    offers: [], // 실업 중 받은 감독 제의 [{ clubId, until }]
     // 이적: deals[playerId] = 내가 진행 중인 영입 협상, incoming = AI 구단이 내 선수에게 보낸 제안
     transfers: { deals: {}, incoming: [], nextOfferId: 1 },
     liveMatch: null,
   };
   state.competitions = newCompetitions(rng, state, START_YEAR);
+  assignInitialCoaches(rng, state); // 감독 주급이 첫 주급 예산에 들어가도록 재정보다 먼저
   for (const club of Object.values(state.clubs)) initFinance(rng, state, club);
-  setSeasonGoals(state);
   state.rngState = rng.state;
   return state;
 }
 
-export function chooseClub(state, clubId, managerName) {
-  const club = state.clubs[clubId];
-  state.manager = { name: managerName, clubId, history: [], reputation: initialReputation(club), trust: START_TRUST };
-  state.phase = 'season';
-  club.delegation ??= { ...delegation.DEFAULT_DELEGATION };
-  addMessage(state, {
-    title: `${club.name} 감독 부임`,
-    body: `${managerName} 감독님, ${club.name}에 오신 것을 환영합니다. ${LEAGUES[club.leagueId].name} ${state.season}-${String(state.season + 1).slice(2)} 시즌 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
-  });
-  announceGoal(state);
+// 리그에서 가장 약한 구단 (새 게임에서 맡게 될 구단)
+export function weakestClub(state, leagueId) {
+  return activeClubs(state).filter((c) => c.leagueId === leagueId)
+    .sort((a, b) => clubStrength(state, a) - clubStrength(state, b))[0];
 }
 
-// 실업 중 받은 제의 중 하나를 받아들인다
-export function chooseNewClub(state, clubId) {
-  return acceptJob(state, clubId);
+// 리그를 고르면 그 리그에서 가장 약한 구단의 단장이 된다
+export function chooseLeague(state, leagueId, name) {
+  chooseClub(state, weakestClub(state, leagueId).id, name);
+}
+
+function chooseClub(state, clubId, name) {
+  const club = state.clubs[clubId];
+  state.user = { name, clubId, history: [] };
+  state.phase = 'season';
+  addMessage(state, {
+    title: `${club.name} 단장 부임`,
+    body: `${name} 단장님, ${club.name}에 오신 것을 환영합니다. ${LEAGUES[club.leagueId].name} ${state.season}-${String(state.season + 1).slice(2)} 시즌 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
+  });
 }
 
 // ---- 조회 ----
@@ -125,12 +126,12 @@ export function fixturesOn(state, date) {
 }
 
 export function userFixtureOn(state, date) {
-  const id = state.manager?.clubId;
+  const id = state.user?.clubId;
   return fixturesOn(state, date).find((f) => f.home === id || f.away === id) ?? null;
 }
 
 export function nextUserFixture(state) {
-  const id = state.manager?.clubId;
+  const id = state.user?.clubId;
   return Object.values(state.competitions)
     .flatMap((c) => c.fixtures)
     .filter((f) => !f.result && (f.home === id || f.away === id))
@@ -154,15 +155,17 @@ function isOffSeason(date) {
 }
 
 function dailyTick(state, rng, date) {
-  const userId = state.manager?.clubId;
+  const userId = state.user?.clubId;
   const training = !isOffSeason(date);
   const user = userId ? state.clubs[userId] : null;
-  if (user && delegation.delegated(user, 'training')) {
+  if (user) {
     const next = nextUserFixture(state);
-    delegation.coachTraining(state, user, next ? daysBetween(date, next.date) : Infinity);
+    staffwork.coachTraining(state, user, next ? daysBetween(date, next.date) : Infinity);
   }
   if (user && isMonday(date)) {
-    weeklyDelegation(state, user);
+    const made = requests.makeRequests(state, rng, user);
+    if (made.length) addMessage(state, { title: '감독의 영입 요청', body: `${user.headCoach.name} 감독이 ${made.length}명의 영입을 요청했습니다. 이적 화면에서 승인하거나 거절하세요.`, important: true });
+    weeklyStaffWork(state, user);
     weeklySummary(state, user);
   }
   for (const club of Object.values(state.clubs)) {
@@ -230,30 +233,25 @@ function weeklySummary(state, club) {
   state.notices = [];
 }
 
-// 매주 월요일: 맡긴 분야를 스태프가 처리한다
-function weeklyDelegation(state, club) {
-  if (delegation.delegated(club, 'youth')) {
-    for (const p of delegation.youthToCallUp(state, club)) {
-      if (!callUpYouth(state, p.id)) break;
-      addNotice(state, { title: `${p.name} 1군 콜업`, body: `유스 코치가 ${withParticle(p.name, '를')} 1군으로 올렸습니다. (능력 ${overall(p)})` });
-    }
+// 매주 월요일: 유스 콜업과 주전이 아닌 선수 재계약을 스태프가 처리한다
+function weeklyStaffWork(state, club) {
+  for (const p of staffwork.youthToCallUp(state, club)) {
+    if (!callUpYouth(state, p.id)) break;
+    addNotice(state, { title: `${p.name} 1군 콜업`, body: `유스 코치가 ${withParticle(p.name, '를')} 1군으로 올렸습니다. (능력 ${overall(p)})` });
   }
-  if (delegation.delegated(club, 'renewals')) {
-    for (const { player: p, renewed } of delegation.staffRenewals(state, club)) {
-      addNotice(state, renewed
-        ? { title: `${p.name} 재계약`, body: `스태프가 ${withParticle(p.name, '와')} ${formatDate(p.contract.until)}까지 재계약했습니다. 주급 ${won(p.contract.wage)}.` }
-        : { title: `${p.name} 계약 만료 예정`, body: `스태프는 ${withParticle(p.name, '와')} 재계약하지 않기로 했습니다. 계약이 끝나면 팀을 떠납니다. 붙잡으려면 직접 재계약하세요.` });
-    }
+  for (const { player: p, renewed } of staffwork.staffRenewals(state, club)) {
+    addNotice(state, renewed
+      ? { title: `${p.name} 재계약`, body: `스태프가 ${withParticle(p.name, '와')} ${formatDate(p.contract.until)}까지 재계약했습니다. 주급 ${won(p.contract.wage)}.` }
+      : { title: `${p.name} 계약 만료 예정`, body: `스태프는 ${withParticle(p.name, '와')} 재계약하지 않기로 했습니다. 계약이 끝나면 팀을 떠납니다. 붙잡으려면 직접 재계약하세요.` });
   }
 }
 
-// 매달 1일: 사기 → 성장(출장 시간 초기화) → 수뇌부
+// 매달 1일: 사기 → 성장(출장 시간 초기화)
 function monthlyTick(state, rng, date) {
   monthlyMorale(state, addMonths(date, -1));
   monthlyDevelopment(state, rng);
-  monthlyBoard(state, rng);
   const month = date.slice(5, 7);
-  if ((month === '01' || month === '04') && state.manager?.clubId) expiryReminder(state);
+  if ((month === '01' || month === '04') && state.user?.clubId) expiryReminder(state);
 }
 
 function expiryReminder(state) {
@@ -280,48 +278,43 @@ function moveTo(state, date) {
   });
 }
 
-// 다음으로 결정이 필요한 순간까지 진행한다.
+// 날짜 다음에 오는 월요일
+function nextMonday(date) {
+  let d = addDays(date, 1);
+  while (new Date(`${d}T00:00:00Z`).getUTCDay() !== 1) d = addDays(d, 1);
+  return d;
+}
+
+// 다음 월요일까지 한 주를 진행한다. 우리 경기는 결과로 처리한다.
 // skipOffers: 내 선수에게 온 이적 제안에서 멈추지 않는다 (답하지 않은 제안은 기한이 지나면 거절된다)
-// 돌려주는 값: { stop: 'userMatch', fixture } | { stop: 'transferOffer', offer } | { stop: 'seasonEnd' } | { stop: 'unemployed' } | { stop: 'offer' } | { stop: 현재 phase }
-export function advance(state, { skipOffers = false } = {}) {
-  if (state.phase === 'unemployed') return waitForOffer(state);
+// watchMatches: 우리 경기 날 멈춰 중계로 볼 수 있게 한다
+// 돌려주는 값: { stop: 'week' } | { stop: 'userMatch', fixture } | { stop: 'transferOffer', offer } | { stop: 'seasonEnd' } | { stop: 현재 phase }
+export function advance(state, { skipOffers = false, watchMatches = false } = {}) {
   if (state.phase !== 'season') return { stop: state.phase };
+  const monday = nextMonday(state.date);
   for (;;) {
     const date = nextUnplayedDate(state);
     if (!date) {
       endSeason(state);
       return { stop: 'seasonEnd' };
     }
-    while (state.date < date) {
-      const offer = moveTo(state, date);
+    const target = date < monday ? date : monday;
+    while (state.date < target) {
+      const offer = moveTo(state, target);
       if (offer && !skipOffers) return { stop: 'transferOffer', offer };
     }
-    if (state.phase === 'unemployed') return { stop: 'unemployed' };
-    const fixture = userFixtureOn(state, date);
-    if (fixture) return { stop: 'userMatch', fixture };
-    playOtherMatches(state, date);
-  }
-}
-
-// 실업 중: 제의가 올 때까지 시간을 보낸다. 시즌이 끝나면 다음 시즌으로 넘어간다.
-// 두 달 동안 제의가 없으면 3부 구단 몇 곳이 제의한다.
-function waitForOffer(state) {
-  const before = new Set(state.offers.map((o) => o.clubId));
-  const isNew = () => state.offers.some((o) => !before.has(o.clubId));
-  const deadline = addDays(state.date, 60);
-  for (;;) {
-    const date = nextUnplayedDate(state);
-    if (!date) {
-      runSeasonTransition(state);
-    } else {
-      moveTo(state, date);
-      playOtherMatches(state, date);
+    if (date === state.date) {
+      const fixture = userFixtureOn(state, date);
+      if (fixture && watchMatches) return { stop: 'userMatch', fixture };
+      if (fixture) {
+        simulateUserMatch(state);
+        finishUserMatch(state);
+        if (state.phase !== 'season') return { stop: 'seasonEnd' };
+      } else {
+        playOtherMatches(state, date);
+      }
     }
-    if (isNew()) return { stop: 'offer' };
-    if (state.date >= deadline) {
-      withRng(state, (rng) => fallbackOffers(state, rng));
-      return { stop: 'offer' };
-    }
+    if (state.date >= monday) return { stop: 'week' };
   }
 }
 
@@ -335,7 +328,7 @@ function matchSetup(state, club, compId, auto, aiTactics) {
 }
 
 function buildMatch(state, fixture, userAuto) {
-  const userId = state.manager?.clubId;
+  const userId = state.user?.clubId;
   const rule = LEAGUES[state.competitions[fixture.competitionId].ruleId];
   const home = state.clubs[fixture.home];
   const away = state.clubs[fixture.away];
@@ -384,7 +377,7 @@ export function finishUserMatch(state) {
 }
 
 function playOtherMatches(state, date) {
-  const userId = state.manager?.clubId;
+  const userId = state.user?.clubId;
   for (const fixture of fixturesOn(state, date)) {
     if (fixture.home === userId || fixture.away === userId) continue;
     const match = buildMatch(state, fixture, true);
@@ -396,7 +389,7 @@ function playOtherMatches(state, date) {
 function applyResult(state, fixture, match) {
   fixture.result = summarize(match);
   const compId = fixture.competitionId;
-  const userId = state.manager?.clubId;
+  const userId = state.user?.clubId;
   const homeClub = state.clubs[fixture.home];
   const table = standings(state, compId);
   fixture.result.crowd = recordGate(state, homeClub, table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length);
@@ -446,7 +439,7 @@ function endSeason(state) {
   if (state.phase === 'seasonEnd') return;
   state.phase = 'seasonEnd';
   const table = standings(state);
-  const pos = table.findIndex((r) => r.clubId === state.manager.clubId) + 1;
+  const pos = table.findIndex((r) => r.clubId === state.user.clubId) + 1;
   const champion = state.clubs[table[0].clubId];
   addMessage(state, {
     title: '시즌 종료',
@@ -461,42 +454,24 @@ function runSeasonTransition(state) {
   returnLoans(state);
   const summary = withRng(state, (rng) => processSeasonEnd(state, rng));
   seasonEndMessages(state, summary);
-  const m = state.manager;
-  const relegatedOut = summary.move && summary.move.to === null;
-  if (m.clubId && (relegatedOut || summary.review?.fired)) {
-    if (summary.review?.fired && !relegatedOut) {
-      addMessage(state, { title: '해고', body: `${state.clubs[m.clubId].name} 수뇌부가 시즌 결과에 실망해 감독 교체를 결정했습니다.`, important: true });
-      m.reputation = Math.max(0, m.reputation - 6);
-    }
-    m.clubId = null;
-    m.trust = null;
+  // 계약이 끝나는 감독은 2년 연장한다
+  for (const club of activeClubs(state)) {
+    const c = club.headCoach;
+    if (!c || c.until > `${state.season + 1}-06-30`) continue;
+    c.until = `${state.season + 3}-06-30`;
+    if (club.id === state.user.clubId) addMessage(state, { title: `${c.name} 감독 재계약`, body: `계약이 끝나 ${formatDate(c.until)}까지 연장했습니다.` });
   }
   withRng(state, (rng) => startSeason(state, rng));
   moveTo(state, seasonStart(state.season));
-  if (!m.clubId) {
-    state.phase = 'unemployed';
-    if (relegatedOut) {
-      // 3부에서 강등되면 모든 나라의 3부 구단이 제의한다
-      const until = `${state.season + 1}-06-30`;
-      state.offers = Object.values(state.clubs).filter((c) => c.status === 'active' && LEAGUES[c.leagueId].tier === 3).map((c) => ({ clubId: c.id, until }));
-    } else {
-      withRng(state, (rng) => {
-        offseasonManagerChanges(state, rng);
-        fallbackOffers(state, rng);
-      });
-    }
-  } else {
-    state.phase = 'season';
-    addMessage(state, {
-      title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
-      body: `${LEAGUES[userLeagueId(state)].name} 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
-    });
-    announceGoal(state);
-  }
+  state.phase = 'season';
+  addMessage(state, {
+    title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
+    body: `${LEAGUES[userLeagueId(state)].name} 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
+  });
   return summary;
 }
 
-// 시즌이 끝난 뒤 "다음 시즌 시작". 내 구단을 잃었으면 phase가 'unemployed'가 된다.
+// 시즌이 끝난 뒤 "다음 시즌 시작"
 export function startNextSeason(state) {
   if (state.phase !== 'seasonEnd') throw new Error('시즌이 아직 끝나지 않았습니다.');
   return runSeasonTransition(state);
@@ -507,9 +482,7 @@ export function simulateToSeasonEnd(state, { skipOffers = true } = {}) {
   if (state.phase !== 'season') return { stop: state.phase };
   for (;;) {
     const res = advance(state, { skipOffers });
-    if (res.stop !== 'userMatch') return res;
-    simulateUserMatch(state);
-    finishUserMatch(state);
+    if (res.stop !== 'week') return res;
   }
 }
 
@@ -547,10 +520,6 @@ export { registeredCount, MAX_SQUAD };
 
 // ---- 전술 (내 구단) ----
 
-export function changeTactics(state, change) {
-  const club = userClub(state);
-  applyTacticsChange(club, state.players, change, { unavailable: unavailableSet(state, userLeagueId(state), club) });
-}
 
 // ---- 이적 (내 구단) ----
 
@@ -606,17 +575,30 @@ export function buyLoanedPlayer(state, playerId) {
   return loans.buyLoanedPlayer(state, userClub(state), state.players[playerId]);
 }
 
-// ---- 훈련·위임 (내 구단) ----
+// ---- 감독 (내 구단) ----
 
-export function setDelegation(state, changes) {
-  return delegation.setDelegation(userClub(state), changes);
+export function managerCandidates(state) {
+  return withRng(state, (rng) => coaches.candidates(rng, state, userClub(state)));
 }
 
-// 직접 훈련을 정하면 훈련 위임은 꺼진다 (코치가 덮어쓰지 않게)
-export function setTraining(state, plan) {
-  const res = training.setTraining(userClub(state), plan);
-  if (res.ok) delegation.setDelegation(userClub(state), { training: 'manager' });
+export const firingCost = (state) => coaches.firingCost(state, userClub(state));
+
+export function fireManager(state) {
+  const res = coaches.fireCoach(state, userClub(state));
+  if (res.ok) addMessage(state, { title: `${res.coach.name} 감독 해고`, body: `위약금 ${won(res.compensation)}을 냈습니다. 새 감독을 뽑을 때까지 코치가 임시로 팀을 맡습니다.` });
   return res;
+}
+
+export function hireManager(state, coachId) {
+  const res = coaches.hireCoach(state, userClub(state), coachId);
+  if (res.ok) addMessage(state, { title: `${res.coach.name} 감독 부임`, body: `${formatDate(res.coach.until)}까지 계약했습니다. 주급 ${won(res.coach.wage)}.` });
+  return res;
+}
+
+export const transferRequests = (state) => requests.activeRequests(state);
+
+export function answerRequest(state, requestId, answer) {
+  return requests.answerRequest(state, requestId, answer);
 }
 
 export function searchPlayers(state, filters) {
@@ -636,7 +618,7 @@ export function renewContract(state, playerId, offer) {
 
 export function upgradeFacility(state, key) {
   const club = userClub(state);
-  const res = requestUpgrade(state, club, key, state.manager.trust);
+  const res = requestUpgrade(state, club, key);
   if (res.ok) addMessage(state, { title: `${FACILITIES[key].name} 공사 시작`, body: `수뇌부가 승인했습니다. ${res.months}개월 뒤 ${res.level + 1}레벨이 됩니다.` });
   return res;
 }

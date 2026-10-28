@@ -41,7 +41,7 @@ export function exportState(state) {
   const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const club = state.manager ? state.clubs[state.manager.clubId].name : '새 게임';
+  const club = state.user ? state.clubs[state.user.clubId].name : '새 게임';
   a.href = url;
   a.download = `축구구단키우기_${club}_${state.date}.json`;
   a.click();

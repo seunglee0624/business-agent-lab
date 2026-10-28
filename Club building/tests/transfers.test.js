@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createNewGame, chooseClub, userClub, playerInfo, searchPlayers, bidForPlayer, offerTerms,
+  createNewGame, chooseLeague, userClub, playerInfo, searchPlayers, bidForPlayer, offerTerms,
   advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed,
 } from '../js/core/game.js';
 import { ageOn } from '../js/core/player.js';
@@ -10,7 +10,7 @@ import { overall } from '../js/core/player.js';
 // 7월 1일, 이적시장이 열린 상태로 시작하는 내 구단
 const fresh = (seed = 'tr') => {
   const state = createNewGame(seed);
-  chooseClub(state, Object.keys(state.clubs)[4], '테스트');
+  chooseLeague(state, 'ENG1', '테스트');
   return state;
 };
 const otherPlayer = (state, pick = (p) => true) => {
@@ -187,9 +187,7 @@ const untilOffer = (state) => {
   for (;;) {
     const res = advance(state);
     if (res.stop === 'transferOffer') return res.offer;
-    if (res.stop !== 'userMatch' || state.date > '2026-08-31') return null;
-    simulateUserMatch(state);
-    finishUserMatch(state);
+    if (res.stop !== 'week' || state.date > '2026-08-31') return null;
   }
 };
 const listed = (seed) => {

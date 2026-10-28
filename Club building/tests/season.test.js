@@ -7,10 +7,18 @@ import { Rng } from '../js/core/rng.js';
 import { monthlyDelta, isHomegrownYouth, retirementChance } from '../js/core/development.js';
 import { YOUTH_CAP } from '../js/core/season.js';
 
+// 우리 다음 경기 날까지 주 단위로 진행한다
+const toMatch = (s) => {
+  let res;
+  do res = g.advance(s, { skipOffers: true, watchMatches: true }); while (res.stop === 'week');
+  return res;
+};
+
+
 // 한 시즌을 끝까지 돌린 세계를 테스트끼리 같이 쓴다 (약 10초)
 const state = g.createNewGame('season-test');
-const userId = Object.values(state.clubs).find((c) => c.leagueId === 'ENG3').id;
-g.chooseClub(state, userId, '테스트');
+g.chooseLeague(state, 'ENG3', '테스트');
+const userId = state.user.clubId;
 g.simulateToSeasonEnd(state);
 // 1년 전에 풀린 자유계약 선수 (이번 시즌 끝에 은퇴 처리돼야 한다)
 const someone = state.players[state.clubs[userId].squad[0]];
@@ -60,7 +68,7 @@ test('새 시즌: 날짜·시즌·기록·누적 경고', () => {
 
 test('선수단: AI 구단 25명, 내 구단 18명 이상, 유스는 정원 이하·21세 이하, 은퇴 선수는 구단 없음', () => {
   for (const club of Object.values(state.clubs).filter((c) => c.status === 'active')) {
-    if (club.id === state.manager.clubId) assert.ok(club.squad.length >= 18 && club.squad.length <= 25, club.name);
+    if (club.id === state.user.clubId) assert.ok(club.squad.length >= 18 && club.squad.length <= 25, club.name);
     // 7월 1일 이적시장이 열리자마자 AI끼리 사고팔 수 있어 한두 명 차이는 있다
     else assert.ok(club.squad.length >= 23 && club.squad.length <= 25, `${club.name} ${club.squad.length}`);
     assert.ok(club.youth.length <= YOUTH_CAP);
@@ -70,18 +78,11 @@ test('선수단: AI 구단 25명, 내 구단 18명 이상, 유스는 정원 이�
   for (const p of Object.values(state.players).filter((x) => x.retired)) assert.equal(p.clubId, null);
 });
 
-test('3부 하위로 끝난 내 구단: 강등이면 새 구단 선택, 아니면 계속', () => {
-  const myPos = tablesBefore.ENG3.findIndex((r) => r.clubId === userId);
-  if (myPos >= tablesBefore.ENG3.length - 3) {
-    assert.equal(state.phase, 'unemployed');
-    const offers = g.jobOffers(state);
-    assert.ok(offers.length > 0 && offers.every((c) => LEAGUES[c.leagueId].tier === 3));
-    g.chooseNewClub(state, offers[0].id);
-    assert.equal(state.phase, 'season');
-  } else {
-    assert.equal(state.phase, 'season');
-  }
-  assert.equal(state.manager.history.length, 1);
+test('3부 하위로 끝나도 단장의 구단은 보관되지 않고 계속 맡는다', () => {
+  assert.equal(state.phase, 'season');
+  assert.equal(state.user.clubId, userId);
+  assert.equal(state.clubs[userId].status, 'active');
+  assert.equal(state.user.history.length, 1);
 });
 
 test('성장: 출장하는 어린 선수는 크고, 서른 넘으면 떨어진다', () => {
@@ -109,7 +110,7 @@ test('부상 선수는 경기 명단에 없다', () => {
   const club = g.userClub(state);
   const hurt = club.squad.slice(0, 3);
   for (const id of hurt) state.players[id].injury = { name: '테스트', since: state.date, until: '2099-01-01', days: 999 };
-  g.advance(state, { skipOffers: true });
+  toMatch(state);
   const match = g.startUserMatch(state);
   const ids = match.sides.flatMap((s) => [...s.onPitch.map((x) => x.playerId), ...s.bench]);
   for (const id of hurt) assert.ok(!ids.includes(id));

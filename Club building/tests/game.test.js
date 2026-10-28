@@ -1,34 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createNewGame, chooseClub, advance, startUserMatch, finishUserMatch, simulateUserMatch,
+  createNewGame, chooseLeague, advance, startUserMatch, finishUserMatch, simulateUserMatch,
   simulateToSeasonEnd, standings, league, userClub, topScorers, withMatchRng,
 } from '../js/core/game.js';
 import { stepMinute, isFinished } from '../js/core/match/engine.js';
 
+// 우리 다음 경기 날까지 주 단위로 진행한다
+const toMatch = (s) => {
+  let res;
+  do res = advance(s, { skipOffers: true, watchMatches: true }); while (res.stop === 'week');
+  return res;
+};
+
+
 const fresh = (seed = 'g') => {
   const state = createNewGame(seed);
-  chooseClub(state, Object.keys(state.clubs)[4], '테스트');
+  chooseLeague(state, 'ENG1', '테스트');
   return state;
 };
 
 test('새 게임: 구단 선택 전에는 진행하지 않는다', () => {
   const state = createNewGame('g');
   assert.equal(state.phase, 'chooseClub');
-  assert.deepEqual(advance(state, { skipOffers: true }), { stop: 'chooseClub' });
+  assert.deepEqual(toMatch(state), { stop: 'chooseClub' });
 });
 
 test('계속: 첫 내 경기일에서 멈춘다', () => {
   const state = fresh();
-  const res = advance(state, { skipOffers: true });
+  const res = toMatch(state);
   assert.equal(res.stop, 'userMatch');
   assert.equal(state.date, league(state).fixtures[0].date);
-  assert.ok([res.fixture.home, res.fixture.away].includes(state.manager.clubId));
+  assert.ok([res.fixture.home, res.fixture.away].includes(state.user.clubId));
 });
 
 test('내 경기를 1분씩 진행해 끝내면 그날 모든 경기 결과가 나온다', () => {
   const state = fresh();
-  advance(state, { skipOffers: true });
+  toMatch(state);
   const match = startUserMatch(state);
   withMatchRng(state, (rng) => {
     while (!isFinished(match)) stepMinute(match, rng);
@@ -58,7 +66,7 @@ test('시즌 끝까지: 380경기 결과, 시즌 종료, 경기 기록이 쌓인
 
 test('출전 정지 선수는 내 경기 선발과 교체 명단에 없다', () => {
   const state = fresh();
-  advance(state, { skipOffers: true });
+  toMatch(state);
   const club = userClub(state);
   const banned = club.squad.slice(0, 5);
   state.discipline.ENG1 = Object.fromEntries(banned.map((id) => [id, { yellows: 0, ban: 1 }]));
@@ -82,12 +90,12 @@ test('중간에 저장(JSON)했다 불러와도 결과가 같다', () => {
   const a = fresh('save');
   const b = fresh('save');
   for (let i = 0; i < 10; i++) {
-    advance(a, { skipOffers: true });
+    toMatch(a);
     simulateUserMatch(a);
     finishUserMatch(a);
   }
   for (let i = 0; i < 10; i++) {
-    advance(b, { skipOffers: true });
+    toMatch(b);
     simulateUserMatch(b);
     finishUserMatch(b);
   }

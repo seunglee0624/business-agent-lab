@@ -34,7 +34,7 @@ export class LiveMatchView {
     this.onFinish = onFinish;
     this.persist = persist;
     this.match = state.liveMatch;
-    this.userSide = this.match.sides[0].clubId === state.manager.clubId ? 0 : 1;
+    this.userSide = this.match.sides[0].clubId === state.user.clubId ? 0 : 1;
     this.mode = state.settings.viewMode === 'full' ? 'full' : 'highlights';
     this.flags = {};
     this.log = [];

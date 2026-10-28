@@ -23,7 +23,7 @@ export function addNotice(state, { title, body }) {
   (state.notices ??= []).push({ date: state.date, title, body });
 }
 
-export const userClub = (state) => state.clubs[state.manager?.clubId];
+export const userClub = (state) => state.clubs[state.user?.clubId];
 export const userLeagueId = (state) => userClub(state)?.leagueId ?? 'ENG1';
 export const league = (state, compId = userLeagueId(state)) => state.competitions[compId];
 export const activeClubs = (state) => Object.values(state.clubs).filter((c) => c.status === 'active');

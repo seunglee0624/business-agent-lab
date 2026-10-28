@@ -36,7 +36,7 @@ export function loanOut(state, club, p) {
   if (!club.squad.includes(p.id) || p.loan) return { ok: false, reason: '우리 구단 선수만 임대 보낼 수 있습니다.' };
   const ovr = overall(p);
   const takers = Object.values(state.clubs)
-    .filter((c) => c.status === 'active' && c.id !== club.id && c.id !== state.manager.clubId
+    .filter((c) => c.status === 'active' && c.id !== club.id && c.id !== state.user.clubId
       && c.level >= ovr - 3 && c.level <= ovr + 6)
     .sort((a, b) => Math.abs(a.level - ovr - 1) - Math.abs(b.level - ovr - 1));
   if (!takers.length) return { ok: false, reason: `${withParticle(p.name, '를')} 데려갈 구단이 없습니다.` };
@@ -89,7 +89,7 @@ export function returnLoans(state) {
   }
   // 임대 중에 선수를 채운 AI 구단은 돌아온 인원만큼 정리한다
   for (const club of Object.values(state.clubs)) {
-    if (club.status === 'active' && club.id !== state.manager?.clubId) trimSquad(state, club);
+    if (club.status === 'active' && club.id !== state.user?.clubId) trimSquad(state, club);
   }
 }
 

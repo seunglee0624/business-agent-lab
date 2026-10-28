@@ -1,31 +1,11 @@
-// 위임: 분야별로 감독이 직접 할지(manager) 스태프에게 맡길지(staff). 맡긴 결과의 품질은 스태프 수준을 따른다
+// 스태프가 맡는 일: 주간 훈련(코치), 유스 콜업(유스 코치), 주전이 아닌 선수 재계약. 품질은 스태프 수준을 따른다
 
 import { TRAINING_FOCUS } from './training.js';
 import { overall, ageOn } from './player.js';
 import { monthsBetween } from './money.js';
 import { renewalDemand, offerRenewal } from './contracts.js';
 
-export const DELEGATION_AREAS = {
-  training: { name: '주간 훈련', staff: 'coach' },
-  youth: { name: '유스 관리 (콜업)', staff: 'youthCoach' },
-  renewals: { name: '주전이 아닌 선수 재계약', staff: 'coach' },
-};
-export const DEFAULT_DELEGATION = { training: 'staff', youth: 'staff', renewals: 'staff' };
-
-export const delegationOf = (club) => club.delegation ?? DEFAULT_DELEGATION;
-export const delegated = (club, area) => delegationOf(club)[area] === 'staff';
-
-export function setDelegation(club, changes) {
-  const next = { ...delegationOf(club) };
-  for (const [area, who] of Object.entries(changes)) {
-    if (!DELEGATION_AREAS[area] || !['staff', 'manager'].includes(who)) return { ok: false, reason: '알 수 없는 위임 설정입니다.' };
-    next[area] = who;
-  }
-  club.delegation = next;
-  return { ok: true };
-}
-
-// ---- 훈련을 맡겼을 때 코치의 판단 ----
+// ---- 코치의 훈련 판단 ----
 
 const TIRED = 85; // 선수단 평균 컨디션이 이보다 낮으면 가볍게
 
@@ -45,7 +25,7 @@ export function coachTraining(state, club, daysToMatch) {
   club.training = { focus, intensity };
 }
 
-// ---- 유스를 맡겼을 때 유스 코치의 판단 ----
+// ---- 유스 코치의 콜업 판단 ----
 
 // 1군에 올릴 만한 유스. 수준 낮은 코치는 기준이 느슨해 덜 자란 선수도 올린다
 export function youthToCallUp(state, club) {
@@ -55,7 +35,7 @@ export function youthToCallUp(state, club) {
     .sort((a, b) => overall(b) - overall(a));
 }
 
-// ---- 재계약을 맡겼을 때 ----
+// ---- 스태프 재계약 ----
 
 const RENEW_BEFORE = 3; // 계약이 이만큼(개월) 남으면 처리한다
 

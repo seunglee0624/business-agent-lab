@@ -35,7 +35,9 @@ export function initClubOps(rng, club) {
 
 // ---- 효과 (평균적인 구단이 1.0 근처가 되도록) ----
 
-export const growthFactor = (club) => 0.71 + 0.05 * club.facilities.training + 0.01 * club.staff.coach;
+// 감독이 없으면 코치가 임시로 맡아 능력이 절반으로 친다
+const headCoachAbility = (club) => club.headCoach?.ability ?? club.staff.coach / 2;
+export const growthFactor = (club) => 0.71 + 0.05 * club.facilities.training + 0.01 * club.staff.coach + 0.006 * (headCoachAbility(club) - 10);
 export const injuryChanceFactor = (club) => 1.2 - 0.06 * club.facilities.sportsScience - 0.008 * club.staff.medical;
 export const injuryDaysFactor = (club) => 1.15 - 0.05 * club.facilities.medical - 0.005 * club.staff.medical;
 export const recoveryFactor = (club) => 0.85 + 0.05 * club.facilities.recovery;
@@ -59,12 +61,10 @@ export function upgradeInfo(club, key) {
 export const isBuilding = (club, key) => club.construction.some((c) => c.key === key);
 
 // 업그레이드 요청. 수뇌부는 잔고가 비용의 1.3배 이상이고, (내 구단이면) 신뢰도가 40 이상일 때 승인한다
-export function requestUpgrade(state, club, key, trust = 100) {
+export function requestUpgrade(state, club, key) {
   const info = upgradeInfo(club, key);
   if (!info) return { ok: false, reason: '이미 최고 레벨입니다.' };
   if (isBuilding(club, key)) return { ok: false, reason: '이미 공사 중입니다.' };
-  if (club.finance.balance < info.cost * 1.3) return { ok: false, reason: '수뇌부: 지금 잔고로는 공사비를 감당하기 어렵습니다.' };
-  if (trust < 40) return { ok: false, reason: '수뇌부: 지금은 감독님을 믿고 큰돈을 쓰기 어렵습니다.' };
   club.finance.balance -= info.cost;
   club.finance.season.expense.construction += info.cost;
   club.construction.push({ key, toLevel: info.level + 1, start: state.date, done: addMonths(state.date, info.months) });

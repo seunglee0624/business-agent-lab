@@ -7,7 +7,7 @@ import { LEAGUES } from '../js/data/countries/index.js';
 
 const N = Number(process.argv[2] ?? 3);
 const state = g.createNewGame('world');
-g.chooseClub(state, Object.keys(state.clubs)[0], '측정');
+g.chooseLeague(state, 'ENG1', '측정');
 
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 const rows = [];

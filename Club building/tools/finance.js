@@ -7,7 +7,7 @@ import { ledgerTotal } from '../js/core/finance.js';
 
 const N = Number(process.argv[2] ?? 1);
 const state = g.createNewGame('finance');
-g.chooseClub(state, Object.keys(state.clubs)[0], '측정');
+g.chooseLeague(state, 'ENG1', '측정');
 
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 const eok = (won) => (won / 1e8).toFixed(0);

@@ -1,11 +1,11 @@
 // 앱 제어: 상태를 들고 화면을 그리고, 버튼 동작을 게임 로직 함수로 연결한다.
 
 import {
-  createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
-  simulateToSeasonEnd, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
-  renewContract, upgradeFacility, setStaffLevel, changeTactics,
+  createNewGame, chooseLeague, advance, startUserMatch, simulateUserMatch, finishUserMatch,
+  simulateToSeasonEnd, startNextSeason, callUpYouth, sendDownToYouth, STATE_VERSION,
+  renewContract, upgradeFacility, setStaffLevel,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
-  setTraining, setDelegation,
+  fireManager, hireManager, answerRequest,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -13,12 +13,11 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, unemployedView, youthView, historyView, clubView, financeView,
+  fixtureDetail, seasonEndBanner, youthView, historyView, clubView, financeView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
-import { trainingView } from './training.js';
-import { trainingOf } from '../core/training.js';
+import { managerView } from './manager.js';
 
 export class App {
   constructor(root) {
@@ -55,14 +54,9 @@ export class App {
     this.live?.destroy();
     this.live = null;
     const s = this.state;
-    if (!s || s.phase === 'chooseClub' || !s.manager) {
+    if (!s || s.phase === 'chooseClub' || !s.user) {
       this.root.className = 'app newgame-root';
       this.root.innerHTML = newGameView(s, this.ui);
-      return;
-    }
-    if (s.phase === 'unemployed') {
-      this.root.className = 'app newgame-root';
-      this.root.innerHTML = unemployedView(s, this.ui);
       return;
     }
     this.root.className = 'app';
@@ -78,7 +72,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView, training: trainingView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -88,27 +82,12 @@ export class App {
 
   // ---- 진행 ----
 
+  // "계속": 한 주 진행. 경기 보기를 켜 두었으면 우리 경기 날 멈춰 중계를 연다
   continue() {
     const s = this.state;
     if (s.liveMatch) return this.openMatch();
-    if (s.phase === 'unemployed') {
-      this.ui.busy = true;
-      this.render();
-      setTimeout(() => {
-        advance(s);
-        this.ui.busy = false;
-        this.persist();
-        this.render();
-      }, 30);
-      return;
-    }
-    const res = advance(s);
+    const res = advance(s, { watchMatches: s.settings.viewMode !== 'result' });
     if (res.stop === 'userMatch') {
-      if (s.settings.viewMode === 'result') {
-        simulateUserMatch(s);
-        this.afterUserMatch();
-        return;
-      }
       startUserMatch(s);
       this.persist();
       this.openMatch();
@@ -166,14 +145,6 @@ export class App {
     }, 30);
   }
 
-  // ---- 전술 편집 ----
-
-  tactics(change) {
-    changeTactics(this.state, change);
-    this.persist();
-    this.render();
-  }
-
   // ---- 이벤트 ----
 
   onClick(ev) {
@@ -194,16 +165,38 @@ export class App {
         this.render();
         break;
       }
-      case 'pickClub': {
+      case 'pickLeague': {
         const name = (this.root.querySelector('#managerName')?.value ?? this.ui.managerName ?? '').trim();
         if (!name) {
-          this.ui.error = '감독 이름을 입력하세요.';
+          this.ui.error = '단장 이름을 입력하세요.';
           this.render();
           return;
         }
         this.state = this.ui.preview;
-        chooseClub(this.state, d.id, name);
+        chooseLeague(this.state, d.league, name);
         this.ui = { view: 'home' };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'fireManager': {
+        if (!confirm('감독을 해고할까요? 위약금이 나갑니다.')) return;
+        const res = fireManager(s);
+        this.ui.managerMsg = { ok: res.ok, text: res.ok ? `위약금 ${won(res.compensation)}을 내고 해고했습니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'hireManager': {
+        const res = hireManager(s, d.id);
+        this.ui.managerMsg = { ok: res.ok, text: res.ok ? `${res.coach.name} 감독과 계약했습니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'answerRequest': {
+        const res = answerRequest(s, Number(d.id), d.answer);
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? (d.answer === 'approve' ? '승인했습니다. 진행 중인 협상에서 이적료를 제안하세요.' : '요청을 거절했습니다.') : res.reason };
         this.persist();
         this.render();
         break;
@@ -213,6 +206,7 @@ export class App {
         this.ui.fixtureId = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
+        this.ui.managerMsg = null;
         this.render();
         break;
       case 'upgradeFacility': {
@@ -330,21 +324,9 @@ export class App {
       case 'nextSeason':
         this.nextSeason();
         break;
-      case 'previewLeague':
-        this.ui.managerName = this.root.querySelector('#managerName')?.value ?? this.ui.managerName;
-        this.ui.previewLeague = d.league;
-        this.render();
-        break;
       case 'tableLeague':
       case 'historyLeague':
-      case 'jobLeague':
         this.ui[a] = d.league;
-        this.render();
-        break;
-      case 'takeJob':
-        chooseNewClub(s, d.id);
-        this.ui = { view: 'home' };
-        this.persist();
         this.render();
         break;
       case 'callUp':
@@ -377,9 +359,6 @@ export class App {
       case 'setRound':
         this.ui.round = Number(d.round);
         this.render();
-        break;
-      case 'autoLineupNow':
-        this.tactics({ autoPick: true });
         break;
       case 'exportSave':
         exportState(s);
@@ -419,30 +398,6 @@ export class App {
           });
         break;
       }
-      case 'setTactic':
-        this.tactics(d.key === 'formation' ? { formation: el.value } : { key: d.key, value: el.value });
-        break;
-      case 'setSlotPlayer':
-        this.tactics({ slot: Number(d.slot), playerId: el.value });
-        break;
-      case 'setSlotRole':
-        this.tactics({ slot: Number(d.slot), role: el.value });
-        break;
-      case 'toggleAutoLineup':
-        this.tactics(el.checked ? { auto: true } : { manual: true });
-        break;
-      case 'setTraining': {
-        const club = s.clubs[s.manager.clubId];
-        setTraining(s, { ...trainingOf(club), [d.key]: el.value });
-        this.persist();
-        this.render();
-        break;
-      }
-      case 'setDelegation':
-        setDelegation(s, { [d.area]: el.value });
-        this.persist();
-        this.render();
-        break;
       case 'setViewMode':
         s.settings.viewMode = el.value;
         this.persist();

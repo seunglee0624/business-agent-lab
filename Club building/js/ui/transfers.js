@@ -4,7 +4,7 @@
 import { POSITIONS } from '../data/positions.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { PROMISES } from '../data/economy.js';
-import { userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD } from '../core/game.js';
+import { userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
@@ -34,6 +34,7 @@ export function transfersView(state, ui) {
       <div class="small">이적 예산 <strong>${won(f.transferBudget)}</strong> · 주급 여유 <strong>${won(f.wageBudget - weeklyWageBill(state, club))}</strong>/주 · 1군 등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명</div>
     </div>
     ${ui.transferMsg ? `<p class="${ui.transferMsg.ok ? 'good' : 'error'}">${esc(ui.transferMsg.text)}</p>` : ''}
+    ${requestsCard(state)}
     <div class="grid two">
       ${incomingCard(state)}
       ${dealsCard(state)}
@@ -44,6 +45,25 @@ export function transfersView(state, ui) {
     </div>
     ${listedCard(state, club)}
     ${loanedOutCard(state, club)}`;
+}
+
+// 감독의 영입 요청: 승인하면 이적료 협상 목록에 오른다
+function requestsCard(state) {
+  const list = transferRequests(state);
+  if (!list.length) return '';
+  const coach = userClub(state).headCoach;
+  return `
+    <div class="card">
+      <h3>${esc(coach?.name ?? '감독')}의 영입 요청</h3>
+      <table class="table compact"><tbody>${list.map((r) => {
+        const p = state.players[r.playerId];
+        return `<tr><td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))}</div></td>
+          <td class="small">${esc(r.reason)}</td><td class="num">${won(marketValue(p, state.date))}</td>
+          <td class="offer-actions"><button class="btn primary small" data-action="answerRequest" data-id="${r.id}" data-answer="approve">승인</button>
+            <button class="btn small" data-action="answerRequest" data-id="${r.id}" data-answer="reject">거절</button></td></tr>`;
+      }).join('')}</tbody></table>
+      <p class="muted small">승인하면 아래 "진행 중인 협상"에 올라가고, 이적료와 개인 조건은 단장이 직접 협상합니다.</p>
+    </div>`;
 }
 
 function incomingCard(state) {

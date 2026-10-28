@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
 import { marketValue, wageFor, roundMoney } from '../js/core/money.js';
-import { leagueGoal, fireManager } from '../js/core/board.js';
 import { renewalDemand, requiredWage } from '../js/core/contracts.js';
 import { weeklyWageBill, ledgerTotal } from '../js/core/finance.js';
 import { growthFactor, completeConstruction } from '../js/core/facilities.js';
@@ -11,10 +10,18 @@ import { LEAGUES } from '../js/data/countries/index.js';
 import { overall } from '../js/core/player.js';
 import { won } from '../js/ui/format.js';
 
+// 우리 다음 경기 날까지 주 단위로 진행한다
+const toMatch = (s) => {
+  let res;
+  do res = g.advance(s, { skipOffers: true, watchMatches: true }); while (res.stop === 'week');
+  return res;
+};
+
+
 const state = g.createNewGame('economy');
 const clubs = Object.values(state.clubs);
-const userId = clubs.find((c) => c.leagueId === 'ENG2').id;
-g.chooseClub(state, userId, '테스트');
+g.chooseLeague(state, 'ENG2', '테스트');
+const userId = state.user.clubId;
 
 test('금액 표시: 억·만 단위', () => {
   assert.equal(won(152_000_000_000), '1,520억 원');
@@ -32,23 +39,14 @@ test('몸값·주급은 능력에 따라 오르고 README 기준과 맞다', () 
   assert.ok(marketValue(better, state.date) > marketValue(p, state.date));
 });
 
-test('세계 생성: 모든 선수에 계약, 모든 구단에 재정·시설·스태프·목표', () => {
-  for (const club of clubs) {
+test('세계 생성: 모든 선수에 계약, 모든 구단에 재정·시설·스태프·감독', () => {
+  for (const club of clubs.filter((c) => c.status === 'active')) {
     assert.ok(club.finance.wageBudget >= weeklyWageBill(state, club), club.name);
     assert.ok(Object.values(club.facilities).every((v) => v >= 1 && v <= 5));
     assert.ok(Object.values(club.staff).every((v) => v >= 1 && v <= 20));
-    assert.ok(club.goal?.text);
+    assert.ok(club.headCoach?.name);
     for (const id of club.squad) assert.ok(state.players[id].contract?.wage > 0);
   }
-  assert.equal(state.manager.trust, 60);
-  assert.ok(state.inbox.some((m) => m.title === '수뇌부의 시즌 목표'));
-});
-
-test('리그 목표: 예상 순위에 맞는 목표', () => {
-  assert.equal(leagueGoal(LEAGUES.ENG1, 1).type, 'title');
-  assert.equal(leagueGoal(LEAGUES.ENG2, 3).type, 'promotion');
-  assert.equal(leagueGoal(LEAGUES.ENG1, 20).type, 'survive');
-  assert.equal(leagueGoal(LEAGUES.ENG1, 20).target, 17);
 });
 
 test('재계약: 요구보다 적게 주면 거절, 맞춰 주면 서명, 한 달 3번까지', () => {
@@ -70,17 +68,15 @@ test('재계약: 요구보다 적게 주면 거절, 맞춰 주면 서명, 한 �
   }
 });
 
-test('시설 업그레이드: 잔고가 부족하면 거절, 승인되면 공사 후 레벨이 오른다', () => {
+test('시설 업그레이드: 잔고와 상관없이 공사비를 내고 시작하며, 공사가 끝나면 레벨이 오른다', () => {
   const s = structuredClone(state);
   const club = g.userClub(s);
   const key = Object.keys(club.facilities).find((k) => k !== 'stadium' && club.facilities[k] < 5);
   const before = club.facilities[key];
   club.finance.balance = 0;
-  assert.equal(g.upgradeFacility(s, key).ok, false);
-  club.finance.balance = 1e13;
   const res = g.upgradeFacility(s, key);
   assert.ok(res.ok, res.reason);
-  assert.equal(club.finance.balance, 1e13 - res.cost);
+  assert.equal(club.finance.balance, -res.cost);
   const growth = growthFactor(club);
   s.date = addDays(club.construction[0].done, -1);
   completeConstruction(s, club, true);
@@ -103,11 +99,11 @@ test('스태프: 주급 예산을 넘는 수준으로는 올릴 수 없다', () 
 test('한 달이 지나면 수입·지출이 장부에 쌓이고, 홈 경기마다 입장 수입이 생긴다', () => {
   const s = structuredClone(state);
   for (let i = 0; i < 4; i++) {
-    g.advance(s, { skipOffers: true });
+    toMatch(s);
     g.simulateUserMatch(s);
     g.finishUserMatch(s);
   }
-  g.advance(s, { skipOffers: true });
+  toMatch(s);
   const club = g.userClub(s);
   const f = club.finance.season;
   assert.ok(f.income.gate > 0 && f.income.tv > 0 && f.income.commercial > 0);
@@ -115,21 +111,6 @@ test('한 달이 지나면 수입·지출이 장부에 쌓이고, 홈 경기마�
   assert.ok(ledgerTotal(f.income) > 0);
   const home = s.competitions[club.leagueId].fixtures.find((x) => x.result && x.home === club.id);
   assert.ok(home.result.crowd > 0);
-});
-
-test('해고되면 실업 상태로 시간이 흐르고, 제의를 받아 새 구단을 맡는다', () => {
-  const s = structuredClone(state);
-  fireManager(s, '테스트');
-  assert.equal(s.phase, 'unemployed');
-  assert.equal(g.userClub(s), undefined);
-  const res = g.advance(s, { skipOffers: true });
-  assert.equal(res.stop, 'offer');
-  const offers = g.jobOffers(s);
-  assert.ok(offers.length > 0);
-  assert.ok(g.chooseNewClub(s, offers[0].id));
-  assert.equal(s.phase, 'season');
-  assert.equal(s.manager.trust, 60);
-  assert.equal(s.manager.history.at(-1).fired, true);
 });
 
 test('사기가 경기력에 조금 영향을 준다', async () => {
@@ -150,5 +131,5 @@ test('시즌이 끝나면 순위 상금, 장부 기록, 계약 만료 처리, �
   assert.equal(ledgerTotal(c.finance.season.income), 0);
   for (const id of expiring) assert.notEqual(s.players[id]?.clubId, c.id, '재계약하지 않은 선수는 떠났다');
   for (const id of c.squad) assert.ok(s.players[id].contract.until > s.date);
-  assert.ok(s.manager.history.at(-1).goal);
+  assert.ok(s.user.history.at(-1).position >= 1);
 });

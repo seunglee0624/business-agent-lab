@@ -95,6 +95,9 @@ const dealOf = (state, p) => {
   return (state.transfers.deals[p.id] = deal ?? { stage: 'fee', tries: 0, fee: 0, until: end });
 };
 
+// 협상 목록에 올린다 (감독 요청 승인)
+export const openDeal = (state, p) => dealOf(state, p);
+
 // 이적료 제안. 돌려주는 값: { ok: true, stage: 'terms', fee } | { ok: false, reason, counter? }
 export function bidForPlayer(state, club, p, fee) {
   if (!p.clubId || p.clubId === club.id) return { ok: false, reason: '다른 구단 선수에게만 이적료를 제안할 수 있습니다.' };

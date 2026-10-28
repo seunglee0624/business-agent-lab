@@ -1,8 +1,8 @@
 // 화면별 HTML. 모든 함수는 (state, ui) → 문자열이고, 상태를 바꾸지 않는다.
 // 버튼은 data-action, 입력은 data-change 속성으로 app.js의 처리 함수와 연결된다.
 
-import { FORMATIONS, FORMATION_KEYS } from '../data/formations.js';
-import { ROLES, rolesForPosition } from '../data/roles.js';
+import { FORMATIONS } from '../data/formations.js';
+import { ROLES } from '../data/roles.js';
 import { ATTRIBUTES, POSITIONS } from '../data/positions.js';
 import { MENTALITIES, PRESSING, TEMPO, LINE, resolveLineup } from '../core/tactics.js';
 import { NATIONS } from '../data/nations.js';
@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, jobOffers, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
+import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, playerWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -26,21 +26,22 @@ const options = (map, current) =>
 
 // ---- 새 게임 ----
 
-// 구단 고르기 표 (새 게임, 계약 종료 후 새 구단)
-function clubPickTable(world, clubs, action, buttonText) {
-  return `<table class="table clickable">
-    <thead><tr><th>구단</th><th>전력</th><th>주전 평균</th><th>최고 선수</th><th>포메이션</th><th></th></tr></thead>
+// 리그마다 맡게 될 구단(가장 약한 구단) 미리 보기
+function leaguePickTable(world) {
+  return `<table class="table">
+    <thead><tr><th>리그</th><th>맡게 될 구단</th><th>주전 평균</th><th>최고 선수</th><th>잔고</th><th></th></tr></thead>
     <tbody>
-      ${clubs.map((c) => {
+      ${Object.values(COUNTRIES).flatMap((country) => country.leagues).map((l) => {
+        const c = weakestClub(world, l.id);
         const best = c.squad.map((id) => world.players[id]).sort((a, b) => overall(b) - overall(a));
         const xi = best.slice(0, 11).reduce((sum, p) => sum + overall(p), 0) / 11;
         return `<tr>
+          <td>${l.tier}부 ${esc(l.name)}</td>
           <td>${clubLabel(c)}</td>
-          <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td>
           <td>${xi.toFixed(1)}</td>
           <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
-          <td>${c.tactics.formation}</td>
-          <td><button class="btn primary small" data-action="${action}" data-id="${c.id}">${buttonText}</button></td>
+          <td>${won(c.finance.balance)}</td>
+          <td><button class="btn primary small" data-action="pickLeague" data-league="${l.id}">이 리그로 시작</button></td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -57,67 +58,23 @@ function leagueTabs(selectedLeague, action) {
 
 export function newGameView(state, ui) {
   const preview = ui.preview;
-  let clubList = '';
-  if (preview) {
-    const leagueId = ui.previewLeague ?? 'ENG1';
-    const clubs = Object.values(preview.clubs).filter((c) => c.leagueId === leagueId).sort((a, b) => b.level - a.level);
-    clubList = `
-      <h2>구단 선택</h2>
-      <p class="muted">5개 나라 1~3부, ${Object.keys(preview.clubs).length}개 구단 중 맡을 구단을 고르세요. 시드: <code>${esc(preview.seed)}</code></p>
-      ${leagueTabs(leagueId, 'previewLeague')}
-      ${clubPickTable(preview, clubs, 'pickClub', '이 구단 맡기')}`;
-  }
+  const leagueList = preview ? `
+      <h2>리그 선택</h2>
+      <p class="muted">고른 리그에서 가장 약한 구단의 단장이 됩니다. 1부는 어렵고 3부는 쉽습니다. 시드: <code>${esc(preview.seed)}</code></p>
+      ${leaguePickTable(preview)}` : '';
   return `
     <div class="newgame">
       <h1>축구구단 키우기</h1>
-      <p class="muted">가상의 유럽 5개 리그에서 구단을 맡아 여러 시즌을 치릅니다. 3부 약팀에서 1부 정상까지 올라가 보세요.</p>
+      <p class="muted">가상의 유럽 5개 리그에서 가장 약한 구단의 단장을 맡습니다. 감독을 뽑고, 돈을 벌고, 선수를 사고팔며 구단을 키워 보세요.</p>
       <div class="card form-row">
-        <label>감독 이름 <input id="managerName" value="${esc(ui.managerName ?? '')}" placeholder="이름을 입력하세요" maxlength="20"></label>
+        <label>단장 이름 <input id="managerName" value="${esc(ui.managerName ?? '')}" placeholder="이름을 입력하세요" maxlength="20"></label>
         <label>세계 시드 (선택) <input id="seed" value="${esc(ui.seedInput ?? '')}" placeholder="비우면 무작위" maxlength="30"></label>
         <button class="btn primary" data-action="generateWorld">세계 생성</button>
         <label class="btn file">세이브 파일 불러오기<input type="file" accept=".json" data-change="importSave" hidden></label>
       </div>
       ${ui.error ? `<p class="error">${esc(ui.error)}</p>` : ''}
-      ${clubList}
+      ${leagueList}
     </div>`;
-}
-
-// 실업 상태: 받은 제의 중에서 고르거나, 제의를 더 기다린다
-export function unemployedView(state, ui) {
-  const m = state.manager;
-  const offers = jobOffers(state).sort((a, b) => LEAGUES[a.leagueId].tier - LEAGUES[b.leagueId].tier || b.level - a.level);
-  const last = m.history.at(-1);
-  const many = offers.length > 30;
-  const leagueId = many ? (ui.jobLeague && offers.some((c) => c.leagueId === ui.jobLeague) ? ui.jobLeague : offers[0].leagueId) : null;
-  const shown = many ? offers.filter((c) => c.leagueId === leagueId) : offers;
-  const leagues = [...new Set(offers.map((c) => c.leagueId))];
-  return `
-    <div class="newgame">
-      <h1>${esc(m.name)} 감독 · 실업 중</h1>
-      <p>${last ? `${esc(last.clubName)}에서 ${last.fired ? '경질되었습니다' : '계약이 끝났습니다'}. ` : ''}${formatDate(state.date)} · 감독 평판 ${m.reputation}</p>
-      ${offers.length ? `
-        <h2>받은 제의 (${offers.length})</h2>
-        ${many ? `<div class="tabs">${leagues.map((id) => `<button class="tab ${id === leagueId ? 'active' : ''}" data-action="jobLeague" data-league="${id}">${esc(COUNTRIES[LEAGUES[id].country].name)} ${esc(LEAGUES[id].name)}</button>`).join('')}</div>` : ''}
-        ${jobTable(state, shown)}`
-        : '<p class="muted">아직 받은 제의가 없습니다. 시간을 보내며 제의를 기다리세요. 성적이 나쁜 구단이 감독을 바꾸면 평판이 맞는 구단에서 연락이 옵니다.</p>'}
-      <p><button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>제의 기다리기 ▶</button> <span class="muted small">${ui.busy ? '진행 중...' : '새 제의가 올 때까지 시간이 흐릅니다.'}</span></p>
-      <div class="card"><h3>메시지</h3>${inboxList(state)}</div>
-    </div>`;
-}
-
-function jobTable(state, clubs) {
-  const rows = clubs.map((c) => {
-    const table = standings(state, c.leagueId);
-    const pos = table.findIndex((r) => r.clubId === c.id) + 1;
-    const offer = state.offers.find((o) => o.clubId === c.id);
-    return `<tr>
-      <td>${clubLabel(c)}</td><td>${esc(LEAGUES[c.leagueId].name)}</td><td>${table[0].played ? `${pos}위` : '-'}</td>
-      <td><span class="tier tier-${c.tier}">${TIER_NAME[c.tier]}</span></td><td>${esc(c.goal.text)}</td><td>${won(c.finance.balance)}</td>
-      <td class="muted small">${formatShortDate(offer.until)}까지</td>
-      <td><button class="btn primary small" data-action="takeJob" data-id="${c.id}">수락</button></td>
-    </tr>`;
-  }).join('');
-  return `<table class="table"><thead><tr><th>구단</th><th>리그</th><th>순위</th><th>전력</th><th>수뇌부 목표</th><th>잔고</th><th>답변 기한</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ---- 공통 틀 ----
@@ -126,7 +83,7 @@ const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
   ['tactics', '전술'],
-  ['training', '훈련'],
+  ['manager', '감독'],
   ['youth', '유스'],
   ['schedule', '일정'],
   ['table', '순위표'],
@@ -144,7 +101,7 @@ export function layout(state, ui, content) {
   const ended = state.phase === 'seasonEnd';
   return `
     <aside class="side">
-      <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(LEAGUES[club.leagueId].name)}</div><div class="muted small">${esc(state.manager.name)} 감독</div></div></div>
+      <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(LEAGUES[club.leagueId].name)}</div><div class="muted small">${esc(state.user.name)} 단장</div></div></div>
       <nav>
         ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${key === 'home' && unread ? ` <span class="count">${unread}</span>` : ''}</button>`).join('')}
       </nav>
@@ -159,7 +116,7 @@ export function layout(state, ui, content) {
           ${ui.busy ? '<span class="muted">진행 중...</span>' : ''}
           ${!inMatch && !ended ? `
             <button class="btn" data-action="toSeasonEnd" ${ui.busy ? 'disabled' : ''} title="내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다">시즌 끝까지</button>
-            <button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>${state.liveMatch ? '경기 재개' : '계속'} ▶</button>` : ''}
+            <button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>${state.liveMatch ? '경기 재개' : '다음 주'} ▶</button>` : ''}
           ${ended && !inMatch ? '<span class="muted">시즌이 끝났습니다</span>' : ''}
         </div>
       </header>
@@ -220,7 +177,7 @@ export function homeView(state) {
       </div>
       <div class="card">
         <h3>구단 상황</h3>
-        ${boardSummary(state, club, myPos + 1)}
+        ${clubStatus(state, club)}
         <button class="btn small" data-action="nav" data-view="club">구단 운영</button> <button class="btn small" data-action="nav" data-view="finance">재정</button>
       </div>
       <div class="card">
@@ -230,17 +187,11 @@ export function homeView(state) {
     </div>`;
 }
 
-function meter(value, label) {
-  const cls = value >= 60 ? 'good' : value >= 35 ? 'mid' : 'low';
-  return `<span class="meter ${cls}" title="${esc(label)} ${value}"><span style="width:${value}%"></span></span> <strong>${value}</strong>`;
-}
-
-function boardSummary(state, club, pos) {
-  const m = state.manager;
+function clubStatus(state, club) {
   const f = club.finance;
+  const coach = club.headCoach;
   return `<table class="table compact">
-    <tr><td>수뇌부 목표</td><td><strong>${esc(club.goal.text)}</strong> <span class="muted small">(지금 ${pos}위)</span></td></tr>
-    <tr><td>신뢰도</td><td>${meter(m.trust, '신뢰도')}</td></tr>
+    <tr><td>감독</td><td>${coach ? `<strong>${esc(coach.name)}</strong> <span class="muted small">능력 ${coach.ability}</span>` : '<span class="error">공석 (코치가 임시로 맡는 중)</span>'}</td></tr>
     <tr><td>잔고</td><td class="${f.balance < 0 ? 'error' : ''}">${won(f.balance)}</td></tr>
     <tr><td>주급 (예산)</td><td>${won(weeklyWageBill(state, club))} <span class="muted small">/ ${won(f.wageBudget)}</span></td></tr>
   </table>`;
@@ -375,33 +326,19 @@ function contractBox(state, p, ui) {
 
 // ---- 전술 ----
 
+// 감독이 정한 전술과 선발 (단장은 보기만 한다)
 export function tacticsView(state) {
   const club = userClub(state);
   const t = club.tactics;
   const slots = FORMATIONS[t.formation];
-  const leagueId = userLeagueId(state);
-  const lineup = resolveLineup(club, state.players, { unavailable: unavailableSet(state, leagueId, club) });
-  const squad = club.squad.map((id) => state.players[id]);
-  const inLineup = new Set(lineup.lineup.filter(Boolean).map((e) => e.playerId));
+  const lineup = resolveLineup(club, state.players, { unavailable: unavailableSet(state, userLeagueId(state), club) });
+  const coach = club.headCoach;
 
   const slotRows = slots.map((pos, i) => {
     const entry = lineup.lineup[i];
-    const current = entry ? state.players[entry.playerId] : null;
-    const candidates = squad.slice().sort((a, b) => ratingAt(b, pos) - ratingAt(a, pos));
-    return `<tr>
-      <td>${posLabel(pos)}</td>
-      <td><select data-change="setSlotPlayer" data-slot="${i}">
-        ${candidates.map((p) => {
-          const banned = isUnavailable(state, leagueId, p.id);
-          const mark = p.id !== entry?.playerId && inLineup.has(p.id) ? ' (선발)' : '';
-          return `<option value="${p.id}" ${p.id === entry?.playerId ? 'selected' : ''} ${banned ? 'disabled' : ''}>${esc(p.name)} · ${p.position} · ${ratingAt(p, pos)}${banned ? (p.injury ? ' · 부상' : ' · 정지') : ''}${mark}</option>`;
-        }).join('')}
-      </select></td>
-      <td><select data-change="setSlotRole" data-slot="${i}">
-        ${rolesForPosition(pos).map((r) => `<option value="${r}" ${r === entry?.role ? 'selected' : ''}>${esc(ROLES[r].name)}</option>`).join('')}
-      </select></td>
-      <td>${current ? conditionBar(current.condition) : ''}</td>
-    </tr>`;
+    const p = entry ? state.players[entry.playerId] : null;
+    return `<tr><td>${posLabel(pos)}</td><td>${p ? `${esc(p.name)} <span class="muted small">${p.position} · ${ratingAt(p, pos)}</span>` : '<span class="muted">비어 있음</span>'}</td>
+      <td>${entry ? esc(ROLES[entry.role].name) : ''}</td><td>${p ? conditionBar(p.condition) : ''}</td></tr>`;
   }).join('');
 
   const spots = slots.map((pos, i) => {
@@ -415,27 +352,17 @@ export function tacticsView(state) {
         <div class="spot-role">${esc(ROLES[entry.role].name)}</div>${conditionBar(p.condition)}`,
     };
   });
-
   const bench = lineup.bench.map((id) => state.players[id]);
-  const takers = squad.filter((p) => p.position !== 'GK').sort((a, b) => (b.attrs.finishing + b.attrs.composure * 2) - (a.attrs.finishing + a.attrs.composure * 2));
 
   return `
     <div class="card">
       <h3>팀 전술</h3>
-      <div class="form-row tactics-row">
-        <label>포메이션 <select data-change="setTactic" data-key="formation">${FORMATION_KEYS.map((f) => `<option ${f === t.formation ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
-        <label>팀 성향 <select data-change="setTactic" data-key="mentality">${options(MENTALITIES, t.mentality)}</select></label>
-        <label>압박 강도 <select data-change="setTactic" data-key="pressing">${options(PRESSING, t.pressing)}</select></label>
-        <label>템포 <select data-change="setTactic" data-key="tempo">${options(TEMPO, t.tempo)}</select></label>
-        <label>수비 라인 <select data-change="setTactic" data-key="line">${options(LINE, t.line)}</select></label>
-        <label>페널티킥 키커 <select data-change="setTactic" data-key="setPieceTaker">
-          <option value="">자동 (가장 잘 차는 선수)</option>
-          ${takers.map((p) => `<option value="${p.id}" ${p.id === t.setPieceTaker ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-        </select></label>
-      </div>
-      <div class="tips small muted">
-        <p>공격적: 기회가 늘지만 수비가 약해집니다. 수비적: 그 반대입니다. · 압박 높음: 중원 장악이 좋아지지만 체력 소모와 반칙이 늘어납니다. · 수비 라인 높게: 점유에 유리하지만, 센터백이 느리면 뒷공간을 내줍니다.</p>
-      </div>
+      <p>${coach ? `${esc(coach.name)} 감독` : '임시 코치'}이 경기마다 컨디션과 출전 정지를 보고 선발을 고릅니다.</p>
+      <table class="table compact"><tbody>
+        <tr><td>포메이션</td><td>${t.formation}</td><td>팀 성향</td><td>${esc(MENTALITIES[t.mentality])}</td></tr>
+        <tr><td>압박 강도</td><td>${esc(PRESSING[t.pressing])}</td><td>템포</td><td>${esc(TEMPO[t.tempo])}</td></tr>
+        <tr><td>수비 라인</td><td>${esc(LINE[t.line])}</td><td></td><td></td></tr>
+      </tbody></table>
     </div>
     <div class="grid two pitch-left">
       <div class="card">
@@ -444,15 +371,8 @@ export function tacticsView(state) {
         <p class="muted small">숫자는 그 자리에서의 능력입니다. 주황 테두리는 익숙하지 않은 자리입니다.</p>
       </div>
       <div class="card">
-        <div class="card-head">
-          <h3>선발 명단</h3>
-          <div>
-            <label class="check"><input type="checkbox" data-change="toggleAutoLineup" ${t.lineup ? '' : 'checked'}> 매 경기 자동 선발</label>
-            <button class="btn small" data-action="autoLineupNow">지금 자동으로 채우기</button>
-          </div>
-        </div>
-        ${t.lineup ? '' : '<p class="muted small">자동 선발이 켜져 있으면 경기마다 컨디션과 출전 정지를 고려해 다시 고릅니다. 선수를 직접 바꾸면 자동 선발이 꺼집니다.</p>'}
-        <table class="table"><thead><tr><th>자리</th><th>선수 · 포지션 · 이 자리 능력</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
+        <h3>다음 경기 선발</h3>
+        <table class="table"><thead><tr><th>자리</th><th>선수</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
         <h4>교체 명단</h4>
         <p class="chips small">${bench.map((p) => `<span class="chip">${posLabel(p.position)} ${esc(p.name)}</span>`).join('')}</p>
       </div>
@@ -622,7 +542,7 @@ export function youthView(state) {
 // ---- 기록 ----
 
 export function historyView(state, ui) {
-  const career = state.manager.history;
+  const career = state.user.history;
   const leagueId = ui.historyLeague ?? userLeagueId(state);
   const club = userClub(state);
   const seasons = state.history.slice().reverse();
@@ -630,7 +550,7 @@ export function historyView(state, ui) {
   return `
     <div class="grid two">
       <div class="card">
-        <h3>감독 커리어 · ${esc(state.manager.name)}</h3>
+        <h3>단장 기록 · ${esc(state.user.name)}</h3>
         ${career.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>구단</th><th>리그</th><th>순위</th></tr></thead><tbody>
           ${career.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(h.clubName)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td><strong>${h.position}위</strong></td></tr>`).join('')}
         </tbody></table>` : '<p class="muted">첫 시즌을 마치면 기록이 쌓입니다.</p>'}
@@ -724,11 +644,10 @@ export function seasonEndBanner(state, ui = {}) {
     </div>`;
 }
 
-// ---- 구단 운영: 수뇌부, 시설, 스태프 ----
+// ---- 구단 운영: 시설, 스태프 ----
 
 export function clubView(state, ui) {
   const club = userClub(state);
-  const m = state.manager;
   const table = standings(state);
   const pos = table.findIndex((r) => r.clubId === club.id) + 1;
   const f = club.finance;
@@ -765,28 +684,19 @@ export function clubView(state, ui) {
     ${ui.clubMsg ? `<p class="${ui.clubMsg.ok ? 'good' : 'error'}">${esc(ui.clubMsg.text)}</p>` : ''}
     <div class="grid two">
       <div class="card">
-        <h3>수뇌부</h3>
-        <table class="table compact">
-          <tr><td>시즌 목표</td><td><strong>${esc(club.goal.text)}</strong></td></tr>
-          <tr><td>지금 순위</td><td>${table[0].played ? `${pos}위` : '개막 전'}</td></tr>
-          <tr><td>신뢰도</td><td>${meter(m.trust, '신뢰도')}</td></tr>
-          <tr><td>감독 평판</td><td>${m.reputation}</td></tr>
-        </table>
-        <p class="muted small">신뢰도는 매달 순위와 목표, 재정(잔고가 마이너스인지)으로 변합니다. 11월부터 15 아래로 떨어지면 시즌 중에도 해고되고, 시즌이 끝나면 목표 달성 여부로 크게 평가합니다.</p>
-      </div>
-      <div class="card">
         <h3>구단 정보</h3>
         <table class="table compact">
           <tr><td>연고지</td><td>${esc(club.city)}</td></tr>
           <tr><td>구단 평판</td><td>${club.reputation}</td></tr>
           <tr><td>경기장</td><td>${capacity(club).toLocaleString('ko-KR')}석 · 예상 관중 비율 ${Math.round(attendanceRate(club, pos || null, table.length) * 100)}%</td></tr>
+          <tr><td>지금 순위</td><td>${table[0].played ? `${pos}위` : '개막 전'}</td></tr>
           <tr><td>잔고</td><td>${won(f.balance)}</td></tr>
         </table>
       </div>
     </div>
     <div class="card">
       <h3>시설</h3>
-      <p class="muted small">업그레이드는 수뇌부 승인이 필요합니다. 잔고가 공사비의 1.3배 이상이고 신뢰도가 40 이상이어야 승인됩니다. 공사비는 바로 나가고, 레벨이 높을수록 매달 유지비가 늘어납니다.</p>
+      <p class="muted small">공사비는 바로 나갑니다(잔고가 모자라면 마이너스가 됩니다). 레벨이 높을수록 매달 유지비가 늘어납니다.</p>
       <table class="table"><thead><tr><th>시설</th><th>레벨</th><th>효과</th><th></th></tr></thead><tbody>${facilityRows}</tbody></table>
     </div>
     <div class="card">

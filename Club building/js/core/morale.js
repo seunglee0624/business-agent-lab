@@ -35,7 +35,7 @@ function monthTally(state, from, to) {
 // 매달 1일, 성장 계산(출장 시간 초기화) 전에 부른다
 export function monthlyMorale(state, prevMonthStart) {
   const tally = monthTally(state, prevMonthStart, state.date);
-  const userId = state.manager?.clubId;
+  const userId = state.user?.clubId;
   for (const club of Object.values(state.clubs)) {
     if (club.status !== 'active') continue;
     const t = tally.get(club.id);

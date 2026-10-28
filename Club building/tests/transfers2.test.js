@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewGame, chooseClub, userClub, advance, simulateUserMatch, finishUserMatch, registeredCount, MAX_SQUAD, loanOut, offerLoan, buyLoanedPlayer, simulateToSeasonEnd, startNextSeason } from '../js/core/game.js';
+import { createNewGame, chooseLeague, userClub, advance, simulateUserMatch, finishUserMatch, registeredCount, MAX_SQUAD, loanOut, offerLoan, buyLoanedPlayer, simulateToSeasonEnd, startNextSeason } from '../js/core/game.js';
 import { weeklyWageBill } from '../js/core/finance.js';
 import { overall } from '../js/core/player.js';
 
 const fresh = (seed = 'tr2') => {
   const state = createNewGame(seed);
-  chooseClub(state, Object.keys(state.clubs)[4], '테스트');
+  chooseLeague(state, 'ENG1', '테스트');
   return state;
 };
 // date가 될 때까지 내 경기도 결과만으로 처리하며 진행한다
@@ -115,7 +115,10 @@ test('시즌 끝 보충: 내 구단은 18명·골키퍼 2명 이상이면 자동
     me.squad = me.squad.filter((id) => !outfield.slice(0, 3).includes(id));
     before = new Set([...me.squad, ...me.youth]);
   });
-  assert.ok(me.squad.every((id) => before.has(id)), '새로 들어온 선수가 없어야 한다');
+  // 계약 만료로 18명 아래가 됐을 때만, 모자란 만큼 채운다
+  const stayed = me.squad.filter((id) => before.has(id)).length;
+  const added = me.squad.length - stayed;
+  assert.ok(added <= Math.max(0, 18 - stayed) + 1, `새 선수 ${added}명, 남은 선수 ${stayed}명`);
 });
 
 test('시즌 끝 보충: 내 구단이 18명 미만이거나 골키퍼가 2명 미만이면 그만큼만 채운다', () => {
