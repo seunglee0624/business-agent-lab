@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -765,9 +765,57 @@ export function fansView(state) {
         <ul class="fan-list">${reactions.map((r) => `
           <li><span class="dot" style="background:${SEG_COLOR[r.key]}"></span><strong>${r.name}</strong> ${r.share}%
             <p class="small ${r.mood === 'good' ? 'good' : r.mood === 'bad' ? 'error' : 'muted'}">"${esc(r.line)}"</p></li>`).join('')}</ul>
+        <p class="small">라이벌: <strong>${esc(rivalOf(state, club)?.name ?? '없음')}</strong></p>
         <p class="muted small">충성층은 성적·연승, 유행층은 스타 영입(능력 75 이상)·다득점, 지역층은 유스 출신 출전, 가족층은 티켓값에 반응합니다. 비율은 시즌이 끝날 때 조금씩 바뀝니다.</p>
       </div>
+      ${ticketCard(state, club)}
+      ${ticketHistory(state, club)}
     </div>`;
+}
+
+const range = (a) => `${won(a[0])} ~ ${won(a[1])}`;
+const crowdRange = (a) => `${a[0].toLocaleString()} ~ ${a[1].toLocaleString()}명`;
+
+// 가격 바 하나: 기본 가격의 50%~200%
+function priceSlider(grade, name, price, ref, fc, disabled = false) {
+  const step = ref >= 1e6 ? 1e4 : 1e3;
+  return `
+      <div class="price-row">
+        <div class="budget-labels"><span><strong>${name}</strong> <span id="price-${grade}">${won(price)}</span> <span class="muted small">기본 ${won(ref)}</span></span>
+          <span class="small muted" id="fc-${grade}">${fc}</span></div>
+        <input type="range" data-change="ticketPrice" data-grade="${grade}" min="${Math.round(ref * 0.5 / step) * step}" max="${Math.round(ref * 2 / step) * step}" step="${step}" value="${price}" ${disabled ? 'disabled' : ''}>
+      </div>`;
+}
+
+export const forecastText = (club, grade, price) => {
+  if (grade === 'season') { const f = seasonForecast(club, price); return `예상 ${crowdRange(f.sold)} · ${range(f.income)}`; }
+  const f = forecast(club, grade, price);
+  return `예상 관중 ${crowdRange(f.crowd)} · 경기당 ${range(f.income)}`;
+};
+
+function ticketCard(state, club) {
+  const t = ticketsOf(club);
+  const locked = t.seasonSold !== null;
+  const level = priceLevel(club);
+  return `
+      <div class="card">
+        <h3>티켓</h3>
+        ${priceSlider('season', '시즌권', t.seasonPrice, referenceSeasonTicket(club), locked ? `판매 확정 ${t.seasonSold.toLocaleString()}석` : forecastText(club, 'season', t.seasonPrice), locked)}
+        ${GRADE_KEYS.map((g) => priceSlider(g, GRADES[g].name, t.prices[g], referencePrice(club, g), forecastText(club, g, t.prices[g]))).join('')}
+        <p class="small ${level > 1.1 ? 'error' : level < 0.9 ? 'good' : 'muted'}">평균 가격: 기본의 ${Math.round(level * 100)}%${level > 1.1 ? ' · 가족층·지역층이 비싸다고 느낍니다' : level < 0.9 ? ' · 가족층·지역층이 반깁니다' : ''}</p>
+        <p class="muted small">시즌권은 첫 홈 경기 날 판매가 확정되고, 그 좌석은 홈 리그 경기마다 먼저 채워집니다. 빅매치는 평판이 5 이상 높은 상대나 리그 상위 4팀, 라이벌전은 라이벌과의 경기입니다. 예상 범위는 마케팅 담당 수준이 높을수록 좁아집니다(구단 탭 스태프).</p>
+      </div>`;
+}
+
+function ticketHistory(state, club) {
+  const h = ticketsOf(club).history;
+  return `
+      <div class="card">
+        <h3>가격 기록</h3>
+        ${h.length ? `<table class="table compact"><thead><tr><th>날짜</th><th>상대</th><th>등급</th><th class="num">가격</th><th class="num">관중</th><th class="num">비율</th><th class="num">만족도</th></tr></thead><tbody>
+          ${h.map((r) => `<tr><td>${formatShortDate(r.date)}</td><td>${esc(state.clubs[r.opponent]?.name ?? '')}</td><td>${GRADES[r.grade].name}</td><td class="num">${won(r.price)}</td><td class="num">${r.crowd.toLocaleString()}</td><td class="num">${Math.round((r.crowd / r.capacity) * 100)}%</td><td class="num">${Math.round(r.satisfaction)}</td></tr>`).join('')}
+        </tbody></table>` : '<p class="muted">홈 경기를 치르면 가격과 관중이 기록됩니다.</p>'}
+      </div>`;
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산

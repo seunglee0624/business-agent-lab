@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -16,7 +16,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView,
+  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -36,6 +36,7 @@ export class App {
   async start() {
     try {
       this.state = (await loadState()) ?? null;
+      if (this.state) upgradeState(this.state);
       if (this.state && this.state.version !== STATE_VERSION) {
         this.state = null;
         this.ui.error = '이전 버전에서 저장한 게임이라 이어서 할 수 없습니다. 새 게임을 시작해 주세요.';
@@ -428,6 +429,12 @@ export class App {
   // 재정 조정 바를 끄는 동안 금액만 바꿔 보여 준다
   onInput(ev) {
     const el = ev.target;
+    if (el.dataset?.change === 'ticketPrice') {
+      const price = Number(el.value);
+      this.root.querySelector(`#price-${el.dataset.grade}`).textContent = won(price);
+      this.root.querySelector(`#fc-${el.dataset.grade}`).textContent = forecastText(userClub(this.state), el.dataset.grade, price);
+      return;
+    }
     if (el.dataset?.change !== 'wageBudget') return;
     const wage = Number(el.value);
     this.root.querySelector('#budgetWage').textContent = won(wage);
@@ -440,6 +447,11 @@ export class App {
     const s = this.state;
     const d = el.dataset;
     switch (d.change) {
+      case 'ticketPrice':
+        setTicketPrice(s, d.grade, Number(el.value));
+        this.persist();
+        this.render();
+        return;
       case 'wageBudget':
         adjustBudgets(s, Number(el.value));
         this.persist();
@@ -451,7 +463,7 @@ export class App {
         importState(file)
           .then((loaded) => {
             if (loaded.version !== STATE_VERSION) throw new Error('이전 버전에서 저장한 파일이라 불러올 수 없습니다.');
-            this.state = loaded;
+            this.state = upgradeState(loaded);
             this.ui = { view: 'home' };
             this.persist();
             this.render();

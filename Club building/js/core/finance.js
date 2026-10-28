@@ -73,7 +73,7 @@ export function initFinance(rng, state, club) {
   setBudgets(state, club);
 }
 
-function income(club, key, amount) {
+export function income(club, key, amount) {
   club.finance.balance += amount;
   club.finance.season.income[key] += amount;
 }

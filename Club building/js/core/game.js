@@ -6,6 +6,7 @@ import { LEAGUES } from '../data/countries/index.js';
 import { seasonStart, addDays, addMonths, formatDate, formatShortDate, daysBetween } from './calendar.js';
 import { resolveLineup } from './tactics.js';
 import * as transfers from './transfers.js';
+import * as tickets from './tickets.js';
 import * as loans from './loans.js';
 import { intensityOf } from './training.js';
 import * as staffwork from './staffwork.js';
@@ -21,7 +22,8 @@ import { assignInjury, healOn, trainingInjuryRoll } from './injury.js';
 import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development.js';
 import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount, MAX_SQUAD } from './season.js';
 import { fanMatchResult, fanMonthly, PROTEST_LINE } from './fans.js';
-import { initFinance, monthlySettlement, recordGate, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
+import { recordHomeGate, priceLevel } from './tickets.js';
+import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
 import { signNew, offerRenewal } from './contracts.js';
 import { monthlyMorale } from './morale.js';
 import {
@@ -252,7 +254,7 @@ function monthlyTick(state, rng, date) {
   monthlyMorale(state, addMonths(date, -1));
   if (state.user?.clubId) {
     const club = userClub(state);
-    const { protest } = fanMonthly(state, club, date);
+    const { protest } = fanMonthly(state, club, date, priceLevel(club));
     if (protest) addMessage(state, { view: 'fans', important: true, title: '팬들의 항의', body: `팬 만족도가 ${PROTEST_LINE} 아래로 떨어져 팬들이 항의하고 있습니다. 이대로 가면 관중이 더 줄어듭니다.` });
   }
   monthlyDevelopment(state, rng);
@@ -408,7 +410,7 @@ function applyResult(state, fixture, match) {
       opponent: state.clubs[home ? fixture.away : fixture.home],
     });
   }
-  fixture.result.crowd = recordGate(state, homeClub, table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length);
+  fixture.result.crowd = recordHomeGate(state, homeClub, state.clubs[fixture.away], table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length, compId === homeClub.leagueId);
 
   for (const [pid, st] of Object.entries(match.stats)) {
     if (!st.minutes && !st.injured) continue;
@@ -534,6 +536,22 @@ export function sendDownToYouth(state, playerId) {
 
 export { registeredCount, MAX_SQUAD };
 export { fansOf, fanReactions, expectedPosition, SEGMENTS, PROTEST_LINE } from './fans.js';
+export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from './tickets.js';
+
+export function setTicketPrice(state, grade, price) {
+  return tickets.setTicketPrice(userClub(state), grade, price);
+}
+
+// 예전 저장 파일 보정: 새로 생긴 값 채우기
+export function upgradeState(state) {
+  for (const club of Object.values(state.clubs)) {
+    if (club.staff && club.staff.marketing === undefined) {
+      const levels = Object.values(club.staff);
+      club.staff.marketing = Math.round(levels.reduce((s, x) => s + x, 0) / Math.max(1, levels.length));
+    }
+  }
+  return state;
+}
 
 // ---- 전술 (내 구단) ----
 

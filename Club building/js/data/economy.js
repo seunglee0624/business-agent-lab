@@ -49,6 +49,7 @@ export const STAFF = {
   scout: { name: '스카우트', effect: '다른 구단 선수 능력치를 보는 정확도 (3-2 이적에서 사용)' },
   medical: { name: '의료진', effect: '부상 확률과 회복 속도' },
   youthCoach: { name: '유스 코치', effect: '유스 선수 잠재력' },
+  marketing: { name: '마케팅 담당', effect: '티켓 가격을 바꿀 때 예상 관중·수입의 정확도' },
 };
 export const STAFF_KEYS = Object.keys(STAFF);
 export const MAX_STAFF = 20;

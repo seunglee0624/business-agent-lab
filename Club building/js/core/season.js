@@ -15,6 +15,7 @@ import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS } from '../data/economy.js';
 import { fanSeasonEnd } from './fans.js';
+import { resetSeasonTickets } from './tickets.js';
 import { won } from './money.js';
 
 export const RETURN_CHANCE = 0.3;
@@ -333,6 +334,7 @@ export function startSeason(state, rng) {
   for (const club of Object.values(state.clubs)) {
     if (club.status !== 'active') continue;
     if (club.id !== state.user.clubId) aiFacilityUpgrade(state, rng, club);
+    resetSeasonTickets(club);
     const b = setBudgets(state, club);
     if (b && club.id === state.user.clubId) {
       addMessage(state, {
