@@ -77,7 +77,7 @@ export function completeConstruction(state, club, isUser) {
   for (const c of club.construction.filter((x) => state.date >= x.done)) {
     club.facilities[c.key] = c.toLevel;
     if (c.key === 'stadium') club.stadium.capacity = Math.max(Math.round(club.stadium.capacity * 1.2), STADIUM_TARGET[c.toLevel]);
-    if (isUser) addMessage(state, { title: `${FACILITIES[c.key].name} 공사 완료`, body: `${withParticle(FACILITIES[c.key].name, '가')} ${c.toLevel}레벨이 되었습니다.` });
+    if (isUser) addMessage(state, { view: 'club', title: `${FACILITIES[c.key].name} 공사 완료`, body: `${withParticle(FACILITIES[c.key].name, '가')} ${c.toLevel}레벨이 되었습니다.` });
   }
   club.construction = club.construction.filter((x) => state.date < x.done);
 }

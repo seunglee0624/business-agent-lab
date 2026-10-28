@@ -130,3 +130,20 @@ test('영입 요청: 이적시장이 닫혀 있거나 감독이 없으면 요청
   advance(s2, { skipOffers: true });
   assert.equal(transferRequests(s2).length, 0);
 });
+
+test('메시지: 연결된 화면이 있고, 그 화면의 안 읽은 메시지를 셀 수 있으며, 열면 읽음 처리된다', async () => {
+  const { unreadCount, openMessage, markViewRead } = await import('../js/core/game.js');
+  const state = fresh('gm-msg');
+  fireManager(state);
+  const msg = state.inbox.find((m) => m.title.endsWith('감독 해고'));
+  assert.equal(msg.view, 'manager');
+  assert.equal(unreadCount(state, 'manager'), 1);
+  assert.ok(unreadCount(state) >= 2, '전체 안 읽은 수');
+  assert.equal(openMessage(state, msg.id), 'manager');
+  assert.equal(msg.read, true);
+  assert.equal(unreadCount(state, 'manager'), 0);
+  const c = managerCandidates(state).find((x) => x.willing);
+  hireManager(state, c.id);
+  markViewRead(state, 'manager');
+  assert.equal(unreadCount(state, 'manager'), 0);
+});

@@ -1,7 +1,8 @@
 // 이적 화면: 받은 제안, 진행 중인 협상, 이적 목록, 선수 찾기와 영입 협상.
 // views.js와 같이 (state, ui) → 문자열이고 상태를 바꾸지 않는다.
 
-import { POSITIONS } from '../data/positions.js';
+import { POSITIONS, POSITION_WEIGHTS, ATTRIBUTES } from '../data/positions.js';
+import { overall } from '../core/player.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { PROMISES } from '../data/economy.js';
 import { userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
@@ -11,7 +12,7 @@ import { loanOptionFee } from '../core/loans.js';
 import { weeklyWageBill } from '../core/finance.js';
 import { formatDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
-import { esc, posLabel, won } from './format.js';
+import { esc, posLabel, won, age, attrClass } from './format.js';
 
 const eok = (amount) => Math.round(amount / 1e6) / 100; // 원 → 억 (소수 둘째 자리)
 
@@ -48,6 +49,14 @@ export function transfersView(state, ui) {
 }
 
 // 감독의 영입 요청: 승인하면 이적료 협상 목록에 오른다
+const ATTR_NAME = Object.fromEntries(ATTRIBUTES.map((a) => [a.key, a.name]));
+
+// 그 포지션에서 중요한 능력치 (가중치 높은 순 6개)
+function keyAttributes(p) {
+  return Object.entries(POSITION_WEIGHTS[p.position]).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([k]) => `<span class="chip">${esc(ATTR_NAME[k])} <b class="${attrClass(p.attrs[k])}">${p.attrs[k]}</b></span>`).join('');
+}
+
 function requestsCard(state) {
   const list = transferRequests(state);
   if (!list.length) return '';
@@ -55,14 +64,15 @@ function requestsCard(state) {
   return `
     <div class="card">
       <h3>${esc(coach?.name ?? '감독')}의 영입 요청</h3>
-      <table class="table compact"><tbody>${list.map((r) => {
+      <table class="table compact clickable"><tbody>${list.map((r) => {
         const p = state.players[r.playerId];
-        return `<tr><td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))}</div></td>
+        return `<tr data-action="selectTarget" data-id="${p.id}"><td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))} · ${age(p, state.date)}세 · 능력 ${overall(p)}</div>
+            <div class="chips small">${keyAttributes(p)}</div></td>
           <td class="small">${esc(r.reason)}</td><td class="num">${won(marketValue(p, state.date))}</td>
           <td class="offer-actions"><button class="btn primary small" data-action="answerRequest" data-id="${r.id}" data-answer="approve">승인</button>
             <button class="btn small" data-action="answerRequest" data-id="${r.id}" data-answer="reject">거절</button></td></tr>`;
       }).join('')}</tbody></table>
-      <p class="muted small">승인하면 아래 "진행 중인 협상"에 올라가고, 이적료와 개인 조건은 단장이 직접 협상합니다.</p>
+      <p class="muted small">선수를 누르면 자세한 정보를 볼 수 있습니다. 승인하면 아래 "진행 중인 협상"에 올라가고, 이적료와 개인 조건은 단장이 직접 협상합니다.</p>
     </div>`;
 }
 

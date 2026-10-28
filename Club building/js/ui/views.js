@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, playerWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -29,10 +29,13 @@ const options = (map, current) =>
 
 // 리그마다 맡게 될 구단(가장 약한 구단) 미리 보기
 function leaguePickTable(world) {
-  return `<table class="table">
+  return Object.values(COUNTRIES).map((country) => `
+  <div class="card">
+  <h3>${esc(country.name)}</h3>
+  <table class="table league-pick">
     <thead><tr><th>리그</th><th>맡게 될 구단</th><th>주전 평균</th><th>최고 선수</th><th>잔고</th><th></th></tr></thead>
     <tbody>
-      ${Object.values(COUNTRIES).flatMap((country) => country.leagues).map((l) => {
+      ${country.leagues.map((l) => {
         const c = weakestClub(world, l.id);
         const best = c.squad.map((id) => world.players[id]).sort((a, b) => overall(b) - overall(a));
         const xi = best.slice(0, 11).reduce((sum, p) => sum + overall(p), 0) / 11;
@@ -46,7 +49,8 @@ function leaguePickTable(world) {
         </tr>`;
       }).join('')}
     </tbody>
-  </table>`;
+  </table>
+  </div>`).join('');
 }
 
 // 나라 → 리그 탭
@@ -80,6 +84,8 @@ export function newGameView(state, ui) {
 
 // ---- 공통 틀 ----
 
+const countBadge = (n) => (n ? ` <span class="count">${n}</span>` : '');
+
 const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
@@ -95,6 +101,8 @@ const NAV = [
   ['settings', '설정'],
 ];
 
+const NAV_NAME = Object.fromEntries(NAV);
+
 export function layout(state, ui, content) {
   const club = userClub(state);
   const unread = state.inbox.filter((m) => !m.read).length;
@@ -104,7 +112,7 @@ export function layout(state, ui, content) {
     <aside class="side">
       <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(LEAGUES[club.leagueId].name)}</div><div class="muted small">${esc(state.user.name)} 단장</div></div></div>
       <nav>
-        ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${key === 'home' && unread ? ` <span class="count">${unread}</span>` : ''}</button>`).join('')}
+        ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${countBadge(key === 'home' ? unread : unreadCount(state, key))}</button>`).join('')}
       </nav>
     </aside>
     <div class="main">
@@ -205,8 +213,8 @@ function miniRow(state, r, i, myId) {
 function inboxList(state) {
   if (!state.inbox.length) return '<p class="muted">메시지가 없습니다.</p>';
   return `<ul class="inbox">${state.inbox.slice(0, 12).map((m) => `
-    <li class="${m.read ? '' : 'unread'} ${m.important ? 'important' : ''}">
-      <div class="inbox-head"><strong>${esc(m.title)}</strong><span class="muted small">${formatShortDate(m.date)}</span></div>
+    <li class="clickable ${m.read ? '' : 'unread'} ${m.important ? 'important' : ''}" data-action="openMessage" data-id="${m.id}">
+      <div class="inbox-head"><strong>${esc(m.title)}</strong><span class="muted small">${m.view ? `${esc(NAV_NAME[m.view] ?? '')} ▸ ` : ''}${formatShortDate(m.date)}</span></div>
       <div>${esc(m.body)}</div>
     </li>`).join('')}</ul>`;
 }

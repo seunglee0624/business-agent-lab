@@ -6,6 +6,7 @@ import {
   renewContract, upgradeFacility, setStaffLevel,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
+  openMessage, markViewRead,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -106,7 +107,6 @@ export class App {
   afterUserMatch() {
     const s = this.state;
     const fixture = finishUserMatch(s);
-    s.inbox.forEach((m) => { m.read = true; });
     this.persist();
     this.ui.view = 'home';
     this.ui.fixtureId = fixture.id;
@@ -201,8 +201,20 @@ export class App {
         this.render();
         break;
       }
+      case 'openMessage': {
+        const view = openMessage(this.state, d.id);
+        if (view) {
+          this.ui.view = view;
+          markViewRead(this.state, view);
+        }
+        this.persist();
+        this.render();
+        break;
+      }
       case 'nav':
         this.ui.view = d.view;
+        markViewRead(this.state, d.view);
+        this.persist();
         this.ui.fixtureId = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;

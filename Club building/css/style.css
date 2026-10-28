@@ -164,7 +164,8 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .next-match .vs { font-size: 18px; margin: 10px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .result-line { font-size: 16px; margin-bottom: 10px; }
 .inbox { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
-.inbox li { border-bottom: 1px solid var(--line); padding: 8px 4px; }
+.inbox li { border-bottom: 1px solid var(--line); padding: 8px 4px; cursor: pointer; }
+.inbox li:hover { background: var(--panel-2); }
 .inbox li.unread { border-left: 3px solid var(--blue); padding-left: 8px; }
 .inbox li.important strong { color: var(--yellow); }
 .inbox-head { display: flex; justify-content: space-between; gap: 8px; }
@@ -361,3 +362,9 @@ input, select { background: var(--panel); }
 @media (max-width: 700px) { .top-actions { width: 100%; } .top-actions .btn.primary { margin-left: auto; } }
 /* 주간 요약처럼 여러 줄인 메시지 */
 .inbox li > div:last-child { white-space: pre-line; }
+.table.league-pick { table-layout: fixed; }
+.table.league-pick th:nth-child(1) { width: 22%; }
+.table.league-pick th:nth-child(2) { width: 20%; }
+.table.league-pick th:nth-child(3) { width: 10%; }
+.table.league-pick th:nth-child(4) { width: 22%; }
+.table.league-pick th:nth-child(5) { width: 13%; }

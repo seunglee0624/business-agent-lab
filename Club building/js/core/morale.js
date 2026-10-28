@@ -64,10 +64,10 @@ function updateRequest(state, p, isUser) {
   p.unhappyMonths = p.morale < UNHAPPY ? (p.unhappyMonths ?? 0) + 1 : 0;
   if (!p.transferRequest && p.unhappyMonths >= 3) {
     p.transferRequest = true;
-    if (isUser) addMessage(state, { title: `${p.name} 이적 요청`, body: `${withParticle(p.name, '가')} 출전 시간과 대우에 불만을 품고 이적을 요청했습니다. (사기 ${p.morale})`, important: true });
+    if (isUser) addMessage(state, { view: 'squad', title: `${p.name} 이적 요청`, body: `${withParticle(p.name, '가')} 출전 시간과 대우에 불만을 품고 이적을 요청했습니다. (사기 ${p.morale})`, important: true });
   } else if (p.transferRequest && p.morale >= CONTENT) {
     p.transferRequest = false;
-    if (isUser) addMessage(state, { title: `${p.name} 이적 요청 철회`, body: `${withParticle(p.name, '가')} 마음을 돌려 팀에 남겠다고 합니다.` });
+    if (isUser) addMessage(state, { view: 'squad', title: `${p.name} 이적 요청 철회`, body: `${withParticle(p.name, '가')} 마음을 돌려 팀에 남겠다고 합니다.` });
   }
 }
 

@@ -209,7 +209,7 @@ export function dailyOffers(state, rng, club) {
   const offer = { id: t.nextOfferId++, playerId: p.id, clubId: buyer.id, fee, date: state.date, expires: [addDays(state.date, OFFER_DAYS), end].sort()[0] };
   t.incoming.push(offer);
   addMessage(state, {
-    title: `${p.name} 이적 제안`,
+    view: 'transfers', title: `${p.name} 이적 제안`,
     body: `${withParticle(buyer.name, '가')} ${withParticle(p.name, '를')} 사고 싶어 합니다. 제안 금액 ${won(fee)}. ${offer.expires}까지 답하지 않으면 거절한 것으로 봅니다.`,
     important: true,
   });

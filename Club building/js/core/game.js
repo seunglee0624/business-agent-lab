@@ -28,12 +28,12 @@ import {
 } from './facilities.js';
 import { FACILITIES, STAFF, MAX_STAFF, staffWage, EUR } from '../data/economy.js';
 import { roundMoney, won } from './money.js';
-import { addNotice,
+import { addNotice, unreadCount, markViewRead, openMessage,
   withRng, addMessage, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable,
   unavailableSet, activeClubs, clubStrength,
 } from './state.js';
 
-export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage };
+export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, unreadCount, markViewRead, openMessage };
 
 export const STATE_VERSION = 5;
 export const START_YEAR = 2026;
@@ -163,7 +163,7 @@ function dailyTick(state, rng, date) {
   }
   if (user && isMonday(date)) {
     const made = requests.makeRequests(state, rng, user);
-    if (made.length) addMessage(state, { title: '감독의 영입 요청', body: `${user.headCoach.name} 감독이 ${made.length}명의 영입을 요청했습니다. 이적 화면에서 승인하거나 거절하세요.`, important: true });
+    if (made.length) addMessage(state, { view: 'transfers', title: '감독의 영입 요청', body: `${user.headCoach.name} 감독이 ${made.length}명의 영입을 요청했습니다. 이적 화면에서 승인하거나 거절하세요.`, important: true });
     weeklyStaffWork(state, user);
     weeklySummary(state, user);
   }
@@ -197,7 +197,7 @@ function dailyTick(state, rng, date) {
       if (club.id === userId) {
         const best = players.slice().sort((a, b) => b.potential - a.potential)[0];
         addMessage(state, {
-          title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
+          view: 'youth', title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
           body: `${players.length}명이 U-21 팀에 입단했습니다. 가장 기대되는 선수는 ${best.name}(${best.position}, 잠재 ${best.potential})입니다.`,
           important: golden,
         });
@@ -260,7 +260,7 @@ function expiryReminder(state) {
   const expiring = club.squad.map((id) => state.players[id]).filter((p) => p.contract && p.contract.until <= end);
   if (!expiring.length) return;
   addMessage(state, {
-    title: '계약 만료 예정',
+    view: 'squad', title: '계약 만료 예정',
     body: `이번 시즌이 끝나면 계약이 끝나는 선수: ${expiring.map((p) => p.name).join(', ')}. 재계약하지 않으면 6월 30일에 팀을 떠납니다.`,
     important: true,
   });
@@ -416,7 +416,7 @@ function applyResult(state, fixture, match) {
     if (st.energyEnd !== null) p.condition = st.energyEnd;
     if (st.injured) {
       const inj = withRng(state, (rng) => assignInjury(rng, p, fixture.date, 'match', injuryDaysFactor(state.clubs[p.clubId])));
-      if (p.clubId === userId) addMessage(state, { title: `${p.name} 부상`, body: `${inj.name}, 약 ${inj.days}일 결장 예상 (복귀 예정 ${formatDate(inj.until)})` });
+      if (p.clubId === userId) addMessage(state, { view: 'squad', title: `${p.name} 부상`, body: `${inj.name}, 약 ${inj.days}일 결장 예상 (복귀 예정 ${formatDate(inj.until)})` });
     }
   }
   fixture.result.ratings = Object.fromEntries(
@@ -429,7 +429,7 @@ function applyResult(state, fixture, match) {
     if (state.players[ban.playerId].clubId !== userId) continue;
     const reason = { secondYellow: '경고 2장 퇴장', red: '레드카드', accumulation: '경고 5장 누적' }[ban.reason];
     addMessage(state, {
-      title: `${state.players[ban.playerId].name} 출전 정지`,
+      view: 'squad', title: `${state.players[ban.playerId].name} 출전 정지`,
       body: `${withParticle(reason, '로')} 다음 ${ban.games}경기에 나설 수 없습니다.`,
     });
   }
@@ -444,7 +444,7 @@ function endSeason(state) {
   const pos = table.findIndex((r) => r.clubId === state.user.clubId) + 1;
   const champion = state.clubs[table[0].clubId];
   addMessage(state, {
-    title: '시즌 종료',
+    view: 'table', title: '시즌 종료',
     body: `${LEAGUES[userLeagueId(state)].name}에서 ${withParticle(champion.name, '가')} 우승했습니다. 우리 팀은 ${pos}위로 시즌을 마쳤습니다.`,
     important: true,
   });
@@ -461,13 +461,13 @@ function runSeasonTransition(state) {
     const c = club.headCoach;
     if (!c || c.until > `${state.season + 1}-06-30`) continue;
     c.until = `${state.season + 3}-06-30`;
-    if (club.id === state.user.clubId) addMessage(state, { title: `${c.name} 감독 재계약`, body: `계약이 끝나 ${formatDate(c.until)}까지 연장했습니다.` });
+    if (club.id === state.user.clubId) addMessage(state, { view: 'manager', title: `${c.name} 감독 재계약`, body: `계약이 끝나 ${formatDate(c.until)}까지 연장했습니다.` });
   }
   withRng(state, (rng) => startSeason(state, rng));
   moveTo(state, seasonStart(state.season));
   state.phase = 'season';
   addMessage(state, {
-    title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
+    view: 'schedule', title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
     body: `${LEAGUES[userLeagueId(state)].name} 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
   });
   return summary;
@@ -539,7 +539,7 @@ export function offerTerms(state, playerId, offer) {
   const res = transfers.offerTerms(state, userClub(state), p, offer);
   if (res.ok) {
     const where = from ? `${state.clubs[from].name}에서` : '자유계약으로';
-    addMessage(state, { title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}` });
+    addMessage(state, { view: 'transfers', title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}` });
   }
   return res;
 }
@@ -549,7 +549,7 @@ export function respondToOffer(state, offerId, answer) {
   const res = withRng(state, (rng) => transfers.respondToOffer(state, rng, userClub(state), offerId, answer));
   if (res.ok && answer !== 'reject') {
     const p = state.players[offer.playerId];
-    addMessage(state, { title: `${p.name} 이적`, body: `${withParticle(p.name, '가')} ${withParticle(state.clubs[offer.clubId].name, '로')} 떠났습니다. 이적료 ${won(res.fee)}.` });
+    addMessage(state, { view: 'transfers', title: `${p.name} 이적`, body: `${withParticle(p.name, '가')} ${withParticle(state.clubs[offer.clubId].name, '로')} 떠났습니다. 이적료 ${won(res.fee)}.` });
   }
   return res;
 }
@@ -561,7 +561,7 @@ export function setTransferListed(state, playerId, listed) {
 export function loanOut(state, playerId) {
   const p = state.players[playerId];
   const res = loans.loanOut(state, userClub(state), p);
-  if (res.ok) addMessage(state, { title: `${p.name} 임대`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[res.clubId].name}에서 뜁니다. 상대 구단이 주급의 ${res.wageShare * 100}%를 냅니다.` });
+  if (res.ok) addMessage(state, { view: 'transfers', title: `${p.name} 임대`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[res.clubId].name}에서 뜁니다. 상대 구단이 주급의 ${res.wageShare * 100}%를 냅니다.` });
   return res;
 }
 
@@ -569,7 +569,7 @@ export function offerLoan(state, playerId, offer) {
   const p = state.players[playerId];
   const from = p.clubId;
   const res = loans.offerLoan(state, userClub(state), p, offer);
-  if (res.ok) addMessage(state, { title: `${p.name} 임대 영입`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[from].name}에서 임대로 왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.` });
+  if (res.ok) addMessage(state, { view: 'transfers', title: `${p.name} 임대 영입`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[from].name}에서 임대로 왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.` });
   return res;
 }
 
@@ -587,13 +587,13 @@ export const firingCost = (state) => coaches.firingCost(state, userClub(state));
 
 export function fireManager(state) {
   const res = coaches.fireCoach(state, userClub(state));
-  if (res.ok) addMessage(state, { title: `${res.coach.name} 감독 해고`, body: `위약금 ${won(res.compensation)}을 냈습니다. 새 감독을 뽑을 때까지 코치가 임시로 팀을 맡습니다.` });
+  if (res.ok) addMessage(state, { view: 'manager', title: `${res.coach.name} 감독 해고`, body: `위약금 ${won(res.compensation)}을 냈습니다. 새 감독을 뽑을 때까지 코치가 임시로 팀을 맡습니다.` });
   return res;
 }
 
 export function hireManager(state, coachId) {
   const res = coaches.hireCoach(state, userClub(state), coachId);
-  if (res.ok) addMessage(state, { title: `${res.coach.name} 감독 부임`, body: `${formatDate(res.coach.until)}까지 계약했습니다. 주급 ${won(res.coach.wage)}.` });
+  if (res.ok) addMessage(state, { view: 'manager', title: `${res.coach.name} 감독 부임`, body: `${formatDate(res.coach.until)}까지 계약했습니다. 주급 ${won(res.coach.wage)}.` });
   return res;
 }
 
@@ -614,14 +614,14 @@ export function renewContract(state, playerId, offer) {
   const p = state.players[playerId];
   if (!club.squad.includes(playerId)) return { ok: false, reason: '우리 선수가 아닙니다.' };
   const res = offerRenewal(state, club, p, offer);
-  if (res.ok) addMessage(state, { title: `${p.name} 재계약`, body: `${withParticle(p.name, '가')} ${offer.years}년 재계약에 서명했습니다.` });
+  if (res.ok) addMessage(state, { view: 'squad', title: `${p.name} 재계약`, body: `${withParticle(p.name, '가')} ${offer.years}년 재계약에 서명했습니다.` });
   return res;
 }
 
 export function upgradeFacility(state, key) {
   const club = userClub(state);
   const res = requestUpgrade(state, club, key);
-  if (res.ok) addMessage(state, { title: `${FACILITIES[key].name} 공사 시작`, body: `수뇌부가 승인했습니다. ${res.months}개월 뒤 ${res.level + 1}레벨이 됩니다.` });
+  if (res.ok) addMessage(state, { view: 'club', title: `${FACILITIES[key].name} 공사 시작`, body: `${res.months}개월 뒤 ${res.level + 1}레벨이 됩니다.` });
   return res;
 }
 
