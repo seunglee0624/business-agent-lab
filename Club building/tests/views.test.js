@@ -128,7 +128,8 @@ test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개�
   const refused = transfersView(state, { search, targetId: third.id });
   assert.match(refused, /요구 이적료/);
   g.bidForPlayer(state, second.id, counter);
-  const termsStage = transfersView(state, { search, targetId: second.id });
+  const termsStage = transfersView(state, { search, targetId: second.id, transferMsg: { ok: false, text: '주급 예산을 넘습니다.' } });
+  assert.match(termsStage.slice(termsStage.indexOf('modal')), /주급 예산을 넘습니다/); // 결과 메시지는 협상 창 안에 보인다
   assert.match(termsStage, /2단계: 개인 조건/);
   assert.match(termsStage, /진행 중인 협상/);
   const free = state.players[first.id];

@@ -35,14 +35,14 @@ export function transfersView(state, ui) {
         <span class="muted small">${end ? '' : '자유계약 선수는 언제든 영입할 수 있습니다.'}</span></div>
       <div class="small">이적 예산 <strong>${won(f.transferBudget)}</strong> · 주급 여유 <strong>${won(f.wageBudget - weeklyWageBill(state, club))}</strong>/주 · 1군 등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명</div>
     </div>
-    ${ui.transferMsg ? `<p class="${ui.transferMsg.ok ? 'good' : 'error'}">${esc(ui.transferMsg.text)}</p>` : ''}
+    ${ui.transferMsg && !target ? `<p class="${ui.transferMsg.ok ? 'good' : 'error'}">${esc(ui.transferMsg.text)}</p>` : ''}
     ${requestsCard(state)}
     <div class="grid two">
       ${incomingCard(state)}
       ${dealsCard(state)}
     </div>
     ${searchCard(state, ui)}
-    ${target ? targetDetail(state, target) : ''}
+    ${target ? targetDetail(state, target, ui.transferMsg) : ''}
     ${ui.profileId ? profileDetail(state, state.players[ui.profileId]) : ''}
     ${listedCard(state, club)}
     ${historyCard(state, ui, club)}
@@ -153,7 +153,7 @@ function profileDetail(state, p) {
   return modal({ title: esc(p.name), body, close: 'data-action="showProfile" data-id=""' });
 }
 
-function targetDetail(state, p) {
+function targetDetail(state, p, msg = null) {
   const club = userClub(state);
   const info = playerInfo(state, p.id);
   const deal = state.transfers.deals[p.id];
@@ -205,7 +205,7 @@ function targetDetail(state, p) {
       ${p.transferRequest ? '<p class="error small">이적을 요청한 선수라 조금 싸게 살 수 있습니다.</p>' : ''}
       ${p.injury ? `<p class="error small">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
       ${playerProfile(state, p)}`;
-  const side = `<h4>${p.clubId === club.id ? '받은 제안' : '협상'}</h4><div class="renew">${box}</div>${p.clubId === club.id ? '' : loanBox(state, p)}`;
+  const side = `<h4>${p.clubId === club.id ? '받은 제안' : '협상'}</h4>${msg ? `<p class="${msg.ok ? 'good' : 'error'} small">${esc(msg.text)}</p>` : ''}<div class="renew">${box}</div>${p.clubId === club.id ? '' : loanBox(state, p)}`;
   return modal({ title: esc(p.name), body, side, close: 'data-action="selectTarget" data-id=""' });
 }
 
