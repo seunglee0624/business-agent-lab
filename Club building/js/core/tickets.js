@@ -68,8 +68,9 @@ export function seasonTicketDemand(club, price = ticketsOf(club).seasonPrice) {
 export function matchCrowd(club, grade, price, position, teams, holders = ticketsOf(club).seasonSold ?? seasonTicketDemand(club)) {
   const cap = capacity(club);
   const ratio = price / referencePrice(club, grade);
-  const want = cap * Math.min(1, attendanceRate(club, position, teams) * GRADES[grade].demand * priceEffect(club, ratio));
-  const sold = Math.max(0, Math.min(cap - holders, Math.round(want - holders)));
+  // 시즌권 좌석을 뺀 나머지 좌석이 관중 비율·등급·가격에 따라 팔린다
+  const rate = Math.min(1, attendanceRate(club, position, teams) * GRADES[grade].demand * priceEffect(club, ratio));
+  const sold = Math.round((cap - holders) * rate);
   return { crowd: holders + sold, sold, holders, income: roundMoney(sold * price) };
 }
 
