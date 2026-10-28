@@ -6,15 +6,16 @@ import {
   renewContract, upgradeFacility, setStaffLevel,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
-  openMessage, markViewRead,
+  openMessage, markViewRead, markAllRead, firingCost, userClub,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
+import { upgradeInfo } from '../core/facilities.js';
 import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, youthView, historyView, clubView, financeView,
+  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -78,6 +79,7 @@ export class App {
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
     if (this.ui.fixtureId) content += fixtureDetail(s, this.ui.fixtureId);
+    if (this.ask) content += confirmModal(this.ask);
     this.root.innerHTML = layout(s, this.ui, content);
   }
 
@@ -127,8 +129,14 @@ export class App {
     }, 30);
   }
 
+  // 게임 안 확인 창을 띄우고, 확인하면 run을 실행한다
+  confirm(ask, run) {
+    this.ask = { ...ask, run };
+    this.render();
+  }
+
   toSeasonEnd() {
-    if (!confirm('내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다. 계속할까요?')) return;
+    if (!this.ask?.confirmed) return this.confirm({ title: '시즌 끝까지 진행', text: '내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다. 계속할까요?', yes: '진행' }, () => this.toSeasonEnd());
     this.ui.busy = true;
     this.render();
     // 화면이 "진행 중"을 그린 다음 계산한다
@@ -150,10 +158,24 @@ export class App {
   onClick(ev) {
     const el = ev.target.closest('[data-action]');
     if (!el || el.disabled) return;
-    if (el.dataset.action === 'closeModal' && ev.target.closest('[data-stop]') && !ev.target.closest('button')) return;
+    // 모달 안쪽을 눌렀을 때 바깥 배경의 닫기 동작이 잡히지 않게 한다
+    const panel = ev.target.closest('[data-stop]');
+    if (panel && !panel.contains(el)) return;
     const a = el.dataset.action;
     const d = el.dataset;
     const s = this.state;
+    // 확인 창에서 확인을 누르면 원래 동작을 다시 실행하고, 그 동작 안에서는 다시 묻지 않는다
+    if (a === 'confirmYes' || a === 'confirmNo') {
+      const ask = this.ask;
+      this.ask = null;
+      if (a === 'confirmYes') {
+        this.ask = { confirmed: true };
+        ask.run();
+        this.ask = null;
+      }
+      this.render();
+      return;
+    }
     switch (a) {
       case 'generateWorld': {
         const name = this.root.querySelector('#managerName').value.trim();
@@ -180,7 +202,7 @@ export class App {
         break;
       }
       case 'fireManager': {
-        if (!confirm('감독을 해고할까요? 위약금이 나갑니다.')) return;
+        if (!this.ask?.confirmed) return this.confirm({ title: '감독 해고', text: `감독을 해고할까요? 위약금 ${withParticle(won(firingCost(s)), '이')} 나갑니다.`, yes: '해고' }, () => this.onClick(ev));
         const res = fireManager(s);
         this.ui.managerMsg = { ok: res.ok, text: res.ok ? `위약금 ${won(res.compensation)}을 내고 해고했습니다.` : res.reason };
         this.persist();
@@ -201,6 +223,11 @@ export class App {
         this.render();
         break;
       }
+      case 'readAll':
+        markAllRead(s);
+        this.persist();
+        this.render();
+        break;
       case 'openMessage': {
         const view = openMessage(this.state, d.id);
         if (view) {
@@ -223,7 +250,8 @@ export class App {
         break;
       case 'upgradeFacility': {
         const name = FACILITIES[d.key].name;
-        if (!confirm(`${name} 업그레이드를 수뇌부에 요청할까요? 승인되면 공사비가 바로 나갑니다.`)) return;
+        const info = upgradeInfo(userClub(s), d.key);
+        if (!this.ask?.confirmed) return this.confirm({ title: `${name} 업그레이드`, text: info ? `${withParticle(name, '를')} 업그레이드할까요? 공사비 ${withParticle(won(info.cost), '이')} 바로 나가고 ${info.months}개월 뒤 완료됩니다.` : `${withParticle(name, '를')} 업그레이드할까요?`, yes: '공사 시작' }, () => this.onClick(ev));
         const res = upgradeFacility(s, d.key);
         this.ui.clubMsg = { ok: res.ok, text: res.ok ? `${name} 공사를 시작합니다. 공사비 ${won(res.cost)}, ${res.months}개월 뒤 완료됩니다.` : res.reason };
         this.persist();
@@ -376,7 +404,7 @@ export class App {
         exportState(s);
         break;
       case 'newGame':
-        if (!confirm('현재 진행 상황이 삭제됩니다. 새 게임을 시작할까요?')) return;
+        if (!this.ask?.confirmed) return this.confirm({ title: '새 게임', text: '현재 진행 상황이 삭제됩니다. 새 게임을 시작할까요?', yes: '새로 시작' }, () => this.onClick(ev));
         clearState().finally(() => {
           this.state = null;
           this.ui = { view: 'home' };

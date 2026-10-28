@@ -147,3 +147,12 @@ test('메시지: 연결된 화면이 있고, 그 화면의 안 읽은 메시지�
   markViewRead(state, 'manager');
   assert.equal(unreadCount(state, 'manager'), 0);
 });
+
+test('메시지: 전체 읽음', async () => {
+  const { unreadCount, markAllRead } = await import('../js/core/game.js');
+  const state = fresh('gm-allread');
+  fireManager(state);
+  assert.ok(unreadCount(state) >= 2);
+  markAllRead(state);
+  assert.equal(unreadCount(state), 0);
+});

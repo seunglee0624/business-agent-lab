@@ -22,6 +22,10 @@ export function addMessage(state, { title, body, important = false, view = null 
 // 안 읽은 메시지 수. view를 주면 그 화면에 연결된 것만
 export const unreadCount = (state, view) => state.inbox.filter((m) => !m.read && (view === undefined || m.view === view)).length;
 
+export function markAllRead(state) {
+  for (const m of state.inbox) m.read = true;
+}
+
 export function markViewRead(state, view) {
   for (const m of state.inbox) if (m.view === view) m.read = true;
 }

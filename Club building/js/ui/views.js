@@ -20,7 +20,7 @@ import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
 import { pitchHtml, shortName } from './pitch.js';
 import { COACH_STYLES } from '../core/coaches.js';
-import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won } from './format.js';
+import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won, modal } from './format.js';
 
 const options = (map, current) =>
   Object.entries(map).map(([k, v]) => `<option value="${k}" ${k === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -190,7 +190,7 @@ export function homeView(state) {
         <button class="btn small" data-action="nav" data-view="club">구단 운영</button> <button class="btn small" data-action="nav" data-view="finance">재정</button>
       </div>
       <div class="card">
-        <h3>메시지</h3>
+        <div class="card-head"><h3>메시지</h3>${unreadCount(state) ? '<button class="btn small" data-action="readAll">전체 읽음</button>' : ''}</div>
         ${inboxList(state)}
       </div>
     </div>`;
@@ -238,7 +238,7 @@ export function squadView(state, ui) {
   const sortBtn = (key, label) => `<button class="btn small ${sort === key ? 'primary' : ''}" data-action="squadSort" data-sort="${key}">${label}</button>`;
 
   return `
-    <div class="squad ${selected ? 'with-detail' : ''}">
+    <div class="squad">
       <div class="card">
         <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
@@ -293,18 +293,15 @@ export function playerDetail(state, p, ui = {}) {
   const leagueId = userLeagueId(state);
   const record = state.discipline[leagueId]?.[p.id];
   const career = Object.entries(p.stats).sort((a, b) => b[0] - a[0]).flatMap(([season, comps]) => Object.entries(comps).map(([comp, x]) => ({ season, comp, x })));
-  return `
-    <div class="card detail">
-      <div class="card-head"><h3>${esc(p.name)}</h3><button class="btn small" data-action="selectPlayer" data-id="">닫기</button></div>
+  const body = `
       <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${age(p, state.date)}세 · ${esc(nationName(p.nation))}</p>
       <p>능력 ${ovrCell(p)} · 잠재 ${p.potential} · 컨디션 ${Math.round(p.condition)}%</p>
       ${p.secondary.length ? `<p class="muted">가능 포지션: ${p.secondary.map((x) => `${x} (${ratingAt(p, x)})`).join(', ')}</p>` : ''}
       ${playerProfile(state, p)}
       ${record ? `<p class="muted">리그 누적 경고 ${record.yellows}장${record.ban ? ` · 출전 정지 ${record.ban}경기 남음` : ''}</p>` : ''}
       ${p.injury ? `<p class="error">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
-      ${contractBox(state, p, ui)}
-      ${career.length > 1 ? `<h4>통산 기록</h4><table class="table compact">${career.map(({ season, comp, x }) => `<tr><td>${season}-${String(Number(season) + 1).slice(2)}</td><td>${esc(LEAGUES[comp]?.name ?? comp)}</td><td>${x.apps}경기</td><td>${x.goals}골</td><td>${x.assists}도움</td><td>${avgRating(x)}</td></tr>`).join('')}</table>` : ''}
-    </div>`;
+      ${career.length > 1 ? `<h4>통산 기록</h4><table class="table compact">${career.map(({ season, comp, x }) => `<tr><td>${season}-${String(Number(season) + 1).slice(2)}</td><td>${esc(LEAGUES[comp]?.name ?? comp)}</td><td>${x.apps}경기</td><td>${x.goals}골</td><td>${x.assists}도움</td><td>${avgRating(x)}</td></tr>`).join('')}</table>` : ''}`;
+  return modal({ title: esc(p.name), body, side: contractBox(state, p, ui) || '<p class="muted">계약 정보가 없습니다.</p>', close: 'data-action="selectPlayer" data-id=""' });
 }
 
 // 계약 정보와 재계약 협상
@@ -472,7 +469,7 @@ export function fixtureDetail(state, fixtureId) {
   return `
     <div class="modal-bg" data-action="closeModal">
       <div class="modal" data-stop>
-        <div class="card-head"><h3>${formatShortDate(f.date)} · ${f.round}라운드</h3><button class="btn small" data-action="closeModal">닫기</button></div>
+        <div class="card-head"><h3>${formatShortDate(f.date)} · ${f.round}라운드</h3><button class="btn small" data-action="closeModal">닫기 ✕</button></div>
         <div class="score-line">${clubLabel(state.clubs[f.home])} <strong>${f.result.home} - ${f.result.away}</strong> ${clubLabel(state.clubs[f.away])}</div>
         <div class="grid two">${side(0)}${side(1)}</div>
         <table class="table compact stats">
@@ -775,4 +772,15 @@ export function financeView(state) {
           }).join('')}</tbody></table>` : '<p class="muted">아직 지난 시즌 기록이 없습니다.</p>'}
       </div>
     </div>`;
+}
+
+// 게임 안 확인 창 (브라우저 confirm 대신)
+export function confirmModal(ask) {
+  return modal({
+    title: esc(ask.title),
+    body: `<p>${esc(ask.text)}</p>
+      <div class="form-row"><button class="btn primary" data-action="confirmYes">${esc(ask.yes ?? '확인')}</button>
+      <button class="btn" data-action="confirmNo">취소</button></div>`,
+    close: 'data-action="confirmNo"',
+  });
 }

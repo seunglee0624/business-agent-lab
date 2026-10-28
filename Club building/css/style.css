@@ -172,7 +172,6 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .season-end { border-color: var(--yellow); }
 
 /* 선수단 */
-.squad.with-detail { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
 .detail { position: sticky; top: 70px; }
 .attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .attr { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); }
@@ -232,7 +231,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .match-summary { border-color: var(--accent); }
 
 @media (max-width: 1000px) {
-  .grid.two, .grid.two.wide-left, .grid.two.pitch-left, .squad.with-detail, .match-body { grid-template-columns: 1fr; }
+  .grid.two, .grid.two.wide-left, .grid.two.pitch-left, .modal-cols, .match-body { grid-template-columns: 1fr; }
   .side { width: 150px; }
 }
 @media (max-width: 520px) {
@@ -270,7 +269,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 /* 선수단 표: 상세 창이 열려도 이름·주급·표시가 두 줄로 깨지지 않게 */
 .squad .table td { white-space: nowrap; }
 .squad .table th { white-space: nowrap; }
-.squad.with-detail > .card:first-child { overflow-x: auto; }
+.squad > .card:first-child { overflow-x: auto; }
 .tag { white-space: nowrap; display: inline-block; }
 
 /* ---- 화이트보드 테마 덧칠 ---- */
@@ -368,3 +367,9 @@ input, select { background: var(--panel); }
 .table.league-pick th:nth-child(3) { width: 10%; }
 .table.league-pick th:nth-child(4) { width: 22%; }
 .table.league-pick th:nth-child(5) { width: 13%; }
+
+/* 목록 항목 상세: 가운데 모달 (왼쪽 정보, 오른쪽 할 일) */
+.modal.wide { width: min(1000px, 100%); }
+.modal-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+.modal-side { border-left: 1px solid var(--line); padding-left: 16px; position: sticky; top: 0; }
+@media (max-width: 900px) { .modal-cols { grid-template-columns: 1fr; } .modal-side { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 12px; position: static; } }

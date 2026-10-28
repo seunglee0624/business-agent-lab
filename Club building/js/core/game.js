@@ -28,12 +28,12 @@ import {
 } from './facilities.js';
 import { FACILITIES, STAFF, MAX_STAFF, staffWage, EUR } from '../data/economy.js';
 import { roundMoney, won } from './money.js';
-import { addNotice, unreadCount, markViewRead, openMessage,
+import { addNotice, unreadCount, markViewRead, markAllRead, openMessage,
   withRng, addMessage, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable,
   unavailableSet, activeClubs, clubStrength,
 } from './state.js';
 
-export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, unreadCount, markViewRead, openMessage };
+export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, unreadCount, markViewRead, markAllRead, openMessage };
 
 export const STATE_VERSION = 5;
 export const START_YEAR = 2026;

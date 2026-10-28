@@ -12,7 +12,7 @@ import { loanOptionFee } from '../core/loans.js';
 import { weeklyWageBill } from '../core/finance.js';
 import { formatDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
-import { esc, posLabel, won, age, attrClass } from './format.js';
+import { esc, posLabel, won, age, attrClass, modal } from './format.js';
 import { playerProfile } from './views.js';
 
 const eok = (amount) => Math.round(amount / 1e6) / 100; // 원 → 억 (소수 둘째 자리)
@@ -41,10 +41,8 @@ export function transfersView(state, ui) {
       ${incomingCard(state)}
       ${dealsCard(state)}
     </div>
-    <div class="squad ${target ? 'with-detail' : ''}">
-      ${searchCard(state, ui)}
-      ${target ? targetDetail(state, target) : ''}
-    </div>
+    ${searchCard(state, ui)}
+    ${target ? targetDetail(state, target) : ''}
     ${listedCard(state, club)}
     ${loanedOutCard(state, club)}`;
 }
@@ -178,19 +176,16 @@ function targetDetail(state, p) {
         <button class="btn primary small" data-action="offerTerms" data-id="${p.id}">제안</button>
       </div>`;
   }
-  return `
-    <div class="card detail">
-      <div class="card-head"><h3>${esc(p.name)}</h3><button class="btn small" data-action="selectTarget" data-id="">닫기</button></div>
+  const body = `
       <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${info.age}세 · ${esc(clubName(state, p.clubId))}</p>
       <p>능력 <strong>${info.overall}</strong> · 잠재 ${potentialText(info)}</p>
       <p class="muted">자리별 능력: ${info.ratings.map((r) => `${r.pos} ${r.rating}`).join(' · ')}</p>
       ${p.contract ? `<p class="small">몸값 약 ${won(value)} · 주급 ${won(p.contract.wage)} · ${formatDate(p.contract.until)}까지</p>` : '<p class="small">소속 구단이 없어 이적료 없이 영입할 수 있습니다.</p>'}
       ${p.transferRequest ? '<p class="error small">이적을 요청한 선수라 조금 싸게 살 수 있습니다.</p>' : ''}
       ${p.injury ? `<p class="error small">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
-      <div class="renew">${box}</div>
-      ${p.clubId === club.id ? '' : loanBox(state, p)}
-      ${playerProfile(state, p)}
-    </div>`;
+      ${playerProfile(state, p)}`;
+  const side = `<h4>${p.clubId === club.id ? '받은 제안' : '협상'}</h4><div class="renew">${box}</div>${p.clubId === club.id ? '' : loanBox(state, p)}`;
+  return modal({ title: esc(p.name), body, side, close: 'data-action="selectTarget" data-id=""' });
 }
 
 // 주전이 아닌 다른 구단 선수는 시즌 끝까지 임대로 데려올 수 있다

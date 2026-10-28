@@ -66,3 +66,14 @@ export function avgRating(s) {
 }
 
 export { won } from '../core/money.js';
+
+// 목록에서 항목을 누르면 여는 가운데 모달. side를 주면 왼쪽(정보)·오른쪽(할 일) 두 칸
+// close: 닫을 때 보낼 data-action 속성 문자열 (예: 'data-action="selectPlayer" data-id=""')
+export function modal({ title, body, side = '', close }) {
+  return `<div class="modal-bg" ${close}>
+    <div class="modal ${side ? 'wide' : ''}" data-stop>
+      <div class="card-head"><h3>${title}</h3><button class="btn small" ${close}>닫기 ✕</button></div>
+      ${side ? `<div class="modal-cols"><div>${body}</div><div class="modal-side">${side}</div></div>` : body}
+    </div>
+  </div>`;
+}
