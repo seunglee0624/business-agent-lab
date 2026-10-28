@@ -20,7 +20,7 @@ import { withParticle } from './korean.js';
 import { assignInjury, healOn, trainingInjuryRoll } from './injury.js';
 import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development.js';
 import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount, MAX_SQUAD } from './season.js';
-import { initFinance, monthlySettlement, recordGate, weeklyWageBill } from './finance.js';
+import { initFinance, monthlySettlement, recordGate, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
 import { signNew, offerRenewal } from './contracts.js';
 import { monthlyMorale } from './morale.js';
 import {
@@ -638,3 +638,7 @@ export function setStaffLevel(state, key, level) {
   club.staff[key] = level;
   return { ok: true };
 }
+
+// 재정 조정 바: 주급 예산을 정하면 이적 예산이 그만큼 바뀐다
+export const budgetRange = (state) => clubBudgetRange(state, userClub(state));
+export const adjustBudgets = (state, wageBudget) => clubAdjustBudgets(state, userClub(state), wageBudget);

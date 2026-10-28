@@ -131,3 +131,24 @@ export function closeLedger(club, season) {
   f.history.length = Math.min(f.history.length, HISTORY_SEASONS);
   f.season = emptyLedger();
 }
+
+// 예산 조정: 남은 시즌 주 수만큼의 주급이 이적 예산과 맞바뀐다. 주급 예산은 지금 주급보다 낮출 수 없다
+export function budgetRange(state, club) {
+  const f = club.finance;
+  const end = new Date(`${state.season + 1}-06-30`);
+  const weeks = Math.max(1, Math.ceil((end - new Date(state.date)) / (7 * 864e5)));
+  const bill = weeklyWageBill(state, club);
+  const unit = bill >= 1e8 ? 1e6 : 1e4;
+  const min = Math.min(f.wageBudget, Math.ceil(bill / unit) * unit);
+  const max = f.wageBudget + f.transferBudget / weeks;
+  return { weeks, min, max, pool: f.transferBudget + f.wageBudget * weeks };
+}
+
+export function adjustBudgets(state, club, wageBudget) {
+  const { weeks, min, max, pool } = budgetRange(state, club);
+  if (!(wageBudget >= min - 1 && wageBudget <= max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
+  const f = club.finance;
+  f.wageBudget = roundMoney(Math.min(max, Math.max(min, wageBudget)));
+  f.transferBudget = roundMoney(Math.max(0, pool - f.wageBudget * weeks));
+  return { ok: true };
+}

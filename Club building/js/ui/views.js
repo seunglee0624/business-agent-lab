@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, playerWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -735,6 +735,19 @@ function ledgerTable(ledger) {
   </table>`;
 }
 
+// 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산
+function budgetSlider(state, f) {
+  const r = budgetRange(state);
+  const step = r.max >= 1e8 ? 1e6 : 1e4;
+  return `
+        <div class="budget-slider">
+          <h4>재정 조정</h4>
+          <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주</span></div>
+          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" min="${r.min}" max="${Math.floor(r.max / step) * step}" step="${step}" value="${f.wageBudget}">
+          <p class="muted small">오른쪽으로 밀면 주급 예산이 늘고 이적 예산이 줄어듭니다. 주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 이적 예산과 같습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
+        </div>`;
+}
+
 export function financeView(state) {
   const club = userClub(state);
   const f = club.finance;
@@ -753,7 +766,8 @@ export function financeView(state) {
           <tr><td>남은 주급 여유</td><td class="num">${won(f.wageBudget - bill)}</td></tr>
           <tr><td>시설 유지비 (월)</td><td class="num">${won(monthlyUpkeep(club))}</td></tr>
         </table>
-        <p class="muted small">예산은 시즌이 시작할 때 수뇌부가 정합니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
+        ${budgetSlider(state, f)}
+        <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
       </div>
       <div class="card">
         <h3>이번 시즌 장부</h3>

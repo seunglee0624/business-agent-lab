@@ -7,6 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
+  adjustBudgets,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -29,6 +30,7 @@ export class App {
     this.live = null;
     root.addEventListener('click', (ev) => this.onClick(ev));
     root.addEventListener('change', (ev) => this.onChange(ev));
+    root.addEventListener('input', (ev) => this.onInput(ev));
   }
 
   async start() {
@@ -423,12 +425,26 @@ export class App {
     }
   }
 
+  // 재정 조정 바를 끄는 동안 금액만 바꿔 보여 준다
+  onInput(ev) {
+    const el = ev.target;
+    if (el.dataset?.change !== 'wageBudget') return;
+    const wage = Number(el.value);
+    this.root.querySelector('#budgetWage').textContent = won(wage);
+    this.root.querySelector('#budgetTransfer').textContent = won(Math.max(0, Number(el.dataset.pool) - wage * Number(el.dataset.weeks)));
+  }
+
   onChange(ev) {
     const el = ev.target.closest('[data-change]');
     if (!el) return;
     const s = this.state;
     const d = el.dataset;
     switch (d.change) {
+      case 'wageBudget':
+        adjustBudgets(s, Number(el.value));
+        this.persist();
+        this.render();
+        return;
       case 'importSave': {
         const file = el.files?.[0];
         if (!file) return;
