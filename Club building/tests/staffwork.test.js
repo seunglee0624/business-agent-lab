@@ -76,7 +76,7 @@ test('주간 요약: 알림은 월요일마다 "주간 요약" 하나로 묶이�
   const { state, y } = youthReady('dl7');
   toMatch(state); // 첫 경기까지 6주쯤
   const summaries = state.inbox.filter((m) => m.title.startsWith('주간 요약'));
-  assert.ok(summaries.length >= 4, `${summaries.length}개`);
+  assert.ok(summaries.length >= 1, `${summaries.length}개`);
   assert.ok(summaries.some((m) => m.body.includes(`${y.name} 1군 콜업`)));
   assert.ok(!state.inbox.some((m) => m.title === `${y.name} 1군 콜업`));
   assert.ok(!state.inbox.some((m) => /부상 회복|훈련 중 부상/.test(m.title)));
@@ -90,4 +90,14 @@ test('주간 요약: 중요한 메시지는 묶지 않고 바로 온다', () => 
   p.contract.promise = 'starter'; // 주전 계약은 스태프가 손대지 않는다
   toMatch(state);
   assert.ok(state.inbox.some((m) => m.title.endsWith('단장 부임')));
+});
+
+test('주간 요약: 경기도 알림도 없는 주에는 요약을 보내지 않는다', () => {
+  const state = fresh('dl9');
+  advance(state, { skipOffers: true });
+  advance(state, { skipOffers: true });
+  state.notices = [];
+  advance(state, { skipOffers: true });
+  const last = state.inbox.filter((m) => m.title.startsWith('주간 요약'));
+  assert.ok(last.every((m) => m.body !== '지난주 경기 없음'));
 });

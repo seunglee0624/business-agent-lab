@@ -353,14 +353,16 @@ function autoSubs(match, rng, newEvents) {
   });
 }
 
-// AI 팀은 지고 있으면 공격적으로, 리드하면 수비적으로 바꾼다
-function autoMentality(match) {
+// 감독은 지고 있으면 공격적으로, 리드하면 수비적으로 바꾼다
+function autoMentality(match, newEvents) {
   if (match.minute < 70) return;
   match.sides.forEach((side, s) => {
     if (!side.aiTactics) return;
     const diff = side.score - match.sides[1 - s].score;
-    if (diff < 0) side.tactics.mentality = 'attacking';
-    else if (diff === 1 && match.minute >= 80) side.tactics.mentality = 'defensive';
+    const want = diff < 0 ? 'attacking' : diff === 1 && match.minute >= 80 ? 'defensive' : null;
+    if (!want || side.tactics.mentality === want) return;
+    side.tactics.mentality = want;
+    newEvents.push(push(match, { type: 'tactics', side: s, mentality: want }));
   });
 }
 
@@ -403,7 +405,7 @@ function playMinute(match, rng, newEvents) {
   injurySubs(match, newEvents);
   drainEnergy(match);
   autoSubs(match, rng, newEvents);
-  autoMentality(match);
+  autoMentality(match, newEvents);
 }
 
 export function isFinished(match) {

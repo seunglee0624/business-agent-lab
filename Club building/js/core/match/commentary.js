@@ -53,6 +53,8 @@ const T = {
   sub: ['{team} 교체: {other} 나가고 {player} 들어갑니다.'],
   injury: ['{player:가} 쓰러졌습니다. 부상으로 더 뛸 수 없을 것 같습니다.', '아, {player:가} 다리를 붙잡고 주저앉습니다. 부상입니다.'],
   tactics: ['{team:가} 전술을 바꿉니다.'],
+  tacticsattacking: ['{team} 벤치가 공격적으로 전환합니다. 동점골을 노립니다.'],
+  tacticsdefensive: ['{team} 벤치가 수비적으로 전환합니다. 리드를 지키겠다는 뜻입니다.'],
 };
 
 // names: { home, away } 구단 이름
@@ -74,7 +76,7 @@ export function commentary(match, event, names) {
     keeper: name(keeperId),
     assist: name(event.assistId),
   };
-  const entry = T[event.type];
+  const entry = T[event.type + (event.mentality ?? '')] ?? T[event.type];
   if (!entry) return '';
   const templates = Array.isArray(entry) ? entry : entry[event.kind] ?? entry.normal;
   let text = fill(choose(templates, event), vars);

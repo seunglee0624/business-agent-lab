@@ -19,6 +19,7 @@ import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
 import { pitchHtml, shortName } from './pitch.js';
+import { COACH_STYLES } from '../core/coaches.js';
 import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won } from './format.js';
 
 const options = (map, current) =>
@@ -191,7 +192,7 @@ function clubStatus(state, club) {
   const f = club.finance;
   const coach = club.headCoach;
   return `<table class="table compact">
-    <tr><td>감독</td><td>${coach ? `<strong>${esc(coach.name)}</strong> <span class="muted small">능력 ${coach.ability}</span>` : '<span class="error">공석 (코치가 임시로 맡는 중)</span>'}</td></tr>
+    <tr><td>감독</td><td>${coach ? `<strong>${esc(coach.name)}</strong> <span class="muted small">${esc(COACH_STYLES[coach.style].name)} · 능력 ${coach.ability}</span>` : '<span class="error">공석 (코치가 임시로 맡는 중)</span>'}</td></tr>
     <tr><td>잔고</td><td class="${f.balance < 0 ? 'error' : ''}">${won(f.balance)}</td></tr>
     <tr><td>주급 (예산)</td><td>${won(weeklyWageBill(state, club))} <span class="muted small">/ ${won(f.wageBudget)}</span></td></tr>
   </table>`;
@@ -357,7 +358,8 @@ export function tacticsView(state) {
   return `
     <div class="card">
       <h3>팀 전술</h3>
-      <p>${coach ? `${esc(coach.name)} 감독` : '임시 코치'}이 경기마다 컨디션과 출전 정지를 보고 선발을 고릅니다.</p>
+      <p>${coach ? `${esc(coach.name)} 감독(${esc(COACH_STYLES[coach.style].name)})` : '임시 코치'}이 경기마다 상대와 컨디션을 보고 전술과 선발을 정하고, 경기 중 교체와 전술 변경도 맡습니다.</p>
+      ${coach?.style === 'pragmatic' ? '<p class="muted small">실리형: 강한 상대에게는 4-5-1 수비적, 약한 상대에게는 4-3-3 공격적으로 나섭니다.</p>' : ''}
       <table class="table compact"><tbody>
         <tr><td>포메이션</td><td>${t.formation}</td><td>팀 성향</td><td>${esc(MENTALITIES[t.mentality])}</td></tr>
         <tr><td>압박 강도</td><td>${esc(PRESSING[t.pressing])}</td><td>템포</td><td>${esc(TEMPO[t.tempo])}</td></tr>
@@ -595,7 +597,6 @@ export function settingsView(state) {
         <h3>경기 보기</h3>
         <div class="form-col">
           <label>기본 보기 방식 <select data-change="setViewMode">${options(VIEW_MODES, s.viewMode)}</select></label>
-          <label class="check"><input type="checkbox" data-change="toggleAutoSubs" ${s.autoSubs ? 'checked' : ''}> 경기 중 교체를 수석코치에게 맡기기 (직접 교체도 가능)</label>
         </div>
         <h4>결정 순간에 멈춤 (하이라이트·전체 중계)</h4>
         <div class="form-col">

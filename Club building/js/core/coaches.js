@@ -15,6 +15,39 @@ export const COACH_STYLES = {
   pragmatic: { name: '실리형' },
 };
 
+// 성향별 기본 전술. 실리형은 상대에 따라 바꾼다
+const STYLE_TACTICS = {
+  attacking: { formation: '4-3-3', mentality: 'attacking', pressing: 'high', tempo: 'fast', line: 'high' },
+  defensive: { formation: '5-3-2', mentality: 'defensive', pressing: 'low', tempo: 'slow', line: 'deep' },
+  youth: { formation: '4-3-3', mentality: 'balanced', pressing: 'high', tempo: 'normal', line: 'normal' },
+  stars: { formation: '4-2-3-1', mentality: 'balanced', pressing: 'normal', tempo: 'normal', line: 'normal' },
+  pragmatic: { formation: '4-4-2', mentality: 'balanced', pressing: 'normal', tempo: 'normal', line: 'normal' },
+};
+const PRAGMATIC_VS = {
+  stronger: { formation: '4-5-1', mentality: 'defensive', pressing: 'low', tempo: 'normal', line: 'deep' },
+  weaker: { formation: '4-3-3', mentality: 'attacking', pressing: 'high', tempo: 'fast', line: 'high' },
+};
+const PRAGMATIC_GAP = 2; // 전력 차이가 이만큼 넘으면 실리형이 전술을 바꾼다
+
+// 감독이 정한 전술을 구단에 적용한다. gap: 상대 전력 - 우리 전력 (경기 전에만 준다)
+export function applyCoachTactics(club, gap = 0) {
+  const coach = club.headCoach;
+  if (!coach) return;
+  let plan = STYLE_TACTICS[coach.style];
+  if (coach.style === 'pragmatic' && gap > PRAGMATIC_GAP) plan = PRAGMATIC_VS.stronger;
+  if (coach.style === 'pragmatic' && gap < -PRAGMATIC_GAP) plan = PRAGMATIC_VS.weaker;
+  if (plan.formation !== club.tactics.formation) club.tactics.lineup = null;
+  Object.assign(club.tactics, plan);
+}
+
+// 선발 가중치: 유스 중시 감독은 21세 이하를, 스타 선호 감독은 상위 선수를 조금 더 쓴다
+export function selectionBonus(club, age, ovr) {
+  const style = club.headCoach?.style;
+  if (style === 'youth' && age <= 21) return 1.06;
+  if (style === 'stars' && ovr >= 70) return 1.03;
+  return 1;
+}
+
 // 구단 수준(대략 45~85)에 맞는 감독 능력(1~20)
 const abilityFor = (level) => Math.round(Math.max(1, Math.min(20, (level - 45) / 2.2 + 1)));
 // 감독 주급: 같은 수준 스태프의 두 배
@@ -39,7 +72,9 @@ export function generateCoach(rng, state, { country, level }) {
 // 새 게임: 모든 구단에 감독을 둔다
 export function assignInitialCoaches(rng, state) {
   for (const club of Object.values(state.clubs)) {
-    if (club.status === 'active') club.headCoach = generateCoach(rng, state, { country: club.country, level: club.level });
+    if (club.status !== 'active') continue;
+    club.headCoach = generateCoach(rng, state, { country: club.country, level: club.level });
+    applyCoachTactics(club);
   }
 }
 
@@ -91,5 +126,6 @@ export function hireCoach(state, club, coachId, years = 2) {
   if (!willing(club, coach)) return { ok: false, reason: `${coach.name} 감독은 우리 구단에 오지 않겠다고 합니다.` };
   state.coachPool = state.coachPool.filter((c) => c !== coach);
   club.headCoach = { ...coach, until: contractEnd(state.date, years) };
+  applyCoachTactics(club);
   return { ok: true, coach: club.headCoach };
 }

@@ -41,7 +41,6 @@ export const YOUTH_INTAKE_DAY = '03-15';
 
 export const DEFAULT_SETTINGS = {
   viewMode: 'result', // result | highlights | full (단장은 기본으로 결과만, 원하면 중계)
-  autoSubs: true, // 경기 중 수석코치가 교체 (직접 교체도 가능)
   pauses: {
     halftime: true,
     conceded: true,
@@ -224,6 +223,7 @@ function weeklySummary(state, club) {
   const table = standings(state);
   const row = table.find((r) => r.clubId === club.id);
   const notices = state.notices ?? [];
+  if (!results.length && !notices.length) return; // 아무 일 없던 주는 건너뛴다
   const lines = [
     results.length ? `지난주 경기: ${results.join(', ')}` : '지난주 경기 없음',
     ...(row.played ? [`리그 순위 ${table.indexOf(row) + 1}위 (${row.points}점)`] : []),
@@ -320,15 +320,17 @@ export function advance(state, { skipOffers = false, watchMatches = false } = {}
 
 // ---- 경기 ----
 
-function matchSetup(state, club, compId, auto, aiTactics) {
+// 감독이 상대를 보고 전술과 선발을 정한다. 교체와 경기 중 전술 변경도 감독이 맡는다
+function matchSetup(state, club, opponent, compId) {
   const rule = LEAGUES[state.competitions[compId].ruleId];
+  coaches.applyCoachTactics(club, clubStrength(state, opponent) - clubStrength(state, club));
   const unavailable = unavailableSet(state, compId, club);
-  const { lineup, bench } = resolveLineup(club, state.players, { unavailable, benchSize: rule.benchSize });
-  return { clubId: club.id, tactics: club.tactics, lineup, bench, auto, aiTactics, injuryFactor: injuryChanceFactor(club) };
+  const bonus = (p) => coaches.selectionBonus(club, ageOn(p, state.date), overall(p));
+  const { lineup, bench } = resolveLineup(club, state.players, { unavailable, benchSize: rule.benchSize, bonus });
+  return { clubId: club.id, tactics: { ...club.tactics }, lineup, bench, auto: true, aiTactics: true, injuryFactor: injuryChanceFactor(club) };
 }
 
-function buildMatch(state, fixture, userAuto) {
-  const userId = state.user?.clubId;
+function buildMatch(state, fixture) {
   const rule = LEAGUES[state.competitions[fixture.competitionId].ruleId];
   const home = state.clubs[fixture.home];
   const away = state.clubs[fixture.away];
@@ -336,8 +338,8 @@ function buildMatch(state, fixture, userAuto) {
     id: fixture.id,
     competitionId: fixture.competitionId,
     date: fixture.date,
-    home: matchSetup(state, home, fixture.competitionId, home.id === userId ? userAuto : true, home.id !== userId),
-    away: matchSetup(state, away, fixture.competitionId, away.id === userId ? userAuto : true, away.id !== userId),
+    home: matchSetup(state, home, away, fixture.competitionId),
+    away: matchSetup(state, away, home, fixture.competitionId),
     players: state.players,
     maxSubs: rule.maxSubs,
   });
@@ -348,7 +350,7 @@ export function startUserMatch(state) {
   const fixture = userFixtureOn(state, state.date);
   if (!fixture) throw new Error('오늘은 경기가 없습니다.');
   if (!state.liveMatch || state.liveMatch.id !== fixture.id) {
-    state.liveMatch = buildMatch(state, fixture, state.settings.autoSubs);
+    state.liveMatch = buildMatch(state, fixture);
   }
   return state.liveMatch;
 }
@@ -380,7 +382,7 @@ function playOtherMatches(state, date) {
   const userId = state.user?.clubId;
   for (const fixture of fixturesOn(state, date)) {
     if (fixture.home === userId || fixture.away === userId) continue;
-    const match = buildMatch(state, fixture, true);
+    const match = buildMatch(state, fixture);
     withRng(state, (rng) => simulateMatch(match, rng));
     applyResult(state, fixture, match);
   }

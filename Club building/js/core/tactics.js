@@ -23,13 +23,13 @@ export function defaultTactics() {
   };
 }
 
-function selectionScore(player, pos) {
-  return ratingAt(player, pos) * (0.55 + 0.45 * (player.condition / 100));
+function selectionScore(player, pos, bonus) {
+  return ratingAt(player, pos) * (0.55 + 0.45 * (player.condition / 100)) * (bonus ? bonus(player) : 1);
 }
 
 // 선발 11명과 교체 명단을 자동으로 고른다. unavailable: 출전할 수 없는 선수 id 집합
 // lineup은 포메이션 슬롯 순서와 같고, 선수가 모자라면 그 자리는 null
-export function autoLineup(squadPlayers, formation, { unavailable = new Set(), benchSize = 9 } = {}) {
+export function autoLineup(squadPlayers, formation, { unavailable = new Set(), benchSize = 9, bonus } = {}) {
   const slots = FORMATIONS[formation];
   const available = squadPlayers.filter((p) => !unavailable.has(p.id));
   const lineup = new Array(slots.length).fill(null);
@@ -37,7 +37,7 @@ export function autoLineup(squadPlayers, formation, { unavailable = new Set(), b
 
   const pairs = [];
   slots.forEach((pos, i) => {
-    for (const p of available) pairs.push({ i, p, score: selectionScore(p, pos) });
+    for (const p of available) pairs.push({ i, p, score: selectionScore(p, pos, bonus) });
   });
   pairs.sort((a, b) => b.score - a.score);
   for (const { i, p } of pairs) {
@@ -58,12 +58,12 @@ export function autoLineup(squadPlayers, formation, { unavailable = new Set(), b
 }
 
 // 저장된 선발이 유효하면 그대로, 아니면 빈자리를 자동으로 채운다
-export function resolveLineup(club, playersById, { unavailable = new Set(), benchSize = 9 } = {}) {
+export function resolveLineup(club, playersById, { unavailable = new Set(), benchSize = 9, bonus } = {}) {
   const t = club.tactics;
   const squad = club.squad.map((id) => playersById[id]);
   const slots = FORMATIONS[t.formation];
   if (!t.lineup || t.lineup.length !== slots.length) {
-    return { ...autoLineup(squad, t.formation, { unavailable, benchSize }), replaced: [] };
+    return { ...autoLineup(squad, t.formation, { unavailable, benchSize, bonus }), replaced: [] };
   }
 
   const replaced = [];
@@ -79,7 +79,7 @@ export function resolveLineup(club, playersById, { unavailable = new Set(), benc
       if (!ROLES[entry.role]?.positions.includes(slots[i])) entry.role = DEFAULT_ROLE[slots[i]];
       return;
     }
-    pool.sort((a, b) => selectionScore(b, slots[i]) - selectionScore(a, slots[i]));
+    pool.sort((a, b) => selectionScore(b, slots[i], bonus) - selectionScore(a, slots[i], bonus));
     const pick = pool.shift();
     if (pick) {
       lineup[i] = { playerId: pick.id, role: DEFAULT_ROLE[slots[i]] };

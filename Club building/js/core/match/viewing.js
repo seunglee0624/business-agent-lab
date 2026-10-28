@@ -21,11 +21,7 @@ export function pauseReason(match, userSide, newEvents, pauses, flags) {
     if (e.type === 'goal' && e.side === opp && pauses.conceded) return '실점했습니다';
     if ((e.type === 'red' || e.type === 'secondYellow') && e.side === userSide && pauses.ourRed) return '우리 팀 선수가 퇴장당했습니다';
     if ((e.type === 'red' || e.type === 'secondYellow') && e.side === opp && pauses.theirRed) return '상대 팀 선수가 퇴장당했습니다';
-    // 교체를 직접 하기로 했으면 설정과 상관없이 멈춘다 (교체할 사람이 없으면 10명으로 뛰게 되므로)
-    if (e.type === 'injury' && e.side === userSide && my.onPitch.some((s) => s.injured)) {
-      if (!my.auto && my.subsUsed < my.maxSubs) return '부상: 교체가 필요합니다';
-      if (pauses.injury) return '우리 팀 선수가 다쳤습니다';
-    }
+    if (e.type === 'injury' && e.side === userSide && pauses.injury) return '우리 팀 선수가 다쳤습니다';
   }
   if (match.phase !== 'second') return null;
   if (pauses.losingAt60 && !flags.losingAt60 && match.minute >= 60 && my.score < their.score) {

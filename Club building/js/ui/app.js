@@ -402,10 +402,6 @@ export class App {
         s.settings.viewMode = el.value;
         this.persist();
         break;
-      case 'toggleAutoSubs':
-        s.settings.autoSubs = el.checked;
-        this.persist();
-        break;
       case 'togglePause':
         s.settings.pauses[d.key] = el.checked;
         this.persist();
