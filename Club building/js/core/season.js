@@ -15,6 +15,7 @@ import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS } from '../data/economy.js';
 import { fanSeasonEnd } from './fans.js';
+import { won } from './money.js';
 
 export const RETURN_CHANCE = 0.3;
 export const RETURN_AFTER_SEASONS = 2;
@@ -332,7 +333,14 @@ export function startSeason(state, rng) {
   for (const club of Object.values(state.clubs)) {
     if (club.status !== 'active') continue;
     if (club.id !== state.user.clubId) aiFacilityUpgrade(state, rng, club);
-    setBudgets(state, club);
+    const b = setBudgets(state, club);
+    if (b && club.id === state.user.clubId) {
+      addMessage(state, {
+        view: 'finance',
+        title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 예산`,
+        body: `이적 예산: 남은 예산 ${won(b.carried)} ${b.added >= 0 ? '+' : '-'} 지난 시즌 ${b.added >= 0 ? '수익' : '적자'} 반영 ${won(Math.abs(b.added))} = ${won(b.total)}${b.total < b.carried + b.added ? ' (잔고까지만)' : ''}. 주급 예산: 주 ${won(club.finance.wageBudget)}.`,
+      });
+    }
   }
 }
 

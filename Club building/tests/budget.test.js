@@ -26,3 +26,25 @@ test('재정 화면에 재정 조정 바가 보인다', async () => {
   assert.match(html, /type="range" data-change="wageBudget"/);
   assert.match(html, /재정 조정/);
 });
+
+test('새 시즌 이적 예산: 남은 예산에 지난 시즌 수익의 절반을 더하고, 잔고를 넘지 않는다', async () => {
+  const { setBudgets, emptyLedger } = await import('../js/core/finance.js');
+  const state = g.createNewGame('budget-carry');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const f = g.userClub(state).finance;
+  f.transferBudget = 50e8;
+  f.balance = 500e8;
+  const last = emptyLedger();
+  last.income.tv = 100e8;
+  last.income.transfers = 40e8; // 이적 수입은 이미 예산에 들어갔으므로 빼고 계산
+  last.expense.wages = 60e8;
+  f.history.unshift({ season: 2025, ...last, balance: f.balance });
+  const b = setBudgets(state, g.userClub(state));
+  assert.equal(b.carried, 50e8);
+  assert.equal(b.added, 20e8);
+  assert.equal(f.transferBudget, 70e8);
+  f.transferBudget = 50e8;
+  f.balance = 30e8;
+  setBudgets(state, g.userClub(state));
+  assert.equal(f.transferBudget, 30e8);
+});

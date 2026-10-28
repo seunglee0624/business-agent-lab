@@ -83,12 +83,23 @@ function expense(club, key, amount) {
   club.finance.season.expense[key] += amount;
 }
 
-// 시즌 시작: 수뇌부가 주급·이적 예산을 정한다
+export const PROFIT_TO_BUDGET = 0.5;
+
+// 시즌 시작: 주급 예산은 수입 기준으로 새로 정하고, 이적 예산은 남은 예산에 지난 시즌 수익(이적 거래 제외)의 절반을 더한다. 첫 시즌은 잔고의 35%
 export function setBudgets(state, club) {
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
   f.wageBudget = roundMoney(Math.max(bill * 1.02, (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52));
-  f.transferBudget = roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO));
+  const last = f.history[0];
+  if (!last) {
+    f.transferBudget = roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO));
+    return null;
+  }
+  const carried = f.transferBudget;
+  const profit = (ledgerTotal(last.income) - last.income.transfers) - (ledgerTotal(last.expense) - last.expense.transfers);
+  const added = roundMoney(profit * PROFIT_TO_BUDGET);
+  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), carried + added)));
+  return { carried, added, total: f.transferBudget };
 }
 
 // 홈 경기 입장 수입
