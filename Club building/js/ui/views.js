@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -723,8 +723,8 @@ export function clubView(state, ui) {
 
 // ---- 재정 ----
 
-const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', transfers: '선수 판매' };
-const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', transfers: '선수 영입' };
+const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', merch: '굿즈', transfers: '선수 판매' };
+const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', merch: '굿즈 생산', transfers: '선수 영입' };
 
 function ledgerTable(ledger) {
   const rows = (names, part, sign) => Object.entries(names)
@@ -741,7 +741,7 @@ const satClass = (s) => (s < PROTEST_LINE ? 'error' : s >= 70 ? 'good' : '');
 const SEG_COLOR = { loyal: '#2f6b3f', trendy: '#c2410c', family: '#2563eb', local: '#a16207' };
 
 // 팬 탭: 팬층 비율, 만족도와 최근 변화, 팬층별 반응
-export function fansView(state) {
+export function fansView(state, ui = {}) {
   const club = userClub(state);
   const fans = fansOf(club);
   const reactions = fanReactions(club);
@@ -770,7 +770,10 @@ export function fansView(state) {
       </div>
       ${ticketCard(state, club)}
       ${ticketHistory(state, club)}
-    </div>`;
+      ${merchCard(state, club)}
+      ${merchHistory(state, club)}
+    </div>
+    ${ui.merchItem ? merchDetail(state, club, ui.merchItem, ui.merchMsg) : ''}`;
 }
 
 const range = (a) => `${won(a[0])} ~ ${won(a[1])}`;
@@ -816,6 +819,77 @@ function ticketHistory(state, club) {
           ${h.map((r) => `<tr><td>${formatShortDate(r.date)}</td><td>${esc(state.clubs[r.opponent]?.name ?? '')}</td><td>${GRADES[r.grade].name}</td><td class="num">${won(r.price)}</td><td class="num">${r.crowd.toLocaleString()}</td><td class="num">${Math.round((r.crowd / r.capacity) * 100)}%</td><td class="num">${Math.round(r.satisfaction)}</td></tr>`).join('')}
         </tbody></table>` : '<p class="muted">홈 경기를 치르면 가격과 관중이 기록됩니다.</p>'}
       </div>`;
+}
+
+// 굿즈 카드: 품목별 디자인·가격·재고·판매
+function merchCard(state, club) {
+  const m = merchOf(club);
+  const rows = ITEM_KEYS.filter((k) => !ITEMS[k].limited || m.limited || m.items[k].ordered).map((k) => {
+    const it = m.items[k];
+    const fc = merchForecast(state, club, k);
+    const status = it.incoming ? `<span class="muted small">${formatShortDate(it.incoming.date)} 도착 ${it.incoming.quantity.toLocaleString()}개</span>`
+      : it.stock ? '' : (it.ordered || it.sold) ? '<span class="error small">품절</span>' : '<span class="muted small">주문 전</span>';
+    return `<tr class="clickable" data-action="openMerch" data-item="${k}">
+      <td><strong>${ITEMS[k].name}</strong>${it.design ? ` <span class="muted small">${DESIGNS[it.design].name}</span>` : ''}</td>
+      <td class="num">${won(it.price)}</td><td class="num">${it.stock.toLocaleString()} ${status}</td>
+      <td class="num">${it.sold.toLocaleString()}</td><td class="num muted small">${fc[0].toLocaleString()}~${fc[1].toLocaleString()}</td></tr>`;
+  }).join('');
+  return `
+      <div class="card">
+        <h3>굿즈</h3>
+        ${m.limited && !m.items.limited.ordered ? `<p class="good small">${m.limited.reason} 기념 한정판을 ${formatShortDate(m.limited.orderBy)}까지 주문할 수 있습니다.</p>` : ''}
+        <table class="table compact"><thead><tr><th>품목</th><th class="num">가격</th><th class="num">재고</th><th class="num">이번 시즌 판매</th><th class="num">시즌 예상 판매</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="muted small">품목을 누르면 디자인·가격·수량을 정합니다. 유니폼은 시즌에 한 번 생산하고 한 번 추가 생산(원가 ${REORDER_COST}배, 30일 뒤 도착)할 수 있습니다. 첫 리그 홈 경기까지 정하지 않으면 지난 디자인으로 자동 생산합니다. 남은 재고는 시즌 끝에 원가의 30%에 정리합니다.</p>
+      </div>`;
+}
+
+function merchHistory(state, club) {
+  const h = merchOf(club).history;
+  return `
+      <div class="card">
+        <h3>굿즈 기록</h3>
+        ${h.length ? h.map((row) => `<p><strong>${row.season}-${String(row.season + 1).slice(2)}</strong></p>
+          <table class="table compact"><thead><tr><th>품목</th><th class="num">판매</th><th class="num">수입</th><th class="num">남은 재고</th></tr></thead><tbody>
+          ${Object.entries(row.items).map(([k, r]) => `<tr><td>${ITEMS[k].name}</td><td class="num">${r.sold.toLocaleString()}</td><td class="num">${won(r.revenue)}</td><td class="num">${r.leftover.toLocaleString()}</td></tr>`).join('')}
+          </tbody></table>`).join('') : '<p class="muted">시즌이 끝나면 품목별 판매가 기록됩니다.</p>'}
+      </div>`;
+}
+
+export function merchForecastText(state, club, item, price, design) {
+  const fc = merchForecast(state, club, item, { price, design });
+  const mid = Math.round((fc[0] + fc[1]) / 2);
+  return `시즌 예상 판매 ${fc[0].toLocaleString()}~${fc[1].toLocaleString()}개 · 수입 약 ${won(mid * price)}`;
+}
+
+function merchDetail(state, club, item, msg) {
+  const m = merchOf(club);
+  const it = m.items[item];
+  const def = ITEMS[item];
+  const star = starPlayer(state, club);
+  const reorder = def.kit && it.ordered;
+  const canOrder = !it.incoming && !(def.kit && it.reordered) && !(def.limited && (it.ordered || !m.limited));
+  const unit = reorder ? unitCost(item) * REORDER_COST : unitCost(item);
+  const fc = merchForecast(state, club, item);
+  const body = `
+      <p>원가 ${won(unitCost(item))} · 기본 가격 ${won(basePrice(item))}</p>
+      <p>재고 ${it.stock.toLocaleString()}개 · 이번 시즌 판매 ${it.sold.toLocaleString()}개 · 수입 ${won(it.revenue)}</p>
+      ${def.kit ? `<p class="small">스타 마킹 선수: ${star ? `<strong>${esc(star.name)}</strong>` : '<span class="error">능력 75 이상 선수가 없어 효과가 작습니다</span>'}</p>
+        <p class="muted small">충성층은 클래식·레트로, 유행층은 모던·스타 마킹, 가족층은 스타 마킹, 지역층은 레트로를 좋아합니다.</p>` : ''}
+      ${def.segment ? `<p class="muted small">${def.segment === 'loyal' ? '충성층' : '가족층'}이 많이 삽니다.</p>` : ''}
+      ${def.limited ? '<p class="muted small">주문하면 2주 동안만 팔립니다.</p>' : ''}
+      <p class="small">지금 설정 기준 ${fc[0].toLocaleString()}~${fc[1].toLocaleString()}개</p>`;
+  const side = `
+      ${msg ? `<p class="${msg.ok ? 'good' : 'error'} small">${esc(msg.text)}</p>` : ''}
+      <div class="renew">
+        ${def.kit && !it.ordered ? `<label>디자인 <select id="merchDesign" data-preview="merch">${DESIGN_KEYS.map((d) => `<option value="${d}" ${d === it.design ? 'selected' : ''}>${DESIGNS[d].name}</option>`).join('')}</select></label>` : ''}
+        <label>가격 (원) <input id="merchPrice" data-preview="merch" type="number" min="1000" step="1000" value="${it.price}"></label>
+        <label>수량 <input id="merchQty" data-preview="merch" type="number" min="0" step="100" value="${Math.round((fc[0] + fc[1]) / 2 / 100) * 100}"></label>
+        <p class="small" id="merchForecast" data-item="${item}">${merchForecastText(state, club, item, it.price, it.design)}</p>
+        <p class="small muted" id="merchCost" data-unit="${unit}">생산비 ${won(unit * Math.round((fc[0] + fc[1]) / 2 / 100) * 100)}${reorder ? ' (추가 생산, 30일 뒤 도착)' : def.leadDays ? ` (${def.leadDays}일 뒤 도착)` : ''}</p>
+        <p>${canOrder ? `<button class="btn primary small" data-action="merchOrder" data-item="${item}">${reorder ? '추가 생산' : '주문'}</button>` : ''}
+        <button class="btn small" data-action="merchPrice" data-item="${item}">가격만 바꾸기</button></p>
+      </div>`;
+  return modal({ title: def.name, body, side, close: 'data-action="openMerch" data-item=""' });
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산

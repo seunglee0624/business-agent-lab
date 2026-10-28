@@ -16,6 +16,7 @@ import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS } from '../data/economy.js';
 import { fanSeasonEnd } from './fans.js';
 import { resetSeasonTickets } from './tickets.js';
+import { merchSeasonEnd } from './merch.js';
 import { won } from './money.js';
 
 export const RETURN_CHANCE = 0.3;
@@ -298,6 +299,12 @@ export function processSeasonEnd(state, rng) {
   if (userId) state.user.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
 
   const moves = promoteAndRelegate(state, rng);
+  if (userId) {
+    const now = state.clubs[userId].leagueId;
+    const unlock = userPos === 1 ? '우승' : LEAGUES[now].tier < LEAGUES[userLeague].tier ? '승격' : null;
+    merchSeasonEnd(state, state.clubs[userId], state.season, unlock);
+    if (unlock) addMessage(state, { view: 'fans', important: true, title: `${unlock} 기념 한정판`, body: `${unlock} 기념 한정판 굿즈를 낼 수 있습니다. 30일 안에 팬 탭에서 주문하세요. 2주 동안 팔립니다.` });
+  }
   const added = fillBottomTier(state, rng, moves);
   const retired = retirements(state, rng, endDate);
   const leaving = expiringContracts(state, rng, endDate, userId);

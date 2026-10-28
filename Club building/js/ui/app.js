@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -16,7 +16,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText,
+  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText, merchForecastText,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -254,6 +254,7 @@ export class App {
         markViewRead(this.state, d.view);
         this.persist();
         this.ui.fixtureId = null;
+        this.ui.merchItem = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
         this.ui.managerMsg = null;
@@ -301,6 +302,28 @@ export class App {
           freeOnly: this.root.querySelector('#sFree').checked,
         };
         this.ui.transferMsg = null;
+        this.render();
+        break;
+      }
+      case 'openMerch':
+        this.ui.merchItem = d.item || null;
+        this.ui.merchMsg = null;
+        this.render();
+        break;
+      case 'merchOrder': {
+        const price = Number(this.root.querySelector('#merchPrice').value);
+        const quantity = Number(this.root.querySelector('#merchQty').value);
+        const design = this.root.querySelector('#merchDesign')?.value;
+        const res = orderMerch(s, d.item, { price, quantity, design });
+        this.ui.merchMsg = { ok: res.ok, text: res.ok ? `${ITEMS[d.item].name} ${quantity.toLocaleString()}개를 주문했습니다. 생산비 ${won(res.cost)}.${res.arrive !== s.date ? ` ${res.arrive} 도착.` : ''}` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'merchPrice': {
+        const res = setMerchPrice(s, d.item, Number(this.root.querySelector('#merchPrice').value));
+        this.ui.merchMsg = { ok: res.ok, text: res.ok ? '가격을 바꿨습니다.' : res.reason };
+        this.persist();
         this.render();
         break;
       }
@@ -429,6 +452,16 @@ export class App {
   // 재정 조정 바를 끄는 동안 금액만 바꿔 보여 준다
   onInput(ev) {
     const el = ev.target;
+    if (el.dataset?.preview === 'merch') {
+      const box = this.root.querySelector('#merchForecast');
+      const price = Number(this.root.querySelector('#merchPrice').value);
+      const qty = Number(this.root.querySelector('#merchQty').value);
+      const design = this.root.querySelector('#merchDesign')?.value;
+      box.textContent = merchForecastText(this.state, userClub(this.state), box.dataset.item, price, design);
+      const cost = this.root.querySelector('#merchCost');
+      cost.textContent = `생산비 ${won(Number(cost.dataset.unit) * qty)}`;
+      return;
+    }
     if (el.dataset?.change === 'ticketPrice') {
       const price = Number(el.value);
       this.root.querySelector(`#price-${el.dataset.grade}`).textContent = won(price);

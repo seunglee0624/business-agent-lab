@@ -7,6 +7,7 @@ import { seasonStart, addDays, addMonths, formatDate, formatShortDate, daysBetwe
 import { resolveLineup } from './tactics.js';
 import * as transfers from './transfers.js';
 import * as tickets from './tickets.js';
+import * as merch from './merch.js';
 import * as loans from './loans.js';
 import { intensityOf } from './training.js';
 import * as staffwork from './staffwork.js';
@@ -189,6 +190,7 @@ function dailyTick(state, rng, date) {
     }
   }
   if (date.endsWith('-01')) monthlyTick(state, rng, date);
+  if (user) userMerchDay(state, user, date);
   transfers.dailyAiTransfers(state, rng, userId);
   loans.dailyAiLoans(state, rng, userId);
   const offer = userId ? transfers.dailyOffers(state, rng, state.clubs[userId]) : null;
@@ -250,6 +252,16 @@ function weeklyStaffWork(state, club) {
 }
 
 // 매달 1일: 사기 → 성장(출장 시간 초기화)
+// 굿즈: 첫 리그 홈 경기 날 주문 안 한 유니폼은 자동 생산, 그 뒤 날마다 판매
+function userMerchDay(state, club, date) {
+  const homeMatch = fixturesOn(state, date).some((f) => f.home === club.id && f.competitionId === club.leagueId);
+  if (homeMatch) {
+    const auto = merch.autoKits(state, club);
+    if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
+  }
+  merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch);
+}
+
 function monthlyTick(state, rng, date) {
   monthlyMorale(state, addMonths(date, -1));
   if (state.user?.clubId) {
@@ -538,6 +550,10 @@ export { registeredCount, MAX_SQUAD };
 export { fansOf, fanReactions, expectedPosition, SEGMENTS, PROTEST_LINE } from './fans.js';
 export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from './tickets.js';
 
+export { merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from './merch.js';
+export const orderMerch = (state, item, opts) => merch.orderMerch(state, userClub(state), item, opts);
+export const setMerchPrice = (state, item, price) => merch.setMerchPrice(userClub(state), item, price);
+
 export function setTicketPrice(state, grade, price) {
   return tickets.setTicketPrice(userClub(state), grade, price);
 }
@@ -545,6 +561,10 @@ export function setTicketPrice(state, grade, price) {
 // 예전 저장 파일 보정: 새로 생긴 값 채우기
 export function upgradeState(state) {
   for (const club of Object.values(state.clubs)) {
+    for (const l of [club.finance.season, ...club.finance.history]) {
+      l.income.merch ??= 0;
+      l.expense.merch ??= 0;
+    }
     if (club.staff && club.staff.marketing === undefined) {
       const levels = Object.values(club.staff);
       club.staff.marketing = Math.round(levels.reduce((s, x) => s + x, 0) / Math.max(1, levels.length));

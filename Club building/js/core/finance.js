@@ -7,12 +7,13 @@ import { capacity } from './facilities.js';
 import { fanFactor, protestPenalty } from './fans.js';
 
 export const WAGE_BUDGET_RATIO = 0.7;
+export const MERCH_SHARE = 0.3; // 우리 구단은 상업 수입 중 이 몫을 굿즈 판매로 번다
 export const TRANSFER_BUDGET_RATIO = 0.35;
 const HISTORY_SEASONS = 5;
 
 export const emptyLedger = () => ({
-  income: { tv: 0, prize: 0, gate: 0, commercial: 0, transfers: 0 },
-  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, transfers: 0 },
+  income: { tv: 0, prize: 0, gate: 0, commercial: 0, merch: 0, transfers: 0 },
+  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, merch: 0, transfers: 0 },
 });
 
 export const ledgerTotal = (part) => Object.values(part).reduce((s, x) => s + x, 0);
@@ -78,7 +79,7 @@ export function income(club, key, amount) {
   club.finance.season.income[key] += amount;
 }
 
-function expense(club, key, amount) {
+export function expense(club, key, amount) {
   club.finance.balance -= amount;
   club.finance.season.expense[key] += amount;
 }
@@ -112,7 +113,8 @@ export function recordGate(state, club, position, teams) {
 // 매달 마지막 날: 그달 몫을 정산한다
 export function monthlySettlement(state, club) {
   income(club, 'tv', roundMoney((tvPerSeason(club) * TV_EQUAL_SHARE) / 12));
-  income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club)) / 12));
+  const share = club.id === state.user?.clubId ? 1 - MERCH_SHARE : 1;
+  income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club) * share) / 12));
   expense(club, 'wages', roundMoney((playerWageBill(state, club) * 52) / 12));
   expense(club, 'staff', roundMoney((staffWageBill(club) * 52) / 12));
   expense(club, 'facilities', monthlyUpkeep(club));
