@@ -67,3 +67,19 @@ test('한 시즌: 굿즈 수입이 생기고 팬 탭에 굿즈 카드가 보인�
   const html = fansView(state, { merchItem: 'kitHome' });
   for (const s of ['굿즈', '홈 유니폼', '머플러', '아동용품', 'merchOrder']) assert.ok(html.includes(s), s);
 });
+
+test('품절 임박: 남은 재고가 도착 기간보다 빨리 떨어질 것 같으면 한 번 경고하고, 주문이 도착하면 다시 경고할 수 있다', () => {
+  const state = fresh('merch-warn');
+  const club = g.userClub(state);
+  const it = g.merchOf(club).items.scarf;
+  it.stock = 5;
+  const w = merchDaily(state, club, 19, false);
+  assert.equal(w.length, 1);
+  assert.equal(w[0].item, 'scarf');
+  assert.equal(w[0].lead, 14);
+  assert.equal(merchDaily(state, club, 19, false).filter((x) => x.item === 'scarf').length, 0);
+  it.stock = 5;
+  it.incoming = { quantity: 10, date: state.date };
+  merchDaily(state, club, 19, false);
+  assert.equal(it.warned, true); // 도착 후 다시 재고가 적어 새로 경고
+});

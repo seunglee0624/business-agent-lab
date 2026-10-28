@@ -165,14 +165,39 @@ function sell(state, club, item, units) {
   return n;
 }
 
-// 날마다: 도착한 물량을 받고, 조금씩 판다. 홈 경기 날은 더 많이 판다
+// 남은 재고가 며칠 치인지 (시즌 수요를 약 300일에 나눠 판다고 본다)
+export const stockDays = (state, club, item) => {
+  const demand = seasonDemand(state, club, item);
+  return demand > 0 ? merchOf(club).items[item].stock / (demand / 300) : Infinity;
+};
+
+// 지금 주문하면 며칠 뒤 오는지 (더 주문할 수 없으면 null)
+function leadTime(m, item) {
+  const def = ITEMS[item];
+  const it = m.items[item];
+  if (def.limited || it.incoming) return null;
+  if (def.kit) return it.ordered && !it.reordered ? REORDER_DAYS : null;
+  return def.leadDays;
+}
+
+// 날마다: 도착한 물량을 받고, 조금씩 판다. 홈 경기 날은 더 많이 판다. 지금 주문해도 늦을 것 같은 품목을 돌려준다
 export function merchDaily(state, club, homeGames, homeMatch) {
   const m = merchOf(club);
+  const warnings = [];
   for (const item of ITEM_KEYS) {
     const it = m.items[item];
     if (it.incoming && it.incoming.date <= state.date) {
       it.stock += it.incoming.quantity;
       it.incoming = null;
+      it.warned = false;
+    }
+    const lead = leadTime(m, item);
+    if (lead !== null && it.stock > 0 && !it.warned) {
+      const days = stockDays(state, club, item);
+      if (days < lead) {
+        it.warned = true;
+        warnings.push({ item, name: ITEMS[item].name, days: Math.max(1, Math.round(days)), lead });
+      }
     }
     if (!it.stock) continue;
     const demand = seasonDemand(state, club, item);
@@ -182,6 +207,7 @@ export function merchDaily(state, club, homeGames, homeMatch) {
     }
     sell(state, club, item, (demand * (1 - HOME_SHARE)) / 365 + (homeMatch ? (demand * HOME_SHARE) / homeGames : 0));
   }
+  return warnings;
 }
 
 // 첫 리그 홈 경기 날: 주문하지 않은 유니폼은 지난 디자인으로 예상 판매만큼 자동 생산

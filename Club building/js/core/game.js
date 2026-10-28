@@ -259,7 +259,9 @@ function userMerchDay(state, club, date) {
     const auto = merch.autoKits(state, club);
     if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
   }
-  merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch);
+  for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch)) {
+    addMessage(state, { view: 'fans', important: true, title: `${w.name} 품절 임박`, body: `${w.name} 재고가 약 ${w.days}일 치 남았습니다. 지금 주문해도 ${w.lead}일 뒤에 도착합니다.` });
+  }
 }
 
 function monthlyTick(state, rng, date) {
