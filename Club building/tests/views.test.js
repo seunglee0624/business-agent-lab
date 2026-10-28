@@ -118,12 +118,15 @@ test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개�
   me.finance.wageBudget = 1e13;
   me.squad.pop();
   const search = { position: 'ST', maxAge: 25 };
-  const [first, second] = g.searchPlayers(state, search);
+  const [first, second, third] = g.searchPlayers(state, search);
   const feeStage = transfersView(state, { search, targetId: first.id });
   assert.match(feeStage, /1단계: 이적료/);
   assert.match(feeStage, new RegExp(`잠재 ${first.potentialRange[0]}~${first.potentialRange[1]}`));
   assert.match(feeStage, /마무리/); // 협상 중에도 선수 프로필(능력치)을 보여 준다
   const { counter } = g.bidForPlayer(state, second.id, 1e6);
+  g.bidForPlayer(state, third.id, 1e6);
+  const refused = transfersView(state, { search, targetId: third.id });
+  assert.match(refused, /요구 이적료/);
   g.bidForPlayer(state, second.id, counter);
   const termsStage = transfersView(state, { search, targetId: second.id });
   assert.match(termsStage, /2단계: 개인 조건/);

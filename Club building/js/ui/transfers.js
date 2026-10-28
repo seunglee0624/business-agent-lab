@@ -180,8 +180,9 @@ function targetDetail(state, p) {
   } else if (stage === 'fee') {
     box = `
       <p><strong>1단계: 이적료</strong> <span class="muted small">${live?.tries ?? 0}/${MAX_FEE_TRIES}번 실패하면 결렬</span></p>
+      ${live?.counter ? `<p class="small error">${esc(clubName(state, p.clubId))} 요구 이적료: <strong>${won(live.counter)}</strong></p>` : ''}
       <div class="form-row">
-        <label>이적료 (억 원) <input id="bidFee" type="number" min="0" step="0.1" value="${eok(value)}"></label>
+        <label>이적료 (억 원) <input id="bidFee" type="number" min="0" step="0.1" value="${eok(live?.counter ?? value)}"></label>
         <button class="btn primary small" data-action="bidForPlayer" data-id="${p.id}">제안</button>
       </div>`;
   } else {

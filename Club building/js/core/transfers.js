@@ -114,6 +114,7 @@ export function bidForPlayer(state, club, p, fee) {
     return { ok: true, stage: 'terms', fee };
   }
   deal.tries++;
+  deal.counter = asking;
   if (deal.tries >= MAX_FEE_TRIES) {
     deal.stage = 'collapsed';
     return { ok: false, reason: `${withParticle(state.clubs[p.clubId].name, '가')} 협상을 끝냈습니다. 다음 이적시장에 다시 시도하세요.` };
