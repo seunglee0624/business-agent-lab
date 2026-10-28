@@ -59,3 +59,20 @@ test('우리 경기도 감독이 교체와 경기 중 전술 변경을 맡는다
   assert.equal(m.sides[s].auto, true);
   assert.equal(m.sides[s].aiTactics, true);
 });
+
+test('감독 코멘트: 우리 선수의 나이·잠재력·팀 내 비중과 판매 의견을 말한다', async () => {
+  const { coachComment } = await import('../js/core/game.js');
+  const { overall, ageOn } = await import('../js/core/player.js');
+  const state = fresh('cs5');
+  const club = userClub(state);
+  const squad = club.squad.map((id) => state.players[id]);
+  const best = squad.sort((a, b) => overall(b) - overall(a))[0];
+  const c = coachComment(state, best.id, 1);
+  assert.equal(c.role, '주전');
+  assert.equal(c.verdict, 'keep', '주전을 헐값에 팔지 말자');
+  assert.ok(c.lines.length >= 3 && c.lines.every((l) => typeof l === 'string'));
+  const rich = coachComment(state, best.id, 1e12);
+  assert.equal(rich.verdict, 'sell', '터무니없이 큰 금액이면 팔자');
+  const young = squad.find((p) => ageOn(p, state.date) <= 21 && p.potential - overall(p) >= 8);
+  if (young) assert.ok(coachComment(state, young.id, 1).lines.some((l) => l.includes('성장')));
+});

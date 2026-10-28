@@ -373,3 +373,5 @@ input, select { background: var(--panel); }
 .modal-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
 .modal-side { border-left: 1px solid var(--line); padding-left: 16px; position: sticky; top: 0; }
 @media (max-width: 900px) { .modal-cols { grid-template-columns: 1fr; } .modal-side { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 12px; position: static; } }
+.coach-comment { background: var(--panel-2); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.coach-comment p { margin: 4px 0; }

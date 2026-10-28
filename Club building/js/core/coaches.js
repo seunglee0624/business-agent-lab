@@ -6,6 +6,8 @@ import { staffWage, EUR } from '../data/economy.js';
 import { roundMoney } from './money.js';
 import { contractEnd } from './contracts.js';
 import { daysBetween } from './calendar.js';
+import { overall, ageOn } from './player.js';
+import { marketValue } from './money.js';
 
 export const COACH_STYLES = {
   attacking: { name: '공격형' },
@@ -128,4 +130,39 @@ export function hireCoach(state, club, coachId, years = 2) {
   club.headCoach = { ...coach, until: contractEnd(state.date, years) };
   applyCoachTactics(club);
   return { ok: true, coach: club.headCoach };
+}
+
+// ---- 감독이 보는 우리 선수 (이적 제안을 받았을 때) ----
+
+// fee: 받은 제안 금액. verdict: keep(팔지 말자) | fair(값만 맞으면) | sell(팔아도 된다)
+export function coachComment(state, club, player, fee) {
+  const coach = club.headCoach;
+  const style = coach?.style;
+  const age = ageOn(player, state.date);
+  const ovr = overall(player);
+  const growth = player.potential - ovr;
+  const samePos = club.squad.map((id) => state.players[id]).filter((p) => p.position === player.position)
+    .sort((a, b) => overall(b) - overall(a));
+  const rank = samePos.indexOf(player);
+  const starters = player.position === 'GK' ? 1 : player.position === 'CB' || player.position === 'CM' ? 2 : 1;
+  const role = rank < starters ? '주전' : rank < starters * 2 ? '로테이션' : '백업';
+  const value = marketValue(player, state.date);
+
+  const lines = [];
+  lines.push(age <= 21 ? `${age}세, 아직 성장기입니다.` : age <= 29 ? `${age}세, 전성기입니다.` : age <= 32 ? `${age}세, 곧 내리막에 접어듭니다.` : `${age}세, 하락기입니다.`);
+  lines.push(growth >= 8 ? `지금 능력 ${ovr}, 앞으로 크게 성장할 수 있습니다 (잠재 ${player.potential}).`
+    : growth >= 3 ? `지금 능력 ${ovr}, 조금 더 성장할 여지가 있습니다 (잠재 ${player.potential}).`
+    : `지금 능력 ${ovr}, 더 성장하기는 어렵습니다.`);
+  lines.push(`${player.position} 자리에서 ${role}입니다${samePos.length > 1 ? ` (${samePos.length}명 중 ${rank + 1}번째)` : ''}.`);
+
+  // 감독이 아끼는 정도: 주전·성장 가능성·성향
+  let keep = role === '주전' ? 2 : role === '로테이션' ? 1 : 0;
+  if (age <= 21 && growth >= 8) keep += style === 'youth' ? 2 : 1;
+  if (style === 'stars' && ovr >= 70) keep += 1;
+  if (age >= 31) keep -= 1;
+  const ratio = fee / Math.max(1, value);
+  const need = keep >= 3 ? 2 : keep >= 2 ? 1.5 : keep >= 1 ? 1.1 : 0.8; // 이만큼 몸값보다 비싸야 팔자고 한다
+  const verdict = ratio >= need ? 'sell' : ratio >= need * 0.8 ? 'fair' : 'keep';
+  lines.push(verdict === 'sell' ? '이 금액이면 팔아도 좋다고 봅니다.' : verdict === 'fair' ? '조금만 더 받으면 보내도 괜찮습니다.' : '이 금액으로는 보내고 싶지 않습니다.');
+  return { role, verdict, lines, coach: coach?.name ?? null };
 }

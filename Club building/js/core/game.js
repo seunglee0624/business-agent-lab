@@ -583,6 +583,8 @@ export function managerCandidates(state) {
   return withRng(state, (rng) => coaches.candidates(rng, state, userClub(state)));
 }
 
+export const coachComment = (state, playerId, fee) => coaches.coachComment(state, userClub(state), state.players[playerId], fee);
+
 export const firingCost = (state) => coaches.firingCost(state, userClub(state));
 
 export function fireManager(state) {

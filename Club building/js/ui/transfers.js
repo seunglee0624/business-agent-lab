@@ -5,7 +5,7 @@ import { POSITIONS, POSITION_WEIGHTS, ATTRIBUTES } from '../data/positions.js';
 import { overall } from '../core/player.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { PROMISES } from '../data/economy.js';
-import { userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
+import { coachComment, userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
@@ -150,10 +150,17 @@ function targetDetail(state, p) {
   let box;
   if (p.clubId === club.id) {
     const offers = state.transfers.incoming.filter((o) => o.playerId === p.id);
+    const VERDICT = { keep: 'error', fair: 'muted', sell: 'good' };
     box = offers.length
-      ? offers.map((o) => `<p>${esc(state.clubs[o.clubId].name)}의 제안 <strong>${won(o.fee)}</strong> <span class="muted small">${formatDate(o.expires)}까지</span>
+      ? offers.map((o) => {
+        const c = coachComment(state, p.id, o.fee);
+        return `<p>${esc(state.clubs[o.clubId].name)}의 제안 <strong>${won(o.fee)}</strong> <span class="muted small">${formatDate(o.expires)}까지 · 몸값 약 ${won(value)}</span></p>
+          <div class="coach-comment"><strong>${esc(c.coach ? `${c.coach} 감독` : '임시 코치')}의 의견</strong>
+            ${c.lines.map((l, i) => `<p class="small ${i === c.lines.length - 1 ? VERDICT[c.verdict] : ''}">${esc(l)}</p>`).join('')}</div>
+          <p>
           <button class="btn small primary" data-action="respondOffer" data-id="${o.id}" data-answer="accept">수락</button>
-          <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="reject">거절</button></p>`).join('')
+          <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="reject">거절</button></p>`;
+      }).join('')
       : '<p class="muted">우리 선수입니다.</p>';
   } else if (stage === 'collapsed') {
     box = '<p class="error">협상이 결렬되었습니다. 다음 이적시장에 다시 시도하세요.</p>';
