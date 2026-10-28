@@ -20,6 +20,7 @@ import { withParticle } from './korean.js';
 import { assignInjury, healOn, trainingInjuryRoll } from './injury.js';
 import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development.js';
 import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount, MAX_SQUAD } from './season.js';
+import { fanMatchResult, fanMonthly, PROTEST_LINE } from './fans.js';
 import { initFinance, monthlySettlement, recordGate, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
 import { signNew, offerRenewal } from './contracts.js';
 import { monthlyMorale } from './morale.js';
@@ -249,6 +250,11 @@ function weeklyStaffWork(state, club) {
 // 매달 1일: 사기 → 성장(출장 시간 초기화)
 function monthlyTick(state, rng, date) {
   monthlyMorale(state, addMonths(date, -1));
+  if (state.user?.clubId) {
+    const club = userClub(state);
+    const { protest } = fanMonthly(state, club, date);
+    if (protest) addMessage(state, { view: 'fans', important: true, title: '팬들의 항의', body: `팬 만족도가 ${PROTEST_LINE} 아래로 떨어져 팬들이 항의하고 있습니다. 이대로 가면 관중이 더 줄어듭니다.` });
+  }
   monthlyDevelopment(state, rng);
   const month = date.slice(5, 7);
   if ((month === '01' || month === '04') && state.user?.clubId) expiryReminder(state);
@@ -394,6 +400,14 @@ function applyResult(state, fixture, match) {
   const userId = state.user?.clubId;
   const homeClub = state.clubs[fixture.home];
   const table = standings(state, compId);
+  if (userId && (fixture.home === userId || fixture.away === userId)) {
+    const home = fixture.home === userId;
+    fanMatchResult(state, state.clubs[userId], {
+      goalsFor: home ? fixture.result.home : fixture.result.away,
+      goalsAgainst: home ? fixture.result.away : fixture.result.home,
+      opponent: state.clubs[home ? fixture.away : fixture.home],
+    });
+  }
   fixture.result.crowd = recordGate(state, homeClub, table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length);
 
   for (const [pid, st] of Object.entries(match.stats)) {
@@ -519,6 +533,7 @@ export function sendDownToYouth(state, playerId) {
 }
 
 export { registeredCount, MAX_SQUAD };
+export { fansOf, fanReactions, expectedPosition, SEGMENTS, PROTEST_LINE } from './fans.js';
 
 // ---- 전술 (내 구단) ----
 

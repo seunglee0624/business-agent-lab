@@ -14,6 +14,7 @@ import { initFinance, payPrizeMoney, closeLedger, setBudgets } from './finance.j
 import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS } from '../data/economy.js';
+import { fanSeasonEnd } from './fans.js';
 
 export const RETURN_CHANCE = 0.3;
 export const RETURN_AFTER_SEASONS = 2;
@@ -291,6 +292,7 @@ export function processSeasonEnd(state, rng) {
     const table = standings(state, comp.id);
     table.forEach((r, i) => payPrizeMoney(state, state.clubs[r.clubId], i + 1, table.length));
   }
+  if (userId) fanSeasonEnd(state, state.clubs[userId], userPos);
   if (userId) state.user.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
 
   const moves = promoteAndRelegate(state, rng);

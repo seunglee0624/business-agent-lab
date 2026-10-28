@@ -16,7 +16,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView,
+  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -76,7 +76,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView, manager: managerView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;

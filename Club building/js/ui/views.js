@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
@@ -96,6 +96,7 @@ const NAV = [
   ['table', '순위표'],
   ['club', '구단'],
   ['finance', '재정'],
+  ['fans', '팬'],
   ['transfers', '이적'],
   ['history', '기록'],
   ['settings', '설정'],
@@ -202,6 +203,7 @@ function clubStatus(state, club) {
   return `<table class="table compact">
     <tr><td>감독</td><td>${coach ? `<strong>${esc(coach.name)}</strong> <span class="muted small">${esc(COACH_STYLES[coach.style].name)} · 능력 ${coach.ability}</span>` : '<span class="error">공석 (코치가 임시로 맡는 중)</span>'}</td></tr>
     <tr><td>잔고</td><td class="${f.balance < 0 ? 'error' : ''}">${won(f.balance)}</td></tr>
+    <tr><td>팬 만족도</td><td class="${satClass(fansOf(club).satisfaction)}">${Math.round(fansOf(club).satisfaction)} <span class="muted small">/ 100</span></td></tr>
     <tr><td>주급 (예산)</td><td>${won(weeklyWageBill(state, club))} <span class="muted small">/ ${won(f.wageBudget)}</span></td></tr>
   </table>`;
 }
@@ -733,6 +735,39 @@ function ledgerTable(ledger) {
     <tr class="line-below"><th>지출</th><th class="num">${won(ledgerTotal(ledger.expense))}</th></tr>${rows(EXPENSE_NAMES, ledger.expense, '-')}
     <tr><th>수지</th><th class="num ${net < 0 ? 'error' : 'good'}">${won(net)}</th></tr>
   </table>`;
+}
+
+const satClass = (s) => (s < PROTEST_LINE ? 'error' : s >= 70 ? 'good' : '');
+const SEG_COLOR = { loyal: '#2f6b3f', trendy: '#c2410c', family: '#2563eb', local: '#a16207' };
+
+// 팬 탭: 팬층 비율, 만족도와 최근 변화, 팬층별 반응
+export function fansView(state) {
+  const club = userClub(state);
+  const fans = fansOf(club);
+  const reactions = fanReactions(club);
+  const table = standings(state);
+  const pos = table.findIndex((r) => r.clubId === club.id) + 1;
+  const hist = fans.history.slice(-6);
+  const prev = hist.length >= 2 ? hist[hist.length - 2].satisfaction : null;
+  const change = prev === null ? '' : `<span class="small ${fans.satisfaction >= prev ? 'good' : 'error'}">지난달보다 ${fans.satisfaction >= prev ? '+' : ''}${Math.round((fans.satisfaction - prev) * 10) / 10}</span>`;
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>팬 만족도</h3>
+        <p class="fan-sat ${satClass(fans.satisfaction)}"><strong>${Math.round(fans.satisfaction)}</strong> <span class="muted small">/ 100</span> ${change}</p>
+        <div class="fan-bar"><div style="width:${fans.satisfaction}%"></div></div>
+        <p class="muted small">기대 순위 ${expectedPosition(state, club)}위 · 지금 ${pos}위. 기대보다 잘하면 오르고, 못하면 내립니다. ${PROTEST_LINE} 아래로 떨어지면 팬들이 항의하고 관중이 줄어듭니다.</p>
+        ${hist.length ? `<table class="table compact"><thead><tr><th>달</th><th class="num">만족도</th></tr></thead><tbody>${hist.slice().reverse().map((h) => `<tr><td>${h.date.slice(0, 7)}</td><td class="num">${Math.round(h.satisfaction)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">달마다 기록이 쌓입니다.</p>'}
+      </div>
+      <div class="card">
+        <h3>팬층</h3>
+        <div class="fan-shares">${reactions.map((r) => `<div style="width:${r.share}%;background:${SEG_COLOR[r.key]}" title="${r.name} ${r.share}%"></div>`).join('')}</div>
+        <ul class="fan-list">${reactions.map((r) => `
+          <li><span class="dot" style="background:${SEG_COLOR[r.key]}"></span><strong>${r.name}</strong> ${r.share}%
+            <p class="small ${r.mood === 'good' ? 'good' : r.mood === 'bad' ? 'error' : 'muted'}">"${esc(r.line)}"</p></li>`).join('')}</ul>
+        <p class="muted small">충성층은 성적·연승, 유행층은 스타 영입(능력 75 이상)·다득점, 지역층은 유스 출신 출전, 가족층은 티켓값에 반응합니다. 비율은 시즌이 끝날 때 조금씩 바뀝니다.</p>
+      </div>
+    </div>`;
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산

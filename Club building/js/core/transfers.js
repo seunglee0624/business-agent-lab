@@ -5,6 +5,7 @@ import { overall, ratingAt, ageOn } from './player.js';
 import { marketValue, roundMoney, won } from './money.js';
 import { daysBetween, addDays } from './calendar.js';
 import { addMessage } from './state.js';
+import { fanTransfer } from './fans.js';
 import { withParticle } from './korean.js';
 import { contractEnd, transferDemand, requiredWage, signNew } from './contracts.js';
 import { weeklyWageBill, recordTransfer } from './finance.js';
@@ -163,6 +164,7 @@ export function offerTerms(state, club, p, offer) {
 
 // 선수를 옮기고 돈을 정산한다. from이 null이면 자유계약 선수
 export function completeTransfer(state, p, from, to, fee, contract) {
+  fanTransfer(state, p, from, to);
   if (from) {
     from.squad = from.squad.filter((id) => id !== p.id);
     from.youth = from.youth.filter((id) => id !== p.id);

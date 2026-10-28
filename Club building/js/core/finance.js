@@ -4,6 +4,7 @@ import { EUR, TV_PER_CLUB, TV_EQUAL_SHARE, TICKET_PRICE, TICKET_COUNTRY, FACILIT
 import { LEAGUES } from '../data/countries/index.js';
 import { roundMoney } from './money.js';
 import { capacity } from './facilities.js';
+import { fanFactor, protestPenalty } from './fans.js';
 
 export const WAGE_BUDGET_RATIO = 0.7;
 export const TRANSFER_BUDGET_RATIO = 0.35;
@@ -31,7 +32,8 @@ export function ticketPrice(club) {
 // 관중 비율: 도시 규모, 메가스토어, 성적(position: 지금 순위, 없으면 중간)
 export function attendanceRate(club, position = null, teams = 20) {
   const form = position ? 0.08 * (1 - (2 * (position - 1)) / Math.max(1, teams - 1)) : 0;
-  return Math.max(0.3, Math.min(1, 0.7 + 0.04 * ((club.citySize ?? 3) - 3) + 0.03 * (club.facilities.megastore - 1) + form));
+  const base = 0.7 + 0.04 * ((club.citySize ?? 3) - 3) + 0.03 * (club.facilities.megastore - 1) + form;
+  return Math.max(0.3, Math.min(1, base * fanFactor(club) * protestPenalty(club)));
 }
 
 export function gatePerMatch(club, position, teams) {
@@ -99,7 +101,7 @@ export function recordGate(state, club, position, teams) {
 // 매달 마지막 날: 그달 몫을 정산한다
 export function monthlySettlement(state, club) {
   income(club, 'tv', roundMoney((tvPerSeason(club) * TV_EQUAL_SHARE) / 12));
-  income(club, 'commercial', roundMoney(commercialPerSeason(club) / 12));
+  income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club)) / 12));
   expense(club, 'wages', roundMoney((playerWageBill(state, club) * 52) / 12));
   expense(club, 'staff', roundMoney((staffWageBill(club) * 52) / 12));
   expense(club, 'facilities', monthlyUpkeep(club));
