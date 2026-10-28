@@ -5,6 +5,7 @@ import {
   simulateToSeasonEnd, startNextSeason, chooseNewClub, callUpYouth, sendDownToYouth, STATE_VERSION,
   renewContract, upgradeFacility, setStaffLevel, changeTactics,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
+  setTraining, setDelegation,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -16,6 +17,8 @@ import {
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
+import { trainingView } from './training.js';
+import { trainingOf } from '../core/training.js';
 
 export class App {
   constructor(root) {
@@ -75,7 +78,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, transfers: transfersView, training: trainingView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -427,6 +430,18 @@ export class App {
         break;
       case 'toggleAutoLineup':
         this.tactics(el.checked ? { auto: true } : { manual: true });
+        break;
+      case 'setTraining': {
+        const club = s.clubs[s.manager.clubId];
+        setTraining(s, { ...trainingOf(club), [d.key]: el.value });
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'setDelegation':
+        setDelegation(s, { [d.area]: el.value });
+        this.persist();
+        this.render();
         break;
       case 'setViewMode':
         s.settings.viewMode = el.value;

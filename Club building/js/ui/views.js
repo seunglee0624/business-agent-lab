@@ -126,6 +126,7 @@ const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
   ['tactics', '전술'],
+  ['training', '훈련'],
   ['youth', '유스'],
   ['schedule', '일정'],
   ['table', '순위표'],

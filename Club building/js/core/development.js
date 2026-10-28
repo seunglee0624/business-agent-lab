@@ -4,6 +4,7 @@ import { ATTRIBUTE_KEYS, POSITION_WEIGHTS } from '../data/positions.js';
 import { overall, ageOn } from './player.js';
 import { generatePlayer, SQUAD_TEMPLATE } from './worldgen.js';
 import { growthFactor, youthAbilityOffset, youthPotentialBoost } from './facilities.js';
+import { intensityOf, focusBoost } from './training.js';
 
 const PHYSICAL = new Set(['pace', 'stamina', 'strength']);
 
@@ -21,12 +22,14 @@ export function monthlyDelta(rng, player, age, { minutes = 0, youth = false, gro
 }
 
 // 종합 능력 변화량을 능력치로 나눠 준다. 소수 부분은 progress에 쌓였다가 1이 넘으면 반영된다.
-export function applyDelta(player, delta) {
+// boost: 성장할 때 능력치별 배율 (훈련 중점)
+export function applyDelta(player, delta, boost = null) {
   const weights = POSITION_WEIGHTS[player.position];
   player.progress ??= {};
   for (const key of ATTRIBUTE_KEYS) {
     let d = weights[key] ? delta / 5 : delta / 10;
     if (delta < 0 && PHYSICAL.has(key)) d *= 1.6;
+    if (delta > 0 && boost) d *= boost(key);
     const v = (player.progress[key] ?? 0) + d;
     const whole = v >= 1 ? Math.floor(v) : v <= -1 ? Math.ceil(v) : 0;
     player.progress[key] = Math.round((v - whole) * 1000) / 1000;
@@ -44,13 +47,14 @@ export function monthlyDevelopment(state, rng) {
     if (club.status === 'archived') for (const id of club.squad) archivedIds.add(id);
     else for (const id of club.youth) youthIds.add(id);
   }
-  const growth = new Map(Object.values(state.clubs).map((c) => [c.id, growthFactor(c)]));
+  const growth = new Map(Object.values(state.clubs).map((c) => [c.id, growthFactor(c) * intensityOf(c).growth]));
+  const boosts = new Map(Object.values(state.clubs).map((c) => [c.id, focusBoost(c)]));
   for (const p of Object.values(state.players)) {
     if (p.retired || !p.clubId) continue;
     const age = ageOn(p, state.date);
     if (archivedIds.has(p.id) && age < 31) continue;
     const delta = monthlyDelta(rng, p, age, { minutes: p.minutesMonth ?? 0, youth: youthIds.has(p.id), growth: growth.get(p.clubId) });
-    applyDelta(p, delta);
+    applyDelta(p, delta, youthIds.has(p.id) ? null : boosts.get(p.clubId));
     p.minutesMonth = 0;
   }
 }

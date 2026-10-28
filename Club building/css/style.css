@@ -359,3 +359,5 @@ input, select { background: var(--panel); }
 .card { max-width: 100%; overflow-x: auto; }
 .search-form .btn { align-self: flex-end; }
 @media (max-width: 700px) { .top-actions { width: 100%; } .top-actions .btn.primary { margin-left: auto; } }
+/* 주간 요약처럼 여러 줄인 메시지 */
+.inbox li > div:last-child { white-space: pre-line; }

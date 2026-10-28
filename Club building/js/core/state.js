@@ -18,6 +18,11 @@ export function addMessage(state, { title, body, important = false }) {
   if (state.inbox.length > 200) state.inbox.length = 200;
 }
 
+// 결정이 필요 없는 알림: 바로 메시지함에 넣지 않고 모아 두었다가 월요일 주간 요약에 묶는다
+export function addNotice(state, { title, body }) {
+  (state.notices ??= []).push({ date: state.date, title, body });
+}
+
 export const userClub = (state) => state.clubs[state.manager?.clubId];
 export const userLeagueId = (state) => userClub(state)?.leagueId ?? 'ENG1';
 export const league = (state, compId = userLeagueId(state)) => state.competitions[compId];
