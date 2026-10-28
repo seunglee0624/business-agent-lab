@@ -14,7 +14,7 @@ import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
-import { weeklyWageBill, playerWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
 import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -752,7 +752,6 @@ export function financeView(state) {
   const club = userClub(state);
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
-  const players = playerWageBill(state, club);
   const top = club.squad.map((id) => state.players[id]).sort((a, b) => b.contract.wage - a.contract.wage).slice(0, 8);
   return `
     <div class="grid two">
@@ -762,7 +761,6 @@ export function financeView(state) {
           <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
           <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
           <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
-          <tr><td>지금 주급 (주)</td><td class="num ${bill > f.wageBudget ? 'error' : ''}">${won(bill)} <span class="muted small">선수 ${won(players)} + 스태프 ${won(bill - players)}</span></td></tr>
           <tr><td>남은 주급 여유</td><td class="num">${won(f.wageBudget - bill)}</td></tr>
           <tr><td>시설 유지비 (월)</td><td class="num">${won(monthlyUpkeep(club))}</td></tr>
         </table>
