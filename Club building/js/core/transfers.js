@@ -306,3 +306,21 @@ function aiSign(state, rng, club, userId) {
   trimSquad(state, club);
   return true;
 }
+
+// ---- 시즌 이적 기록 ----
+
+// 그 시즌(7월 1일 ~ 다음 해 6월 30일)의 이적·임대, 최근 것부터. clubId나 leagueId로 거른다
+export function seasonTransfers(state, season, { clubId, leagueId } = {}) {
+  const from = `${season}-07-01`;
+  const to = `${season + 1}-06-30`;
+  const inLeague = (id) => id && state.clubs[id]?.leagueId === leagueId;
+  return Object.values(state.players)
+    .flatMap((p) => (p.transfers ?? []).map((t) => ({
+      date: t.date, playerId: p.id, from: t.from, to: t.to, fee: t.fee ?? 0,
+      type: t.loan ? 'loan' : t.from ? 'transfer' : 'free',
+    })))
+    .filter((t) => t.date >= from && t.date <= to)
+    .filter((t) => !clubId || t.from === clubId || t.to === clubId)
+    .filter((t) => !leagueId || inLeague(t.from) || inLeague(t.to))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}

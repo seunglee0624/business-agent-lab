@@ -525,6 +525,8 @@ export { registeredCount, MAX_SQUAD };
 
 // ---- 이적 (내 구단) ----
 
+export const seasonTransfers = (state, season, filter) => transfers.seasonTransfers(state, season, filter);
+
 export function playerInfo(state, playerId) {
   return transfers.playerInfo(state, userClub(state), state.players[playerId]);
 }

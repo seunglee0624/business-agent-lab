@@ -5,7 +5,7 @@ import { POSITIONS, POSITION_WEIGHTS, ATTRIBUTES } from '../data/positions.js';
 import { overall } from '../core/player.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { PROMISES } from '../data/economy.js';
-import { coachComment, userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
+import { seasonTransfers, START_YEAR, coachComment, userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
@@ -43,7 +43,9 @@ export function transfersView(state, ui) {
     </div>
     ${searchCard(state, ui)}
     ${target ? targetDetail(state, target) : ''}
+    ${ui.profileId ? profileDetail(state, state.players[ui.profileId]) : ''}
     ${listedCard(state, club)}
+    ${historyCard(state, ui, club)}
     ${loanedOutCard(state, club)}`;
 }
 
@@ -63,9 +65,9 @@ function requestsCard(state) {
   return `
     <div class="card">
       <h3>${esc(coach?.name ?? '감독')}의 영입 요청</h3>
-      <table class="table compact clickable"><tbody>${list.map((r) => {
+      <table class="table compact"><tbody>${list.map((r) => {
         const p = state.players[r.playerId];
-        return `<tr data-action="selectTarget" data-id="${p.id}"><td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))} · ${age(p, state.date)}세 · 능력 ${overall(p)}</div>
+        return `<tr><td class="link-cell" data-action="selectTarget" data-id="${p.id}">${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))} · ${age(p, state.date)}세 · 능력 ${overall(p)}</div>
             <div class="chips small">${keyAttributes(p)}</div></td>
           <td class="small">${esc(r.reason)}</td><td class="num">${won(marketValue(p, state.date))}</td>
           <td class="offer-actions"><button class="btn primary small" data-action="answerRequest" data-id="${r.id}" data-answer="approve">승인</button>
@@ -80,10 +82,10 @@ function incomingCard(state) {
   return `
     <div class="card">
       <h3>받은 제안</h3>
-      ${offers.length ? `<table class="table compact clickable"><tbody>${offers.map((o) => {
+      ${offers.length ? `<table class="table compact"><tbody>${offers.map((o) => {
         const p = state.players[o.playerId];
-        return `<tr data-action="selectTarget" data-id="${p.id}">
-          <td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(state.clubs[o.clubId].name)} · ${formatDate(o.expires)}까지</div></td>
+        return `<tr>
+          <td class="link-cell" data-action="selectTarget" data-id="${p.id}">${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(state.clubs[o.clubId].name)} · ${formatDate(o.expires)}까지</div></td>
           <td class="num"><strong>${won(o.fee)}</strong></td>
           <td class="offer-actions">
             <button class="btn small primary" data-action="respondOffer" data-id="${o.id}" data-answer="accept">수락</button>
@@ -138,6 +140,17 @@ function searchCard(state, ui) {
           </tbody></table>${rows.length >= 100 ? '<p class="muted small">능력 순 상위 100명만 보여 줍니다. 조건을 좁혀 보세요.</p>' : ''}`
         : '<p class="muted">조건에 맞는 선수가 없습니다.</p>'}
     </div>`;
+}
+
+// 이적 기록에서 누른 선수: 협상 없이 프로필만
+function profileDetail(state, p) {
+  const info = playerInfo(state, p.id);
+  const body = `
+      <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${info.age}세 · ${esc(clubName(state, p.clubId))}</p>
+      <p>능력 <strong>${info.overall}</strong> · 잠재 ${potentialText(info)}</p>
+      <p class="muted">자리별 능력: ${info.ratings.map((r) => `${r.pos} ${r.rating}`).join(' · ')}</p>
+      ${playerProfile(state, p)}`;
+  return modal({ title: esc(p.name), body, close: 'data-action="showProfile" data-id=""' });
 }
 
 function targetDetail(state, p) {
@@ -216,6 +229,39 @@ function loanedOutCard(state, club) {
       <h3>임대 보낸 선수</h3>
       <table class="table compact"><tbody>${out.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td>
         <td>${esc(clubName(state, p.clubId))}</td><td class="small">상대 구단이 주급 ${p.loan.wageShare * 100}% 부담</td></tr>`).join('')}</tbody></table>
+    </div>`;
+}
+
+const LOG_SCOPES = { mine: '우리 구단', league: '우리 리그', all: '전체' };
+const LOG_TYPE = { loan: '임대', free: '자유계약' };
+
+// 시즌 이적 기록: 범위(우리 구단·우리 리그·전체)와 시즌을 골라 본다
+function historyCard(state, ui, club) {
+  const scope = ui.logScope ?? 'mine';
+  const season = ui.logSeason ?? state.season;
+  const filter = scope === 'mine' ? { clubId: club.id } : scope === 'league' ? { leagueId: club.leagueId } : {};
+  const rows = seasonTransfers(state, season, filter);
+  const spent = rows.filter((t) => t.to === club.id).reduce((sum, t) => sum + t.fee, 0);
+  const earned = rows.filter((t) => t.from === club.id).reduce((sum, t) => sum + t.fee, 0);
+  const seasons = [];
+  for (let y = state.season; y >= START_YEAR; y--) seasons.push([y, `${y}-${String(y + 1).slice(2)}`]);
+  const side = (id) => (id ? `<span class="${id === club.id ? 'good' : ''}">${esc(state.clubs[id].name)}</span>` : '<span class="muted">자유계약</span>');
+  return `
+    <div class="card">
+      <div class="card-head"><h3>시즌 이적 기록 <span class="muted small">${rows.length}건</span></h3>
+        <div class="form-row">
+          ${Object.entries(LOG_SCOPES).map(([k, v]) => `<button class="btn small ${k === scope ? 'primary' : ''}" data-action="logScope" data-scope="${k}">${v}</button>`).join('')}
+          <select data-change="logSeason">${options(seasons, season)}</select>
+        </div></div>
+      <p class="small">우리 구단 지출 <strong>${won(spent)}</strong> · 수입 <strong>${won(earned)}</strong></p>
+      ${rows.length ? `<div class="scroll-box"><table class="table compact clickable"><thead><tr><th>날짜</th><th>선수</th><th>보낸 구단</th><th></th><th>받은 구단</th><th class="num">이적료</th></tr></thead><tbody>
+        ${rows.slice(0, 300).map((t) => {
+          const p = state.players[t.playerId];
+          return `<tr data-action="showProfile" data-id="${p.id}"><td class="small">${formatDate(t.date)}</td>
+            <td>${posLabel(p.position)} ${esc(p.name)} <span class="muted small">${overall(p)}</span></td>
+            <td>${side(t.from)}</td><td>→</td><td>${side(t.to)}</td>
+            <td class="num">${t.fee ? won(t.fee) : `<span class="muted small">${LOG_TYPE[t.type] ?? '-'}</span>`}</td></tr>`;
+        }).join('')}</tbody></table></div>` : '<p class="muted">이 시즌 기록이 없습니다.</p>'}
     </div>`;
 }
 

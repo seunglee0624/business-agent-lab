@@ -223,6 +223,14 @@ export class App {
         this.render();
         break;
       }
+      case 'showProfile':
+        this.ui.profileId = d.id || null;
+        this.render();
+        break;
+      case 'logScope':
+        this.ui.logScope = d.scope;
+        this.render();
+        break;
       case 'readAll':
         markAllRead(s);
         this.persist();
@@ -438,6 +446,10 @@ export class App {
           });
         break;
       }
+      case 'logSeason':
+        this.ui.logSeason = Number(el.value);
+        this.render();
+        break;
       case 'setViewMode':
         s.settings.viewMode = el.value;
         this.persist();

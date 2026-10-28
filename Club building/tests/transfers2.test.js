@@ -18,7 +18,7 @@ const runUntil = (state, date) => {
 };
 const movesBetweenAi = (state, userId) => Object.values(state.players)
   .flatMap((p) => (p.transfers ?? []).map((t) => ({ ...t, p })))
-  .filter((t) => t.to !== userId && t.from !== userId);
+  .filter((t) => !t.loan && t.to !== userId && t.from !== userId);
 
 test('AI 구단끼리 여름 이적시장에서 선수를 사고팔며, 구단마다 3명 이하로 사고 등록 인원을 넘지 않는다', () => {
   const state = fresh();
@@ -160,4 +160,24 @@ test('AI 구단끼리 임대: 여름에 어린 후보 선수를 수준 낮은 �
     assert.ok(p.clubId === owner || (p.transfers ?? []).some((t) => t.date >= '2027-06-30'), p.name);
     assert.ok(!p.loan || p.loan.until > '2027-06-30');
   }
+});
+
+test('시즌 이적 기록: 그 시즌의 이적과 임대를 날짜순으로 모으고, 구단·리그로 거를 수 있다', async () => {
+  const { seasonTransfers } = await import('../js/core/game.js');
+  const state = fresh('log1');
+  const me = userClub(state);
+  const p = state.players[me.squad[me.squad.length - 1]];
+  assert.equal(loanOut(state, p.id).ok, true);
+  advance(state, { skipOffers: true });
+  advance(state, { skipOffers: true });
+  const all = seasonTransfers(state, 2026);
+  assert.ok(all.length >= 5, `${all.length}건`);
+  assert.ok(all.every((t, i) => i === 0 || all[i - 1].date >= t.date), '최근 것부터');
+  assert.ok(all.every((t) => t.playerId && t.to && ['transfer', 'free', 'loan'].includes(t.type)));
+  const mine = seasonTransfers(state, 2026, { clubId: me.id });
+  assert.ok(mine.some((t) => t.playerId === p.id && t.type === 'loan' && t.from === me.id));
+  assert.ok(mine.every((t) => t.from === me.id || t.to === me.id));
+  const eng = seasonTransfers(state, 2026, { leagueId: 'ENG1' });
+  assert.ok(eng.every((t) => [t.from, t.to].some((id) => id && state.clubs[id].leagueId === 'ENG1')));
+  assert.equal(seasonTransfers(state, 2025).length, 0);
 });

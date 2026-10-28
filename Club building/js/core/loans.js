@@ -18,6 +18,7 @@ function move(state, p, from, to, loan) {
   to.squad.push(p.id);
   p.clubId = to.id;
   p.transferListed = false;
+  if (loan) (p.transfers ??= []).push({ date: state.date, from: from.id, to: to.id, fee: 0, loan: true });
   if (loan) {
     p.loan = loan;
     (state.clubs[loan.from].loanedOut ??= []).includes(p.id) || state.clubs[loan.from].loanedOut.push(p.id);
