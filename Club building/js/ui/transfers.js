@@ -129,7 +129,7 @@ function searchCard(state, ui) {
         <label class="check"><input id="sFree" type="checkbox" ${q.freeOnly ? 'checked' : ''}> 자유계약만</label>
         <button class="btn primary" data-action="searchPlayers">검색</button>
       </div>
-      ${!ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수는 현재 능력과 자리별 능력만 보이고, 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
+      ${!ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수의 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
         : rows.length ? `<table class="table clickable"><thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>구단</th><th>능력</th><th>잠재</th><th class="num">몸값</th><th class="num">주급</th><th>계약</th><th></th></tr></thead><tbody>
           ${rows.map((r) => `<tr class="${ui.targetId === r.id ? 'selected' : ''}" data-action="selectTarget" data-id="${r.id}">
             <td>${posLabel(r.position)}</td><td>${esc(r.name)}</td><td>${r.age}</td><td class="small">${esc(clubName(state, r.clubId))}</td>

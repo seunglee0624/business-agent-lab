@@ -122,7 +122,7 @@ test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개�
   const feeStage = transfersView(state, { search, targetId: first.id });
   assert.match(feeStage, /1단계: 이적료/);
   assert.match(feeStage, new RegExp(`잠재 ${first.potentialRange[0]}~${first.potentialRange[1]}`));
-  assert.doesNotMatch(feeStage, /마무리|중거리/); // 세부 능력치는 숨긴다
+  assert.match(feeStage, /마무리/); // 협상 중에도 선수 프로필(능력치)을 보여 준다
   const { counter } = g.bidForPlayer(state, second.id, 1e6);
   g.bidForPlayer(state, second.id, counter);
   const termsStage = transfersView(state, { search, targetId: second.id });
