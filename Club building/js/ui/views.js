@@ -272,10 +272,25 @@ export function squadView(state, ui) {
 const nationName = (code) => NATIONS[code]?.name ?? code;
 const moraleClass = (m) => (m >= 70 ? 'a-high' : m >= 50 ? 'a-good' : m >= 30 ? 'a-mid' : 'a-low');
 
+const ATTR_GROUPS = { technical: '기술', mental: '정신', physical: '신체', goalkeeping: '골키퍼' };
+
+// 능력치와 이번 시즌 기록 (선수단·이적 화면이 같이 쓴다)
+export function playerProfile(state, p) {
+  const s = seasonStats(p, state.season, state.clubs[p.clubId]?.leagueId ?? userLeagueId(state));
+  return `
+      <div class="attrs">
+        ${Object.entries(ATTR_GROUPS).map(([g, name]) => {
+          if (g === 'goalkeeping' && p.position !== 'GK') return '';
+          return `<div><h4>${name}</h4>${ATTRIBUTES.filter((a) => a.group === g).map((a) =>
+            `<div class="attr"><span>${a.name}</span><span class="${attrClass(p.attrs[a.key])}">${p.attrs[a.key]}</span></div>`).join('')}</div>`;
+        }).join('')}
+      </div>
+      <h4>이번 시즌</h4>
+      <p>${s ? `${s.apps}경기 (선발 ${s.starts}) · ${s.minutes}분 · ${s.goals}골 ${s.assists}도움 · 평점 ${avgRating(s)} · 경고 ${s.yellows} 퇴장 ${s.reds}` : '출전 기록이 없습니다.'}</p>`;
+}
+
 export function playerDetail(state, p, ui = {}) {
-  const groups = { technical: '기술', mental: '정신', physical: '신체', goalkeeping: '골키퍼' };
   const leagueId = userLeagueId(state);
-  const s = seasonStats(p, state.season, leagueId);
   const record = state.discipline[leagueId]?.[p.id];
   const career = Object.entries(p.stats).sort((a, b) => b[0] - a[0]).flatMap(([season, comps]) => Object.entries(comps).map(([comp, x]) => ({ season, comp, x })));
   return `
@@ -284,15 +299,7 @@ export function playerDetail(state, p, ui = {}) {
       <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${age(p, state.date)}세 · ${esc(nationName(p.nation))}</p>
       <p>능력 ${ovrCell(p)} · 잠재 ${p.potential} · 컨디션 ${Math.round(p.condition)}%</p>
       ${p.secondary.length ? `<p class="muted">가능 포지션: ${p.secondary.map((x) => `${x} (${ratingAt(p, x)})`).join(', ')}</p>` : ''}
-      <div class="attrs">
-        ${Object.entries(groups).map(([g, name]) => {
-          if (g === 'goalkeeping' && p.position !== 'GK') return '';
-          return `<div><h4>${name}</h4>${ATTRIBUTES.filter((a) => a.group === g).map((a) =>
-            `<div class="attr"><span>${a.name}</span><span class="${attrClass(p.attrs[a.key])}">${p.attrs[a.key]}</span></div>`).join('')}</div>`;
-        }).join('')}
-      </div>
-      <h4>이번 시즌</h4>
-      <p>${s ? `${s.apps}경기 (선발 ${s.starts}) · ${s.minutes}분 · ${s.goals}골 ${s.assists}도움 · 평점 ${avgRating(s)} · 경고 ${s.yellows} 퇴장 ${s.reds}` : '출전 기록이 없습니다.'}</p>
+      ${playerProfile(state, p)}
       ${record ? `<p class="muted">리그 누적 경고 ${record.yellows}장${record.ban ? ` · 출전 정지 ${record.ban}경기 남음` : ''}</p>` : ''}
       ${p.injury ? `<p class="error">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
       ${contractBox(state, p, ui)}

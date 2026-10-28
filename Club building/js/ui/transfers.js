@@ -13,6 +13,7 @@ import { weeklyWageBill } from '../core/finance.js';
 import { formatDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
 import { esc, posLabel, won, age, attrClass } from './format.js';
+import { playerProfile } from './views.js';
 
 const eok = (amount) => Math.round(amount / 1e6) / 100; // 원 → 억 (소수 둘째 자리)
 
@@ -81,9 +82,9 @@ function incomingCard(state) {
   return `
     <div class="card">
       <h3>받은 제안</h3>
-      ${offers.length ? `<table class="table compact"><tbody>${offers.map((o) => {
+      ${offers.length ? `<table class="table compact clickable"><tbody>${offers.map((o) => {
         const p = state.players[o.playerId];
-        return `<tr>
+        return `<tr data-action="selectTarget" data-id="${p.id}">
           <td>${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(state.clubs[o.clubId].name)} · ${formatDate(o.expires)}까지</div></td>
           <td class="num"><strong>${won(o.fee)}</strong></td>
           <td class="offer-actions">
@@ -149,7 +150,14 @@ function targetDetail(state, p) {
   const stage = !p.clubId ? 'terms' : live?.stage ?? 'fee';
   const value = p.clubId ? marketValue(p, state.date) : 0;
   let box;
-  if (stage === 'collapsed') {
+  if (p.clubId === club.id) {
+    const offers = state.transfers.incoming.filter((o) => o.playerId === p.id);
+    box = offers.length
+      ? offers.map((o) => `<p>${esc(state.clubs[o.clubId].name)}의 제안 <strong>${won(o.fee)}</strong> <span class="muted small">${formatDate(o.expires)}까지</span>
+          <button class="btn small primary" data-action="respondOffer" data-id="${o.id}" data-answer="accept">수락</button>
+          <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="reject">거절</button></p>`).join('')
+      : '<p class="muted">우리 선수입니다.</p>';
+  } else if (stage === 'collapsed') {
     box = '<p class="error">협상이 결렬되었습니다. 다음 이적시장에 다시 시도하세요.</p>';
   } else if (stage === 'fee') {
     box = `
@@ -180,7 +188,8 @@ function targetDetail(state, p) {
       ${p.transferRequest ? '<p class="error small">이적을 요청한 선수라 조금 싸게 살 수 있습니다.</p>' : ''}
       ${p.injury ? `<p class="error small">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
       <div class="renew">${box}</div>
-      ${loanBox(state, p)}
+      ${p.clubId === club.id ? '' : loanBox(state, p)}
+      ${playerProfile(state, p)}
     </div>`;
 }
 
