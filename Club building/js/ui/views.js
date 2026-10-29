@@ -11,10 +11,10 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
-import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
 import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -97,6 +97,7 @@ const NAV = [
   ['club', '구단'],
   ['finance', '재정'],
   ['fans', '팬'],
+  ['sponsors', '스폰서'],
   ['transfers', '이적'],
   ['history', '기록'],
   ['settings', '설정'],
@@ -765,6 +766,7 @@ export function fansView(state, ui = {}) {
         <ul class="fan-list">${reactions.map((r) => `
           <li><span class="dot" style="background:${SEG_COLOR[r.key]}"></span><strong>${r.name}</strong> ${r.share}%
             <p class="small ${r.mood === 'good' ? 'good' : r.mood === 'bad' ? 'error' : 'muted'}">"${esc(r.line)}"</p></li>`).join('')}</ul>
+        <p class="small">해외 팬: <strong>${fans.overseas.toLocaleString()}명</strong> <span class="muted">(프리시즌 투어로 늘어나고, 스폰서 금액·굿즈 판매를 키웁니다)</span></p>
         <p class="small">라이벌: <strong>${esc(rivalOf(state, club)?.name ?? '없음')}</strong></p>
         <p class="muted small">충성층은 성적·연승, 유행층은 스타 영입(능력 75 이상)·다득점, 지역층은 유스 출신 출전, 가족층은 티켓값에 반응합니다. 비율은 시즌이 끝날 때 조금씩 바뀝니다.</p>
       </div>
@@ -890,6 +892,87 @@ function merchDetail(state, club, item, msg) {
         <button class="btn small" data-action="merchPrice" data-item="${item}">가격만 바꾸기</button></p>
       </div>`;
   return modal({ title: def.name, body, side, close: 'data-action="openMerch" data-item=""' });
+}
+
+const industryFans = (ind) => {
+  const parts = Object.entries(INDUSTRIES[ind].fans).map(([k, d]) => `${{ loyal: '충성층', trendy: '유행층', family: '가족층', local: '지역층' }[k]} ${d > 0 ? '+' : '−'}`);
+  return parts.length ? parts.join(' · ') : '반응 없음';
+};
+
+// 스폰서 탭: 계약, 받은 제안, 프리시즌 투어
+export function sponsorsView(state, ui = {}) {
+  const club = userClub(state);
+  const s = sponsorsOf(state, club);
+  const total = SLOT_KEYS.reduce((sum, k) => sum + (s.contracts[k]?.amount ?? 0), 0);
+  const rows = SLOT_KEYS.map((slot) => {
+    const c = s.contracts[slot];
+    const next = s.pending?.[slot];
+    const pitch = s.pitches.find((p) => p.slot === slot);
+    const state_ = pitch ? `<span class="muted small">${INDUSTRIES[pitch.industry].name} 영업 중 (${formatShortDate(pitch.ready)}쯤 결과)</span>`
+      : next ? `<span class="good small">다음: ${esc(next.company)} ${won(next.amount)}/년</span>`
+      : canPitch(state, club, slot) ? `<button class="btn small" data-action="openPitch" data-slot="${slot}">영업</button>` : '';
+    return `<tr><td><strong>${SLOTS[slot].name}</strong></td>
+      <td>${c ? `${esc(c.company)} <span class="muted small">${INDUSTRIES[c.industry].name}</span>` : '<span class="error">빈자리</span>'}</td>
+      <td class="num">${c ? won(c.amount) : '-'}</td><td>${c ? `${c.until.slice(0, 4)}년 6월` : ''}</td>
+      <td class="small">${c?.bonus ? `${c.bonus.target}위 이내 +${won(c.bonus.amount)}` : ''}</td><td>${state_}</td></tr>`;
+  }).join('');
+  const offers = s.offers.map((o) => `
+      <tr><td><strong>${esc(o.company)}</strong> <span class="muted small">${INDUSTRIES[o.industry].name}</span></td><td>${SLOTS[o.slot].name}</td>
+        <td class="num">${won(o.amount)}/년</td><td>${o.years}년</td><td class="small">${o.bonus.target}위 이내 +${won(o.bonus.amount)}</td><td class="small muted">${formatShortDate(o.expires)}까지 · 요구 ${o.asks}/${MAX_ASKS}</td>
+        <td class="offer-actions"><button class="btn small primary" data-action="sponsorAccept" data-id="${o.id}">수락</button>
+          <input id="ask-${o.id}" type="number" min="0" step="0.1" value="${Math.round(o.amount * 1.15 / 1e7) / 10}" title="요구 금액 (억 원/년)"><span class="small">억</span>
+          <button class="btn small" data-action="sponsorAsk" data-id="${o.id}">요구</button>
+          <button class="btn small" data-action="sponsorReject" data-id="${o.id}">거절</button></td></tr>`).join('');
+  return `
+    ${ui.sponsorMsg ? `<p class="${ui.sponsorMsg.ok ? 'good' : 'error'}">${esc(ui.sponsorMsg.text)}</p>` : ''}
+    <div class="card">
+      <h3>스폰서 계약 <span class="muted small">연 ${won(total)}</span></h3>
+      <table class="table compact"><thead><tr><th>자리</th><th>회사</th><th class="num">연 금액</th><th>계약 끝</th><th>성적 보너스</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="muted small">빈자리나 계약이 1년 안에 끝나는 자리에서 업종을 골라 영업하면 1~2주 뒤 1~3곳이 제안합니다. 금액은 리그·평판·성적·팬 만족도·해외 팬으로 정해집니다. 업종마다 팬층 반응이 다릅니다.</p>
+    </div>
+    <div class="card">
+      <h3>받은 제안</h3>
+      ${offers ? `<table class="table compact"><thead><tr><th>회사</th><th>자리</th><th class="num">금액</th><th>기간</th><th>보너스</th><th></th><th></th></tr></thead><tbody>${offers}</tbody></table>
+        <p class="muted small">더 많이 요구하면 회사가 금액을 올려 다시 제안하거나 받아들입니다. ${MAX_ASKS}번 넘게 요구하거나 너무 많이 요구하면 협상이 끝납니다.</p>` : '<p class="muted">받은 제안이 없습니다.</p>'}
+    </div>
+    ${tourCard(state, club)}
+    ${ui.pitchSlot ? pitchDetail(state, club, ui.pitchSlot) : ''}`;
+}
+
+function pitchDetail(state, club, slot) {
+  const rows = INDUSTRY_KEYS.map((ind) => `
+      <tr><td><strong>${INDUSTRIES[ind].name}</strong></td><td class="small">${industryFans(ind)}</td>
+        <td class="num small">약 ${won(baseIndustryValue(club, slot, ind))}/년</td>
+        <td><button class="btn small primary" data-action="pitchSponsor" data-slot="${slot}" data-industry="${ind}">영업</button></td></tr>`).join('');
+  const body = `<table class="table compact"><thead><tr><th>업종</th><th>팬 반응</th><th class="num">기준 금액</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted small">기준 금액은 지금 성적·만족도·해외 팬을 반영하기 전 값입니다. 팬 반응은 계약 중 매달 만족도에 반영됩니다.</p>`;
+  return modal({ title: `${SLOTS[slot].name} 영업`, body, close: 'data-action="openPitch" data-slot=""' });
+}
+
+const baseIndustryValue = (club, slot, ind) => Math.round((commercialBase(club) * 0.7 * SLOTS[slot].weight * INDUSTRIES[ind].mult) / 1e6) * 1e6;
+
+function tourCard(state, club) {
+  const t = club.tour?.season === state.season ? club.tour : null;
+  if (canChooseTour(state, club)) {
+    const rows = TOUR_KEYS.map((r) => {
+      const stars = tourStars(state, club, r);
+      return `<tr><td><strong>${TOURS[r].name}</strong></td><td class="num">${won(tourFee(club, r))}</td><td class="num">+${tourGain(state, club, r).toLocaleString()}명</td>
+        <td class="num">${TOURS[r].fatigue}</td><td class="small">${stars.length ? stars.map((p) => esc(p.name)).join(', ') : '-'}</td>
+        <td><button class="btn small primary" data-action="chooseTour" data-region="${r}">선택</button></td></tr>`;
+    }).join('');
+    return `
+    <div class="card">
+      <h3>프리시즌 투어 <span class="muted small">7월 15일까지</span></h3>
+      <table class="table compact"><thead><tr><th>지역</th><th class="num">초청료</th><th class="num">해외 팬</th><th class="num">피로</th><th>그 나라 주전</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <button class="btn small" data-action="chooseTour" data-region="none">가지 않음</button>
+      <p class="muted small">투어는 7월 31일까지 다녀옵니다. 멀리 갈수록 초청료와 해외 팬이 늘지만, 개막 전 체력이 떨어지고 부상 위험이 커집니다. 주전 선수의 나라로 가면 해외 팬이 더 늘어납니다.</p>
+    </div>`;
+  }
+  const status = !t ? '이번 시즌 투어를 정할 수 있는 기간(7월 1~15일)이 아닙니다.'
+    : t.region === 'none' ? '이번 시즌은 투어를 가지 않았습니다.'
+    : t.done ? `${TOURS[t.region].name} 투어: 초청료 ${won(t.fee)}, 해외 팬 +${t.gain.toLocaleString()}명${t.injured.length ? `, 부상 ${t.injured.length}명` : ''}`
+    : `${TOURS[t.region].name} 투어 중 (7월 31일까지)`;
+  return `<div class="card"><h3>프리시즌 투어</h3><p>${status}</p></div>`;
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산

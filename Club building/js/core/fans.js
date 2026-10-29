@@ -55,6 +55,11 @@ export function fansOf(club) {
     protestMonths: 0,
     streak: 0,
   };
+  // 해외 팬 (명): 평판이 높을수록 많다. 처음 값을 기준으로 늘어난 만큼 스폰서·굿즈가 늘어난다
+  if (club.fans.overseas === undefined) {
+    club.fans.overseas = Math.round(50000 * Math.exp((club.reputation - 55) * 0.08));
+    club.fans.overseasBase = club.fans.overseas;
+  }
   return club.fans;
 }
 
@@ -115,7 +120,7 @@ export function fanTransfer(state, p, from, to) {
 const isHomegrown = (p) => !!p.youthSince && !(p.transfers ?? []).some((t) => t.from);
 
 // 매달 1일 (출전 시간 초기화 전에 부른다)
-export function fanMonthly(state, club, date, priceLevel = 1) {
+export function fanMonthly(state, club, date, priceLevel = 1, extra = {}) {
   const fans = fansOf(club);
   const table = standings(state, club.leagueId);
   const played = table.find((r) => r.clubId === club.id)?.played ?? 0;
@@ -133,6 +138,7 @@ export function fanMonthly(state, club, date, priceLevel = 1) {
   d = add(d, { trendy: Math.min(4, fans.month.stars * 2) });
   if (fans.month.soldStarters) d = add(d, all(-1.5 * fans.month.soldStarters));
   if (club.finance.balance < 0) d = add(d, all(-2));
+  d = add(d, extra); // 스폰서 업종 반응
   // 티켓값: 기본보다 10% 넘게 비싸면 가족층·지역층이 불만, 10% 넘게 싸면 좋아한다
   if (Math.abs(priceLevel - 1) > 0.1) {
     const over = priceLevel - 1;
@@ -157,6 +163,12 @@ export function fanSeasonEnd(state, club, position) {
   if (position && position > teams - 3) raw.trendy -= 2;
   fans.shares = normalize(raw);
   fans.season = { stars: 0, youthMinutes: 0, minutes: 0 };
+}
+
+// 해외 팬 배율: 처음보다 늘어난 비율의 15%, 최대 1.25
+export function overseasFactor(club) {
+  const f = fansOf(club);
+  return Math.min(1.25, Math.max(1, 1 + (f.overseas / f.overseasBase - 1) * 0.15));
 }
 
 // 관중·상업 수입 배율: 시작값(60)이면 1, 0~100에서 ±10%. 항의가 이어지면 관중이 더 준다

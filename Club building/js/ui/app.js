@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -16,7 +16,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText, merchForecastText,
+  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -77,7 +77,7 @@ export class App {
     }
     const views = {
       home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, transfers: transfersView, manager: managerView,
+      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -255,6 +255,8 @@ export class App {
         this.persist();
         this.ui.fixtureId = null;
         this.ui.merchItem = null;
+        this.ui.pitchSlot = null;
+        this.ui.sponsorMsg = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
         this.ui.managerMsg = null;
@@ -302,6 +304,40 @@ export class App {
           freeOnly: this.root.querySelector('#sFree').checked,
         };
         this.ui.transferMsg = null;
+        this.render();
+        break;
+      }
+      case 'openPitch':
+        this.ui.pitchSlot = d.slot || null;
+        this.render();
+        break;
+      case 'pitchSponsor': {
+        const res = pitchSponsor(s, d.slot, d.industry);
+        this.ui.pitchSlot = null;
+        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? `${SLOTS[d.slot].name} 자리에 ${INDUSTRIES[d.industry].name} 업종 영업을 시작했습니다. ${res.ready}쯤 결과가 나옵니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'sponsorAccept':
+      case 'sponsorAsk': {
+        const ask = d.action === 'sponsorAsk' ? Number(this.root.querySelector(`#ask-${d.id}`).value) * 1e8 : null;
+        const res = answerSponsor(s, d.id, ask === null ? { accept: true } : { ask });
+        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? `${withParticle(res.contract.company, '와')} 연 ${won(res.contract.amount)}, ${res.contract.until.slice(0, 4)}년 6월까지 계약했습니다.${res.contract.from ? ` (지금 계약이 끝난 뒤 ${res.contract.from}부터)` : ''}` : res.reason.replace(/연 ([0-9,]+)원/, (m, n) => `연 ${won(Number(n.replace(/,/g, '')))}`) };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'sponsorReject':
+        rejectSponsor(s, d.id);
+        this.ui.sponsorMsg = { ok: true, text: '제안을 거절했습니다.' };
+        this.persist();
+        this.render();
+        break;
+      case 'chooseTour': {
+        const res = chooseTour(s, d.region);
+        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? (d.region === 'none' ? '이번 시즌은 투어를 가지 않습니다.' : `${TOURS[d.region].name} 투어를 떠납니다. 7월 31일에 돌아옵니다.`) : res.reason };
+        this.persist();
         this.render();
         break;
       }

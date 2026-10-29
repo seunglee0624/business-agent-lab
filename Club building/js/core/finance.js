@@ -113,8 +113,8 @@ export function recordGate(state, club, position, teams) {
 // 매달 마지막 날: 그달 몫을 정산한다
 export function monthlySettlement(state, club) {
   income(club, 'tv', roundMoney((tvPerSeason(club) * TV_EQUAL_SHARE) / 12));
-  const share = club.id === state.user?.clubId ? 1 - MERCH_SHARE : 1;
-  income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club) * share) / 12));
+  // 우리 구단의 상업 수입은 스폰서 계약(sponsors.js)과 굿즈(merch.js)로 들어온다
+  if (club.id !== state.user?.clubId) income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club)) / 12));
   expense(club, 'wages', roundMoney((playerWageBill(state, club) * 52) / 12));
   expense(club, 'staff', roundMoney((staffWageBill(club) * 52) / 12));
   expense(club, 'facilities', monthlyUpkeep(club));

@@ -8,6 +8,8 @@ import { resolveLineup } from './tactics.js';
 import * as transfers from './transfers.js';
 import * as tickets from './tickets.js';
 import * as merch from './merch.js';
+import * as sponsors from './sponsors.js';
+import * as tour from './tour.js';
 import * as loans from './loans.js';
 import { intensityOf } from './training.js';
 import * as staffwork from './staffwork.js';
@@ -191,11 +193,15 @@ function dailyTick(state, rng, date) {
   }
   if (date.endsWith('-01')) monthlyTick(state, rng, date);
   if (user) userMerchDay(state, user, date);
+  if (user) userCommercialDay(state, rng, user, date);
   transfers.dailyAiTransfers(state, rng, userId);
   loans.dailyAiLoans(state, rng, userId);
   const offer = userId ? transfers.dailyOffers(state, rng, state.clubs[userId]) : null;
   // 재정은 매달 마지막 날 정산한다 (6월분이 그 시즌 장부에 들어가도록)
-  if (addDays(date, 1).endsWith('-01')) for (const club of activeClubs(state)) monthlySettlement(state, club);
+  if (addDays(date, 1).endsWith('-01')) {
+    for (const club of activeClubs(state)) monthlySettlement(state, club);
+    if (user) sponsors.sponsorMonthly(state, user, true);
+  }
   if (date.slice(5) === YOUTH_INTAKE_DAY) {
     for (const club of activeClubs(state)) {
       const { players, golden } = youthIntake(state, rng, club);
@@ -252,6 +258,28 @@ function weeklyStaffWork(state, club) {
 }
 
 // 매달 1일: 사기 → 성장(출장 시간 초기화)
+// 스폰서 영업 결과, 투어 안내와 마무리
+function userCommercialDay(state, rng, club, date) {
+  for (const a of sponsors.sponsorDaily(state, rng, club)) {
+    addMessage(state, {
+      view: 'sponsors', important: true, title: `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`,
+      body: `${sponsors.INDUSTRIES[a.industry].name} 업종 영업 결과 ${a.offers.map((o) => o.company).join(', ')}에서 제안이 왔습니다. ${a.offers[0].expires}까지 답하세요.`,
+    });
+  }
+  if (date.slice(5) === '07-01' && tour.canChooseTour(state, club)) {
+    addMessage(state, { view: 'sponsors', title: '프리시즌 투어', body: '7월 15일까지 프리시즌 투어 지역을 정하세요. 정하지 않으면 투어를 가지 않습니다.' });
+  }
+  if (date.slice(5) === tour.TOUR_END) {
+    const t = tour.finishTour(state, rng, club);
+    if (t) {
+      addMessage(state, {
+        view: 'sponsors', title: `${tour.TOURS[t.region].name} 투어 마무리`,
+        body: `초청료 ${won(t.fee)}, 해외 팬 ${t.gain.toLocaleString()}명 증가.${t.injured.length ? ` 부상: ${t.injured.join(', ')}.` : ' 부상자는 없습니다.'}`,
+      });
+    }
+  }
+}
+
 // 굿즈: 첫 리그 홈 경기 날 주문 안 한 유니폼은 자동 생산, 그 뒤 날마다 판매
 function userMerchDay(state, club, date) {
   const homeMatch = fixturesOn(state, date).some((f) => f.home === club.id && f.competitionId === club.leagueId);
@@ -268,7 +296,7 @@ function monthlyTick(state, rng, date) {
   monthlyMorale(state, addMonths(date, -1));
   if (state.user?.clubId) {
     const club = userClub(state);
-    const { protest } = fanMonthly(state, club, date, priceLevel(club));
+    const { protest } = fanMonthly(state, club, date, priceLevel(club), sponsors.sponsorMonthly(state, club));
     if (protest) addMessage(state, { view: 'fans', important: true, title: '팬들의 항의', body: `팬 만족도가 ${PROTEST_LINE} 아래로 떨어져 팬들이 항의하고 있습니다. 이대로 가면 관중이 더 줄어듭니다.` });
   }
   monthlyDevelopment(state, rng);
@@ -553,6 +581,12 @@ export { fansOf, fanReactions, expectedPosition, SEGMENTS, PROTEST_LINE } from '
 export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from './tickets.js';
 
 export { merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from './merch.js';
+export { sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS } from './sponsors.js';
+export { TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars } from './tour.js';
+export const pitchSponsor = (state, slot, industry) => withRng(state, (rng) => sponsors.pitchSponsor(state, rng, userClub(state), slot, industry));
+export const answerSponsor = (state, offerId, opts) => sponsors.answerSponsor(state, userClub(state), offerId, opts);
+export const rejectSponsor = (state, offerId) => sponsors.rejectSponsor(state, userClub(state), offerId);
+export const chooseTour = (state, region) => tour.chooseTour(state, userClub(state), region);
 export const orderMerch = (state, item, opts) => merch.orderMerch(state, userClub(state), item, opts);
 export const setMerchPrice = (state, item, price) => merch.setMerchPrice(userClub(state), item, price);
 
