@@ -68,12 +68,13 @@ export function renewalDemand(state, club, p) {
 // 약속을 요구보다 낮추면 주급을 더 원하고, 높여 주면 조금 덜 받아도 된다
 export function requiredWage(demand, promise) {
   const diff = PROMISES[promise].rank - PROMISES[demand.promise].rank;
-  return demand.wage * (diff < 0 ? 1 + 0.25 * -diff : 1 - 0.08 * diff);
+  return demand.wage * (diff < 0 ? 1 + 0.15 * -diff : 1 - 0.08 * diff);
 }
 
-// 이적해 올 선수의 요구 조건: 지금 주급보다 10%, 능력 기준값보다 15% 더 원한다
+// 이적해 올 선수의 요구 조건: 지금 주급과 능력 기준값 중 큰 쪽보다 7% 더 원한다
+export const TRANSFER_WAGE_RAISE = 1.07;
 export function transferDemand(state, club, p) {
-  const wage = roundMoney(Math.max(wageFor(overall(p)) * 1.15, (p.contract?.wage ?? 0) * 1.1));
+  const wage = roundMoney(Math.max(wageFor(overall(p)), p.contract?.wage ?? 0) * TRANSFER_WAGE_RAISE);
   return { wage, promise: promiseForRank(squadRank(state, club, p)) };
 }
 
