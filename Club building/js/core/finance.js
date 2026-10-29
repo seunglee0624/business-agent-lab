@@ -163,7 +163,14 @@ export function adjustBudgets(state, club, wageBudget) {
   const { weeks, min, max, pool } = budgetRange(state, club);
   if (!(wageBudget >= min - 1 && wageBudget <= max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
   const f = club.finance;
-  f.wageBudget = roundMoney(Math.min(max, Math.max(min, wageBudget)));
+  // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산을 모두 주급으로 돌린다
+  const unit = max >= 1e8 ? 1e6 : 1e4;
+  if (wageBudget >= max - unit) {
+    f.wageBudget = roundMoney(max);
+    f.transferBudget = 0;
+    return { ok: true };
+  }
+  f.wageBudget = roundMoney(Math.max(min, wageBudget));
   f.transferBudget = roundMoney(Math.max(0, pool - f.wageBudget * weeks));
   return { ok: true };
 }
