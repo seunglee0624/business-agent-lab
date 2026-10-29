@@ -11,7 +11,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
@@ -724,8 +724,8 @@ export function clubView(state, ui) {
 
 // ---- 재정 ----
 
-const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', merch: '굿즈', transfers: '선수 판매' };
-const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', merch: '굿즈 생산', transfers: '선수 영입' };
+const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', merch: '굿즈', rental: '경기장 대관', transfers: '선수 판매' };
+const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', merch: '굿즈 생산', events: '행사·SNS', transfers: '선수 영입' };
 
 function ledgerTable(ledger) {
   const rows = (names, part, sign) => Object.entries(names)
@@ -752,6 +752,7 @@ export function fansView(state, ui = {}) {
   const prev = hist.length >= 2 ? hist[hist.length - 2].satisfaction : null;
   const change = prev === null ? '' : `<span class="small ${fans.satisfaction >= prev ? 'good' : 'error'}">지난달보다 ${fans.satisfaction >= prev ? '+' : ''}${Math.round((fans.satisfaction - prev) * 10) / 10}</span>`;
   return `
+    ${ui.fanMsg ? `<p class="${ui.fanMsg.ok ? 'good' : 'error'}">${esc(ui.fanMsg.text)}</p>` : ''}
     <div class="grid two">
       <div class="card">
         <h3>팬 만족도</h3>
@@ -774,8 +775,100 @@ export function fansView(state, ui = {}) {
       ${ticketHistory(state, club)}
       ${merchCard(state, club)}
       ${merchHistory(state, club)}
+      ${eventsCard(state, club)}
+      ${mediaCard(state, club)}
     </div>
-    ${ui.merchItem ? merchDetail(state, club, ui.merchItem, ui.merchMsg) : ''}`;
+    ${ui.merchItem ? merchDetail(state, club, ui.merchItem, ui.merchMsg) : ''}
+    ${ui.eventFixture ? eventDetail(state, club, ui.eventFixture, ui.eventMsg) : ''}`;
+}
+
+const fanDeltaText = (fans) => Object.entries(fans).map(([k, d]) => `${SEGMENTS[k].name} +${d}`).join(', ');
+
+// 경기장 행사: 앞으로의 홈 경기마다 행사 하나
+function eventsCard(state, club) {
+  const s = stadiumOf(club);
+  const rows = upcomingHomeFixtures(state).map((f) => {
+    const b = s.events.booked[f.id];
+    return `<tr><td>${formatShortDate(f.date)}</td><td>${esc(state.clubs[f.away].name)}</td>
+      <td>${b ? `<strong>${EVENTS[b.kind].name}</strong>` : '<span class="muted">-</span>'}</td>
+      <td><button class="btn small" data-action="openEvent" data-id="${f.id}">${b ? '보기' : '행사 열기'}</button></td></tr>`;
+  }).join('');
+  const hist = s.events.history.slice(0, 5).map((e) => `<tr><td>${formatShortDate(e.date)}</td><td>${EVENTS[e.kind].name}</td><td class="num">${won(e.cost)}</td><td class="num">${e.satisfaction >= 0 ? '+' : ''}${e.satisfaction}</td></tr>`).join('');
+  return `
+    <div class="card">
+      <h3>경기장 행사</h3>
+      ${rows ? `<table class="table compact"><thead><tr><th>날짜</th><th>상대</th><th>행사</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">남은 홈 경기가 없습니다.</p>'}
+      ${hist ? `<h4>지난 행사</h4><table class="table compact"><thead><tr><th>날짜</th><th>행사</th><th class="num">비용</th><th class="num">만족도</th></tr></thead><tbody>${hist}</tbody></table>` : ''}
+      <p class="muted small">홈 경기에 행사를 붙이면 그 경기 관중이 늘고 팬층 만족도가 오릅니다. 최근 ${4}번 안에 같은 행사를 또 열면 효과가 절반씩 줄어듭니다.</p>
+    </div>`;
+}
+
+function eventDetail(state, club, fixtureId, msg) {
+  const s = stadiumOf(club);
+  const f = upcomingHomeFixtures(state, 99).find((x) => x.id === fixtureId);
+  const close = 'data-action="openEvent" data-id=""';
+  if (!f) return modal({ title: '경기장 행사', body: '<p class="muted">이미 끝난 경기입니다.</p>', close });
+  const b = s.events.booked[f.id];
+  const rows = EVENT_KEYS.map((k) => {
+    const k2 = eventStrength(club, k);
+    return `<tr><td><strong>${EVENTS[k].name}</strong></td><td class="small">${fanDeltaText(EVENTS[k].fans)}</td>
+      <td class="num">+${Math.round((EVENTS[k].demand - 1) * k2 * 100)}%</td><td class="num">${won(eventCost(club, k))}</td>
+      <td class="small ${k2 < 1 ? 'error' : 'muted'}">${k2 < 1 ? `효과 ${Math.round(k2 * 100)}%` : ''}</td>
+      <td>${b ? '' : `<button class="btn small primary" data-action="bookEvent" data-id="${f.id}" data-kind="${k}">예약</button>`}</td></tr>`;
+  }).join('');
+  const body = `
+    <p>${formatDate(f.date)} vs ${esc(state.clubs[f.away].name)}</p>
+    ${b ? `<p>예약된 행사: <strong>${EVENTS[b.kind].name}</strong> (${won(b.cost)}) <button class="btn small" data-action="cancelEvent" data-id="${f.id}">취소 (절반 환불)</button></p>` : ''}
+    <table class="table compact"><thead><tr><th>행사</th><th>팬 반응</th><th class="num">관중 수요</th><th class="num">비용</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted small">비용은 예약할 때 나갑니다. 팬 반응은 각 팬층 만족도 변화이고, 전체 만족도에는 팬층 비율만큼 반영됩니다.</p>`;
+  const side = msg ? `<p class="${msg.ok ? 'good' : 'error'}">${esc(msg.text)}</p>` : '';
+  return modal({ title: '경기장 행사', body, side, close });
+}
+
+// SNS·미디어 캠페인
+function mediaCard(state, club) {
+  const m = mediaOf(club);
+  const running = m.running.map((c) => `<tr><td><strong>${CAMPAIGNS[c.kind].name}</strong></td><td>${formatShortDate(c.end)}까지</td><td class="num">+${c.added.toLocaleString()}명</td><td class="small muted">${c.players.map(esc).join(', ')}</td></tr>`).join('');
+  const rows = CAMPAIGN_KEYS.map((k) => {
+    const def = CAMPAIGNS[k];
+    const rep = repeatFactor(state, club, k);
+    const reason = canStartCampaign(state, club, k);
+    return `<tr><td><strong>${def.name}</strong></td><td class="num">${def.days}일</td><td class="num">${def.overseas ? `+${Math.round(def.overseas * 100)}%` : '-'}</td>
+      <td class="small">${fanDeltaText(def.fans)}</td><td class="num">${def.players}명 −${def.fatigue}</td><td class="num">${won(campaignCost(club, k))}</td>
+      <td class="small ${rep < 1 ? 'error' : ''}">${rep < 1 ? `효과 ${Math.round(rep * 100)}%` : ''}</td>
+      <td>${reason ? '' : `<button class="btn small primary" data-action="startCampaign" data-kind="${k}">시작</button>`}</td></tr>`;
+  }).join('');
+  const hist = m.history.slice(0, 5).map((c) => `<tr><td>${formatShortDate(c.end)}</td><td>${CAMPAIGNS[c.kind].name}</td><td class="num">+${c.gain.toLocaleString()}명</td><td class="num">${c.satisfaction >= 0 ? '+' : ''}${c.satisfaction}</td></tr>`).join('');
+  return `
+    <div class="card">
+      <h3>SNS·미디어 <span class="muted small">해외 팬 ${fansOf(club).overseas.toLocaleString()}명</span></h3>
+      ${running ? `<table class="table compact"><thead><tr><th>진행 중</th><th>기간</th><th class="num">해외 팬</th><th>참여 선수</th></tr></thead><tbody>${running}</tbody></table>` : ''}
+      <table class="table compact"><thead><tr><th>캠페인</th><th class="num">기간</th><th class="num">해외 팬</th><th>팬 반응</th><th class="num">선수 피로</th><th class="num">비용</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      ${hist ? `<h4>지난 캠페인</h4><table class="table compact"><thead><tr><th>끝난 날</th><th>캠페인</th><th class="num">해외 팬</th><th class="num">만족도</th></tr></thead><tbody>${hist}</tbody></table>` : ''}
+      <p class="muted small">동시에 ${MAX_RUNNING}개까지. 반응은 운에 따라 0.6~1.4배이고, 1년 안에 같은 캠페인을 다시 하면 효과가 60%로 줄어듭니다. 능력이 높은 선수부터 참여해 체력이 조금 떨어집니다.</p>
+    </div>`;
+}
+
+// 경기장 대관과 잔디 상태 (스폰서 탭)
+function rentalCard(state, club) {
+  const s = stadiumOf(club);
+  const sys = s.pitchSystem;
+  const offers = s.rentals.offers.map((o) => `<tr><td><strong>${RENTALS[o.kind].name}</strong></td><td>${formatShortDate(o.date)}</td><td class="num">${won(o.fee)}</td>
+      <td class="num">${hasPitchSystem(state, club) ? 0 : RENTALS[o.kind].damage}</td><td class="small muted">${formatShortDate(o.expires)}까지</td>
+      <td><button class="btn small primary" data-action="rentalAnswer" data-id="${o.id}" data-accept="1">수락</button> <button class="btn small" data-action="rentalAnswer" data-id="${o.id}" data-accept="">거절</button></td></tr>`).join('');
+  const booked = s.rentals.booked.map((b) => `<li>${formatShortDate(b.date)} ${RENTALS[b.kind].name} · ${won(b.fee)}</li>`).join('');
+  const sysText = hasPitchSystem(state, club) ? '<p class="good small">잔디 보호 시스템 가동 중: 대관해도 잔디가 상하지 않고 대관료가 20% 오릅니다.</p>'
+    : sys ? `<p class="small">${PITCH_SYSTEM.name} 공사 중 (${formatShortDate(sys.done)} 완공)</p>`
+    : `<p class="small">${PITCH_SYSTEM.name}: 개폐식 잔디로 대관 때 잔디를 보호합니다. 비용 ${won(pitchSystemCost())}, ${PITCH_SYSTEM.months}개월.
+        ${club.facilities.stadium >= PITCH_SYSTEM.minStadium ? '<button class="btn small" data-action="buildPitchSystem">짓기</button>' : `<span class="muted">(경기장 ${PITCH_SYSTEM.minStadium}레벨 이상 필요)</span>`}</p>`;
+  return `
+    <div class="card">
+      <h3>경기장 대관 <span class="muted small">잔디 상태 ${s.pitch}/100 · 홈 경기력 ${Math.round((pitchFactor(club) - 1) * 1000) / 10}%</span></h3>
+      ${offers ? `<table class="table compact"><thead><tr><th>행사</th><th>날짜</th><th class="num">대관료</th><th class="num">잔디 손상</th><th></th><th></th></tr></thead><tbody>${offers}</tbody></table>` : '<p class="muted">받은 대관 제안이 없습니다. 매달 1일에 제안이 옵니다.</p>'}
+      ${booked ? `<h4>예정된 대관</h4><ul class="small">${booked}</ul>` : ''}
+      ${sysText}
+      <p class="muted small">잔디는 하루 1씩 회복합니다. 상해 있는 동안 홈 경기 전력이 조금 떨어집니다. 6~7월 대관은 손상이 절반입니다.</p>
+    </div>`;
 }
 
 const range = (a) => `${won(a[0])} ~ ${won(a[1])}`;
@@ -935,6 +1028,7 @@ export function sponsorsView(state, ui = {}) {
       ${offers ? `<table class="table compact"><thead><tr><th>회사</th><th>자리</th><th class="num">금액</th><th>기간</th><th>보너스</th><th></th><th></th></tr></thead><tbody>${offers}</tbody></table>
         <p class="muted small">더 많이 요구하면 회사가 금액을 올려 다시 제안하거나 받아들입니다. ${MAX_ASKS}번 넘게 요구하거나 너무 많이 요구하면 협상이 끝납니다.</p>` : '<p class="muted">받은 제안이 없습니다.</p>'}
     </div>
+    ${rentalCard(state, club)}
     ${tourCard(state, club)}
     ${ui.pitchSlot ? pitchDetail(state, club, ui.pitchSlot) : ''}`;
 }

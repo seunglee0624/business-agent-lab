@@ -12,8 +12,8 @@ export const TRANSFER_BUDGET_RATIO = 0.35;
 const HISTORY_SEASONS = 5;
 
 export const emptyLedger = () => ({
-  income: { tv: 0, prize: 0, gate: 0, commercial: 0, merch: 0, transfers: 0 },
-  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, merch: 0, transfers: 0 },
+  income: { tv: 0, prize: 0, gate: 0, commercial: 0, merch: 0, rental: 0, transfers: 0 },
+  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, merch: 0, events: 0, transfers: 0 },
 });
 
 export const ledgerTotal = (part) => Object.values(part).reduce((s, x) => s + x, 0);

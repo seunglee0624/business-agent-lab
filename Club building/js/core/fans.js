@@ -75,6 +75,11 @@ function applyMood(fans, deltas) {
   return total;
 }
 
+// 행사·SNS 등 한 번에 오는 반응
+export function fanEvent(club, deltas) {
+  return applyMood(fansOf(club), deltas);
+}
+
 const all = (d) => Object.fromEntries(SEGMENT_KEYS.map((k) => [k, d]));
 const add = (a, b) => Object.fromEntries(SEGMENT_KEYS.map((k) => [k, (a[k] ?? 0) + (b[k] ?? 0)]));
 

@@ -55,6 +55,7 @@ function buildSide(setup, players, maxSubs) {
     auto: setup.auto !== false, // 교체를 자동으로
     aiTactics: setup.aiTactics !== false, // 스코어에 따라 성향을 자동으로 바꿈 (AI 구단만)
     injuryFactor: setup.injuryFactor ?? 1, // 스포츠 과학 센터·의료진 보정
+    pitchFactor: setup.pitchFactor ?? 1, // 홈 잔디 상태 (대관으로 상하면 1보다 작다)
     score: 0,
     shots: 0,
     onTarget: 0,
@@ -388,7 +389,7 @@ export function changeRole(match, s, playerId, role) {
 
 function playMinute(match, rng, newEvents) {
   const str = [
-    teamStrength(match.sides[0], match.players, HOME_BONUS),
+    teamStrength(match.sides[0], match.players, HOME_BONUS * (match.sides[0].pitchFactor ?? 1)),
     teamStrength(match.sides[1], match.players, 1),
   ];
   const c0 = str[0].control ** POSSESSION_POWER;

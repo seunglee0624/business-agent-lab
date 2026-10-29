@@ -65,11 +65,11 @@ export function seasonTicketDemand(club, price = ticketsOf(club).seasonPrice) {
 }
 
 // 한 경기 관중: 시즌권 좌석 + 남은 좌석에서 일반 티켓
-export function matchCrowd(club, grade, price, position, teams, holders = ticketsOf(club).seasonSold ?? seasonTicketDemand(club)) {
+export function matchCrowd(club, grade, price, position, teams, holders = ticketsOf(club).seasonSold ?? seasonTicketDemand(club), demand = 1) {
   const cap = capacity(club);
   const ratio = price / referencePrice(club, grade);
   // 시즌권 좌석을 뺀 나머지 좌석이 관중 비율·등급·가격에 따라 팔린다
-  const rate = Math.min(1, attendanceRate(club, position, teams) * GRADES[grade].demand * priceEffect(club, ratio));
+  const rate = Math.min(1, attendanceRate(club, position, teams) * GRADES[grade].demand * demand * priceEffect(club, ratio));
   const sold = Math.round((cap - holders) * rate);
   return { crowd: holders + sold, sold, holders, income: roundMoney(sold * price) };
 }
@@ -107,8 +107,8 @@ export function setTicketPrice(club, grade, price) {
   return { ok: true };
 }
 
-// 홈 경기 날: 첫 홈 경기면 시즌권을 확정하고, 일반 티켓 수입을 넣는다. 관중 수를 돌려준다
-export function recordHomeGate(state, home, away, position, teams, league) {
+// 홈 경기 날 (demand: 행사로 늘어난 수요 배율): 첫 홈 경기면 시즌권을 확정하고, 일반 티켓 수입을 넣는다. 관중 수를 돌려준다
+export function recordHomeGate(state, home, away, position, teams, league, demand = 1) {
   const t = ticketsOf(home);
   if (league && t.seasonSold === null) {
     t.seasonSold = seasonTicketDemand(home);
@@ -117,7 +117,7 @@ export function recordHomeGate(state, home, away, position, teams, league) {
   const grade = matchGrade(state, home, away);
   const price = t.prices[grade];
   // 리그 경기가 아니면 시즌권 좌석이 없다
-  const res = matchCrowd(home, grade, price, position, teams, league ? t.seasonSold : 0);
+  const res = matchCrowd(home, grade, price, position, teams, league ? t.seasonSold : 0, demand);
   income(home, 'gate', res.income);
   if (home.id === state.user?.clubId) {
     t.history.unshift({ date: state.date, opponent: away.id, grade, price, crowd: res.crowd, capacity: capacity(home), satisfaction: fansOf(home).satisfaction });

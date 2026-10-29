@@ -10,6 +10,8 @@ import * as tickets from './tickets.js';
 import * as merch from './merch.js';
 import * as sponsors from './sponsors.js';
 import * as tour from './tour.js';
+import * as stadium from './stadium.js';
+import * as media from './media.js';
 import * as loans from './loans.js';
 import { intensityOf } from './training.js';
 import * as staffwork from './staffwork.js';
@@ -269,6 +271,17 @@ function userCommercialDay(state, rng, club, date) {
   if (date.slice(5) === '07-01' && tour.canChooseTour(state, club)) {
     addMessage(state, { view: 'sponsors', title: '프리시즌 투어', body: '7월 15일까지 프리시즌 투어 지역을 정하세요. 정하지 않으면 투어를 가지 않습니다.' });
   }
+  if (date.endsWith('-01')) {
+    const made = stadium.rentalMonthly(state, rng, club, userHomeDates(state, club));
+    if (made.length) addMessage(state, { view: 'sponsors', title: '경기장 대관 제안', body: `${made.map((o) => `${stadium.RENTALS[o.kind].name}(${formatShortDate(o.date)}, ${won(o.fee)})`).join(', ')} 대관 제안이 왔습니다. ${formatShortDate(made[0].expires)}까지 답하세요.` });
+  }
+  for (const r of stadium.stadiumDaily(state, club)) {
+    if (r.system) addMessage(state, { view: 'sponsors', title: '잔디 보호 시스템 완공', body: '이제 대관 행사를 열어도 잔디가 상하지 않습니다. 대관 제안이 늘고 대관료도 오릅니다.', important: true });
+    else addNotice(state, { title: `${stadium.RENTALS[r.kind].name} 대관`, body: `대관료 ${won(r.fee)}.${r.damage ? ` 잔디가 상했습니다 (상태 ${club.stadium.pitch}). 회복될 때까지 홈 경기력이 조금 떨어집니다.` : ''}` });
+  }
+  for (const c of media.mediaDaily(state, club)) {
+    addNotice(state, { title: `${media.CAMPAIGNS[c.kind].name} 마무리`, body: `${media.reception(c.strength)}. 해외 팬 +${c.gain.toLocaleString()}명, 팬 만족도 ${c.satisfaction >= 0 ? '+' : ''}${c.satisfaction}.` });
+  }
   if (date.slice(5) === tour.TOUR_END) {
     const t = tour.finishTour(state, rng, club);
     if (t) {
@@ -278,6 +291,12 @@ function userCommercialDay(state, rng, club, date) {
       });
     }
   }
+}
+
+// 앞으로 남은 우리 홈 경기 날짜
+function userHomeDates(state, club) {
+  return new Set(Object.values(state.competitions).flatMap((c) => c.fixtures)
+    .filter((f) => f.home === club.id && !f.result).map((f) => f.date));
 }
 
 // 굿즈: 첫 리그 홈 경기 날 주문 안 한 유니폼은 자동 생산, 그 뒤 날마다 판매
@@ -388,7 +407,7 @@ function buildMatch(state, fixture) {
     id: fixture.id,
     competitionId: fixture.competitionId,
     date: fixture.date,
-    home: matchSetup(state, home, away, fixture.competitionId),
+    home: { ...matchSetup(state, home, away, fixture.competitionId), pitchFactor: stadium.pitchFactor(home) },
     away: matchSetup(state, away, home, fixture.competitionId),
     players: state.players,
     maxSubs: rule.maxSubs,
@@ -452,7 +471,9 @@ function applyResult(state, fixture, match) {
       opponent: state.clubs[home ? fixture.away : fixture.home],
     });
   }
-  fixture.result.crowd = recordHomeGate(state, homeClub, state.clubs[fixture.away], table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length, compId === homeClub.leagueId);
+  const event = homeClub.id === userId ? stadium.takeEvent(state, homeClub, fixture) : null;
+  fixture.result.crowd = recordHomeGate(state, homeClub, state.clubs[fixture.away], table.findIndex((r) => r.clubId === homeClub.id) + 1, table.length, compId === homeClub.leagueId, event?.demand ?? 1);
+  if (event) fixture.result.event = event.kind;
 
   for (const [pid, st] of Object.entries(match.stats)) {
     if (!st.minutes && !st.injured) continue;
@@ -587,6 +608,20 @@ export const pitchSponsor = (state, slot, industry) => withRng(state, (rng) => s
 export const answerSponsor = (state, offerId, opts) => sponsors.answerSponsor(state, userClub(state), offerId, opts);
 export const rejectSponsor = (state, offerId) => sponsors.rejectSponsor(state, userClub(state), offerId);
 export const chooseTour = (state, region) => tour.chooseTour(state, userClub(state), region);
+export { EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM } from './stadium.js';
+export { CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStart as canStartCampaign, MAX_RUNNING } from './media.js';
+export const bookEvent = (state, fixtureId, kind) => stadium.bookEvent(state, userClub(state), findFixture(state, fixtureId), kind);
+export const cancelEvent = (state, fixtureId) => stadium.cancelEvent(state, userClub(state), fixtureId);
+export const buildPitchSystem = (state) => stadium.buildPitchSystem(state, userClub(state));
+export const answerRental = (state, offerId, accept) => stadium.answerRental(state, userClub(state), offerId, accept, userHomeDates(state, userClub(state)));
+export const startCampaign = (state, kind) => withRng(state, (rng) => media.startCampaign(state, rng, userClub(state), kind));
+// 행사를 열 수 있는 앞으로의 홈 경기 (가까운 순)
+export function upcomingHomeFixtures(state, limit = 6) {
+  const id = state.user.clubId;
+  return Object.values(state.competitions).flatMap((c) => c.fixtures)
+    .filter((f) => f.home === id && !f.result && f.date > state.date)
+    .sort((a, b) => (a.date < b.date ? -1 : 1)).slice(0, limit);
+}
 export const orderMerch = (state, item, opts) => merch.orderMerch(state, userClub(state), item, opts);
 export const setMerchPrice = (state, item, price) => merch.setMerchPrice(userClub(state), item, price);
 
@@ -600,6 +635,8 @@ export function upgradeState(state) {
     for (const l of [club.finance.season, ...club.finance.history]) {
       l.income.merch ??= 0;
       l.expense.merch ??= 0;
+      l.income.rental ??= 0;
+      l.expense.events ??= 0;
     }
     if (club.staff && club.staff.marketing === undefined) {
       const levels = Object.values(club.staff);

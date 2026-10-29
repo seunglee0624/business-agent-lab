@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -257,6 +257,8 @@ export class App {
         this.ui.merchItem = null;
         this.ui.pitchSlot = null;
         this.ui.sponsorMsg = null;
+        this.ui.fanMsg = null;
+        this.ui.eventFixture = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
         this.ui.managerMsg = null;
@@ -337,6 +339,46 @@ export class App {
       case 'chooseTour': {
         const res = chooseTour(s, d.region);
         this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? (d.region === 'none' ? '이번 시즌은 투어를 가지 않습니다.' : `${TOURS[d.region].name} 투어를 떠납니다. 7월 31일에 돌아옵니다.`) : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'openEvent':
+        this.ui.eventFixture = d.id || null;
+        this.ui.eventMsg = null;
+        this.render();
+        break;
+      case 'bookEvent': {
+        const res = bookEvent(s, d.id, d.kind);
+        this.ui.eventMsg = { ok: res.ok, text: res.ok ? `${withParticle(EVENTS[d.kind].name, '을')} 예약했습니다. 비용 ${won(res.cost)}.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'cancelEvent': {
+        const res = cancelEvent(s, d.id);
+        this.ui.eventMsg = { ok: res.ok, text: res.ok ? `행사를 취소했습니다. ${withParticle(won(res.refund), '을')} 돌려받았습니다.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'startCampaign': {
+        const res = startCampaign(s, d.kind);
+        this.ui.fanMsg = { ok: res.ok, text: res.ok ? `${withParticle(CAMPAIGNS[d.kind].name, '을')} 시작했습니다. 참여: ${res.campaign.players.join(', ')}.` : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'rentalAnswer': {
+        const res = answerRental(s, d.id, !!d.accept);
+        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? (d.accept ? `${res.offer.date} 대관을 잡았습니다. 대관료 ${won(res.offer.fee)}.` : '대관 제안을 거절했습니다.') : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'buildPitchSystem': {
+        const res = buildPitchSystem(s);
+        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? `잔디 보호 시스템 공사를 시작했습니다. ${won(res.cost)}, ${res.done} 완공 예정.` : res.reason };
         this.persist();
         this.render();
         break;
