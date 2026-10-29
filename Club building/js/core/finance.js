@@ -23,7 +23,7 @@ export const ledgerTotal = (part) => Object.values(part).reduce((s, x) => s + x,
 export const tvPerSeason = (club) => TV_PER_CLUB[club.leagueId] * EUR;
 
 // 스폰서·상업 수입 (시즌): 구단 평판에 지수로 비례
-export const commercialPerSeason = (club) => 2e6 * Math.exp((club.reputation - 55) * 0.13) * EUR;
+export const commercialPerSeason = (club) => 3e6 * Math.exp((club.reputation - 55) * 0.13) * EUR;
 
 export function ticketPrice(club) {
   const rule = LEAGUES[club.leagueId];

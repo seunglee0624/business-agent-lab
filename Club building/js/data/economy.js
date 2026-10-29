@@ -3,10 +3,11 @@
 export const EUR = 1500;
 
 // 리그별 구단당 평균 중계권 수입 (시즌, 유로). 절반은 매달 똑같이, 절반은 시즌 끝 순위 상금
+// 2026-10-29: 상업 수입을 1.5배로 키운 만큼 리그 평균 수입이 같도록 줄임 (원래 값의 50% 아래로는 안 내림)
 export const TV_PER_CLUB = {
-  ENG1: 24e6, ESP1: 19e6, GER1: 17e6, ITA1: 18e6, FRA1: 12e6,
-  ENG2: 4.5e6, ESP2: 3e6, GER2: 3.3e6, ITA2: 2.7e6, FRA2: 2.3e6,
-  ENG3: 1e6, ESP3: 0.85e6, GER3: 1e6, ITA3: 0.65e6, FRA3: 0.6e6,
+  ENG1: 16.2e6, ESP1: 11.4e6, GER1: 10.5e6, ITA1: 11.2e6, FRA1: 6.2e6,
+  ENG2: 2.8e6, ESP2: 1.75e6, GER2: 2e6, ITA2: 1.6e6, FRA2: 1.2e6,
+  ENG3: 0.5e6, ESP3: 0.43e6, GER3: 0.5e6, ITA3: 0.33e6, FRA3: 0.3e6,
 };
 export const TV_EQUAL_SHARE = 0.5;
 
