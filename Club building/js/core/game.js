@@ -210,7 +210,7 @@ function dailyTick(state, rng, date) {
       if (club.id === userId) {
         const best = players.slice().sort((a, b) => b.potential - a.potential)[0];
         addMessage(state, {
-          view: 'youth', title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
+          view: 'squad', title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
           body: `${players.length}명이 U-21 팀에 입단했습니다. 가장 기대되는 선수는 ${best.name}(${best.position}, 잠재 ${best.potential})입니다.`,
           important: golden,
         });
@@ -631,6 +631,8 @@ export function setTicketPrice(state, grade, price) {
 
 // 예전 저장 파일 보정: 새로 생긴 값 채우기
 export function upgradeState(state) {
+  // 유스 탭은 선수단 탭에 합쳐졌다
+  for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
   for (const club of Object.values(state.clubs)) {
     for (const l of [club.finance.season, ...club.finance.history]) {
       l.income.merch ??= 0;

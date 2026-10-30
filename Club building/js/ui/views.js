@@ -86,7 +86,6 @@ const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
   ['manager', '감독'],
-  ['youth', '유스'],
   ['schedule', '일정'],
   ['table', '순위표'],
   ['club', '구단'],
@@ -234,8 +233,11 @@ export function squadView(state, ui) {
   });
   const selected = ui.playerId ? state.players[ui.playerId] : null;
   const sortBtn = (key, label) => `<button class="btn small ${sort === key ? 'primary' : ''}" data-action="squadSort" data-sort="${key}">${label}</button>`;
+  const tab = ui.squadTab === 'youth' ? 'youth' : 'first';
+  const tabs = `<div class="tabs">${[['first', `1군 (${club.squad.length})`], ['youth', `유스 (${club.youth.length})`]].map(([k, name]) => `<button class="tab ${k === tab ? 'active' : ''}" data-action="squadTab" data-tab="${k}">${name}</button>`).join('')}</div>`;
+  if (tab === 'youth') return tabs + youthView(state);
 
-  return `
+  return `${tabs}
     <div class="squad">
       <div class="card">
         <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>

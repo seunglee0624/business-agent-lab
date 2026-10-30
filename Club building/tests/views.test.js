@@ -26,7 +26,7 @@ function renderAll(state, ui = {}) {
     home: homeView(state, ui),
     squad: squadView(state, ui),
     squadDetail: squadView(state, { ...ui, playerId: club.squad[0] }),
-    youth: youthView(state, ui),
+    youth: squadView(state, { ...ui, squadTab: 'youth' }),
     schedule: scheduleView(state, ui),
     table: tableView(state, ui),
     tableOther: tableView(state, { tableLeague: 'GER3' }),
@@ -143,4 +143,14 @@ test('이적 화면: 검색 결과, 다른 구단 선수 상세(이적료·개�
   assert.match(offerView, /수락/);
   assert.match(offerView, /50억 원/);
   check({ feeStage, termsStage, freeView, offerView, squad: squadView(state, { playerId: me.squad[0] }) });
+});
+
+test('선수단 탭에서 1군과 유스를 나눠 보고, 유스 탭은 따로 없다', () => {
+  const state = g.createNewGame('squadtab');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const first = squadView(state, {});
+  assert.ok(first.includes('data-tab="youth"'));
+  assert.ok(first.includes('data-action="selectPlayer"'));
+  assert.ok(squadView(state, { squadTab: 'youth' }).includes('U-21 팀'));
+  assert.ok(!layout(state, { view: 'home' }, '').includes('data-view="youth"'));
 });

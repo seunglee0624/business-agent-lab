@@ -16,7 +16,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, scheduleView, tableView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
+  fixtureDetail, seasonEndBanner, confirmModal, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -76,7 +76,7 @@ export class App {
       return;
     }
     const views = {
-      home: homeView, squad: squadView, youth: youthView, schedule: scheduleView,
+      home: homeView, squad: squadView, schedule: scheduleView,
       table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
@@ -249,6 +249,11 @@ export class App {
         this.render();
         break;
       }
+      case 'squadTab':
+        this.ui.squadTab = d.tab;
+        this.ui.playerId = null;
+        this.render();
+        break;
       case 'nav':
         this.ui.view = d.view;
         markViewRead(this.state, d.view);
