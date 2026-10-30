@@ -4,7 +4,7 @@
 
 import * as g from '../js/core/game.js';
 import { LEAGUES } from '../js/data/countries/index.js';
-import { ledgerTotal, weeklyWageBill } from '../js/core/finance.js';
+import { ledgerTotal, weeklyWageBill, spendable } from '../js/core/finance.js';
 import { SEASON_RESET } from '../js/core/fans.js';
 if (process.env.FAN_RESET) SEASON_RESET.ratio = Number(process.env.FAN_RESET); // 측정용: 시즌 시작 만족도 보정 비율
 import { askingPrice, windowEnd } from '../js/core/transfers.js';
@@ -20,6 +20,8 @@ const LEAGUE = process.argv[3] ?? 'ENG1';
 const state = g.createNewGame(process.argv[4] ?? 'longrun');
 g.chooseLeague(state, LEAGUE, '측정');
 const club = () => g.userClub(state);
+// 운영 방식 (측정용): base 기본, wages 이적 예산을 전부 주급으로 돌려 자유계약 위주, invest 시설에 적극 투자, youth 영입 없이 유스·시설
+const STRATEGY = process.env.STRATEGY ?? 'base';
 const eok = (x) => Math.round(x / 1e8);
 
 // 행동 기록: 이름 → { ok, fail: { 이유: 횟수 } }
@@ -37,12 +39,14 @@ function act(name, res) {
 // ---- 이적 ----
 function transfersWeek() {
   const c = club();
+  if (STRATEGY === 'youth') return;
   if (windowEnd(state.date)) act('감독에게 추천 요구', g.askCoach(state));
   for (const req of g.transferRequests(state)) act('영입 요청 승인', g.answerRequest(state, req.id, 'approve'));
   if (!windowEnd(state.date)) return;
   for (const [pid, deal] of Object.entries(state.transfers.deals)) {
     const p = state.players[pid];
     if (!p || p.clubId === c.id || deal.stage === 'collapsed' || deal.until < state.date) continue;
+    if (deal.stage === 'fee' && STRATEGY === 'wages') continue;
     if (deal.stage === 'fee') {
       const res = act('이적료 제안', g.bidForPlayer(state, pid, Math.min(c.finance.transferBudget, askingPrice(state, p))));
       if (!res.ok) continue;
@@ -97,6 +101,19 @@ function seasonStartPlans() {
   // 잔고가 비용의 3배 넘는 시설 중 가장 싼 것 하나
   const options = FACILITY_KEYS.filter((k) => !isBuilding(c, k)).map((k) => ({ k, info: upgradeInfo(c, k) })).filter((o) => o.info)
     .sort((a, b) => a.info.cost - b.info.cost);
+  if (STRATEGY === 'wages') {
+    // 이적 예산을 모두 주급 예산으로 돌린다
+    act('재정 조정 (시즌 시작 전부 주급)', { ok: true, ...g.adjustBudgets(state, g.budgetRange(state).max) });
+  }
+  if (STRATEGY === 'invest' || STRATEGY === 'youth') {
+    // 훈련장·유스 시설을 먼저, 쓸 수 있는 돈이 되는 대로 짓는다
+    const order = ['training', 'academy', ...FACILITY_KEYS.filter((k) => k !== 'training' && k !== 'academy')];
+    for (const k of order) {
+      const info = upgradeInfo(c, k);
+      if (info && !isBuilding(c, k) && spendable(c) > info.cost * 1.2) act('시설 업그레이드', g.upgradeFacility(state, k));
+    }
+    return;
+  }
   const pick = options.find((o) => c.finance.balance > o.info.cost * 3);
   if (pick) act(`시설 업그레이드`, g.upgradeFacility(state, pick.k));
   if (c.facilities.stadium >= 3 && !g.stadiumOf(c).pitchSystem && c.finance.balance > g.pitchSystemCost() * 3) act('잔디 보호 시스템', g.buildPitchSystem(state));
@@ -267,4 +284,6 @@ for (const [name, r] of Object.entries(log)) {
 }
 console.log('\n== 진행 멈춤 ==');
 console.log(Object.entries(stops).map(([k, v]) => `${k} ${v}`).join(' · '));
+const t3 = seasons.findIndex((x) => x.리그.endsWith('3') && x.순위 <= 3);
+console.log(`\n전략 ${STRATEGY} · 경로 ${seasons.map((x) => `${x.리그} ${x.순위}`).join(' → ')} · 3부 상위 3위 첫 달성: ${t3 < 0 ? '없음' : `${t3 + 1}시즌째`}`);
 console.log(`\n최종 주급 ${eok(weeklyWageBill(state, club()) * 52)}억/년 · 주급 예산 ${eok(club().finance.wageBudget * 52)}억/년 · 이적 예산 ${eok(club().finance.transferBudget)}억`);
