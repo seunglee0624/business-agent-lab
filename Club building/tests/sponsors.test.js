@@ -97,3 +97,20 @@ test('처음 스폰서 회사는 자리마다 다르다', () => {
     assert.equal(new Set(names).size, names.length);
   }
 });
+
+test('스폰서: 팬 만족도가 바닥이어도 제안 금액이 0이 되지 않고, 거절당하면 요구 칸이 새 제안과 지난 요구 사이로 바뀐다', () => {
+  const state = fresh('sponsor-low');
+  const club = g.userClub(state);
+  g.fansOf(club).satisfaction = 0;
+  g.pitchSponsor(state, 'partner3', 'betting');
+  state.date = g.sponsorsOf(state, club).pitches[0].ready;
+  const [{ offers }] = sponsorDaily(state, new Rng('low'), club);
+  assert.ok(offers.every((o) => o.amount > 0 && o.bonus.amount > 0));
+  const o = offers[0];
+  const ask = Math.round(o.max * 1.1);
+  const res = g.answerSponsor(state, o.id, { ask });
+  assert.equal(res.ok, false);
+  const html = sponsorsView(state, {});
+  const val = Number(html.match(new RegExp(`id="ask-${o.id}"[^>]*value="([0-9.]+)"`))[1]) * 1e8;
+  assert.ok(val > o.amount * 0.99 && val < ask, `${val} 은 ${o.amount}~${ask} 사이`);
+});

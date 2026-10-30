@@ -954,6 +954,9 @@ const industryFans = (ind) => {
 };
 
 // 스폰서 탭: 계약, 받은 제안, 프리시즌 투어
+// 요구 금액 칸 기본값: 처음엔 제안의 1.15배, 거절당한 뒤엔 다시 제안한 금액과 지난번 요구 사이 (억 원)
+const askDefault = (o) => Math.round((o.lastAsk ? (o.amount + o.lastAsk) / 2 : o.amount * 1.15) / 1e7) / 10;
+
 export function sponsorsView(state, ui = {}) {
   const club = userClub(state);
   const s = sponsorsOf(state, club);
@@ -974,7 +977,7 @@ export function sponsorsView(state, ui = {}) {
       <tr><td><strong>${esc(o.company)}</strong> <span class="muted small">${INDUSTRIES[o.industry].name}</span></td><td>${SLOTS[o.slot].name}</td>
         <td class="num">${won(o.amount)}/년</td><td>${o.years}년</td><td class="small">${o.bonus.target}위 이내 +${won(o.bonus.amount)}</td><td class="small muted">${formatShortDate(o.expires)}까지 · 요구 ${o.asks}/${MAX_ASKS}</td>
         <td class="offer-actions"><button class="btn small primary" data-action="sponsorAccept" data-id="${o.id}">수락</button>
-          <input id="ask-${o.id}" type="number" min="0" step="0.1" value="${Math.round(o.amount * 1.15 / 1e7) / 10}" title="요구 금액 (억 원/년)"><span class="small">억</span>
+          <input id="ask-${o.id}" type="number" min="0" step="0.1" value="${askDefault(o)}" title="요구 금액 (억 원/년)"><span class="small">억</span>
           <button class="btn small" data-action="sponsorAsk" data-id="${o.id}">요구</button>
           <button class="btn small" data-action="sponsorReject" data-id="${o.id}">거절</button></td></tr>`).join('');
   return `

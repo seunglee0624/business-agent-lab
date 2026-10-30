@@ -46,13 +46,13 @@ export function baseValue(club, slot, industry) {
   return commercialPerSeason(club) * SPONSOR_SHARE * SLOTS[slot].weight * INDUSTRIES[industry].mult;
 }
 
-// 지금 구단 가치: 성적(기대 순위 대비), 팬 만족도, 해외 팬
+// 지금 구단 가치: 성적(기대 순위 대비), 팬 만족도(아무리 낮아도 0.6배), 해외 팬
 export function clubAppeal(state, club) {
   const table = standings(state, club.leagueId);
   const pos = table.findIndex((r) => r.clubId === club.id) + 1;
   const played = table.find((r) => r.clubId === club.id)?.played ?? 0;
   const form = played >= 5 ? Math.max(-0.1, Math.min(0.1, (expectedPosition(state, club) - pos) * 0.015)) : 0;
-  const sat = Math.sqrt(fansOf(club).satisfaction / START_SATISFACTION);
+  const sat = Math.max(0.6, Math.sqrt(fansOf(club).satisfaction / START_SATISFACTION));
   return (1 + form) * sat * overseasFactor(club);
 }
 
@@ -166,6 +166,7 @@ export function answerSponsor(state, club, offerId, { accept = false, ask = null
   if (ask <= offer.amount) return { ok: true, contract: sign(state, club, offer, offer.amount) };
   if (ask <= offer.max) return { ok: true, contract: sign(state, club, offer, ask) };
   offer.asks++;
+  offer.lastAsk = roundMoney(ask);
   if (ask > offer.max * WALK_AWAY || offer.asks >= MAX_ASKS) {
     s.offers = s.offers.filter((o) => o !== offer);
     return { ok: false, collapsed: true, reason: `${withParticle(offer.company, '가')} 협상을 끝냈습니다.` };
