@@ -89,8 +89,7 @@ const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
   ['manager', '감독'],
-  ['schedule', '일정'],
-  ['table', '순위표'],
+  ['competition', '대회 정보'],
   ['club', '구단'],
   ['finance', '재정'],
   ['fans', '팬'],
@@ -181,7 +180,7 @@ export function homeView(state) {
       <div class="card">
         <h3>순위</h3>
         <table class="table compact"><thead><tr><th>#</th><th>구단</th><th>경기</th><th>승점</th></tr></thead><tbody>${mini}</tbody></table>
-        <button class="btn small" data-action="nav" data-view="table">전체 순위</button>
+        <button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button>
       </div>
       <div class="card">
         <h3>구단 상황</h3>
@@ -371,6 +370,14 @@ export function teamTacticsCard(state) {
         <tr><td>수비 라인</td><td>${esc(LINE[t.line])}</td><td></td><td></td></tr>
       </tbody></table>
     </div>`;
+}
+
+// ---- 대회 정보: 순위표와 일정 ----
+
+export function competitionView(state, ui) {
+  const tab = ui.compTab === 'schedule' ? 'schedule' : 'table';
+  const tabs = `<div class="tabs">${[['table', '순위표'], ['schedule', '일정']].map(([k, name]) => `<button class="tab ${k === tab ? 'active' : ''}" data-action="compTab" data-tab="${k}">${name}</button>`).join('')}</div>`;
+  return tabs + (tab === 'schedule' ? scheduleView(state, ui) : tableView(state, ui));
 }
 
 // ---- 일정 ----

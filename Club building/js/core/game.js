@@ -616,7 +616,7 @@ function endSeason(state) {
   const pos = table.findIndex((r) => r.clubId === state.user.clubId) + 1;
   const champion = state.clubs[table[0].clubId];
   addMessage(state, {
-    view: 'table', title: '시즌 종료',
+    view: 'competition', title: '시즌 종료',
     body: `${LEAGUES[userLeagueId(state)].name}에서 ${withParticle(champion.name, '가')} 우승했습니다. 우리 팀은 ${pos}위로 시즌을 마쳤습니다.`,
     important: true,
   });
@@ -646,7 +646,7 @@ function runSeasonTransition(state) {
   moveTo(state, seasonStart(state.season));
   state.phase = 'season';
   addMessage(state, {
-    view: 'schedule', title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
+    view: 'competition', title: `${state.season}-${String(state.season + 1).slice(2)} 시즌 시작`,
     body: `${LEAGUES[userLeagueId(state)].name} 개막은 ${formatDate(league(state).fixtures[0].date)}입니다.`,
   });
   return summary;
@@ -743,6 +743,8 @@ export function upgradeState(state) {
   for (const c of Object.values(state.clubs)) if (c.finance) c.finance.transferBudget = Math.max(0, Math.min(c.finance.transferBudget, c.finance.balance));
   // 유스 탭은 선수단 탭에 합쳐졌다
   for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
+  // 순위표·일정 탭은 대회 정보 탭에 합쳐졌다
+  for (const m of state.inbox ?? []) if (m.view === 'table' || m.view === 'schedule') m.view = 'competition';
   for (const club of Object.values(state.clubs)) {
     for (const l of [club.finance.season, ...club.finance.history]) {
       l.income.merch ??= 0;
@@ -750,6 +752,9 @@ export function upgradeState(state) {
       l.income.rental ??= 0;
       l.expense.events ??= 0;
     }
+    // 전용기 시설은 없어졌다
+    if (club.facilities) delete club.facilities.jet;
+    if (club.construction) club.construction = club.construction.filter((c) => c.key !== 'jet');
     if (club.staff && club.staff.marketing === undefined) {
       const levels = Object.values(club.staff);
       club.staff.marketing = Math.round(levels.reduce((s, x) => s + x, 0) / Math.max(1, levels.length));

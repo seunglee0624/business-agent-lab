@@ -1,4 +1,4 @@
-// 간단한 사기 (0~100): 매달 출전 시간(계약 약속 대비), 주급 비교, 숙소·전용기, 팀 성적으로 변한다.
+// 간단한 사기 (0~100): 매달 출전 시간(계약 약속 대비), 주급 비교, 숙소, 팀 성적으로 변한다.
 // 면담과 성격은 5단계에서 넣는다.
 
 import { PROMISES } from '../data/economy.js';
@@ -40,7 +40,7 @@ export function monthlyMorale(state, prevMonthStart) {
     if (club.status !== 'active') continue;
     const t = tally.get(club.id);
     const squad = club.squad.map((id) => state.players[id]);
-    const facilities = (club.facilities.housing + club.facilities.jet - 6) * 2;
+    const facilities = (club.facilities.housing - 3) * 4;
     const form = t ? (t.points / t.games - 1.4) * 6 : 0;
     for (const p of squad) {
       let target = 60 + facilities + form;

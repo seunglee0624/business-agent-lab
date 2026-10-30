@@ -226,6 +226,12 @@ test('감독: 포지션 진단으로 부족한 자리를 알려 주고, 추천 �
   assert.equal(g.askCoach(state).ok, false, '일주일에 한 번');
   const html = managerView(state, {});
   assert.match(html, /선수단 진단/);
+  // 문제 있는 자리만 칸으로, 칸을 누르면 전체 진단 모달
+  assert.match(html, /class="need-tile" data-action="openNeeds"/);
+  assert.doesNotMatch(html, /선수단 전체 진단/);
+  const tiles = html.match(/class="need-tile"/g).length;
+  assert.equal(tiles, g.positionNeeds(state).filter((n) => n.status !== 'ok').length);
+  assert.match(managerView(state, { needsOpen: true }), /선수단 전체 진단/);
   assert.match(html, /data-action="askCoach"/);
   state.date = '2026-10-01';
   const closed = g.askCoach(state);

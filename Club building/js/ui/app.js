@@ -15,7 +15,7 @@ import { upgradeInfo } from '../core/facilities.js';
 import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
-  newGameView, layout, homeView, squadView, scheduleView, tableView, settingsView,
+  newGameView, layout, homeView, squadView, competitionView, settingsView,
   fixtureDetail, seasonEndBanner, confirmModal, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
@@ -76,8 +76,7 @@ export class App {
       return;
     }
     const views = {
-      home: homeView, squad: squadView, schedule: scheduleView,
-      table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
+      home: homeView, squad: squadView, competition: competitionView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
@@ -251,6 +250,14 @@ export class App {
         this.render();
         break;
       }
+      case 'openNeeds':
+        this.ui.needsOpen = !!d.open;
+        this.render();
+        break;
+      case 'compTab':
+        this.ui.compTab = d.tab;
+        this.render();
+        break;
       case 'squadTab':
         this.ui.squadTab = d.tab;
         this.ui.playerId = null;
@@ -258,6 +265,8 @@ export class App {
         break;
       case 'nav':
         this.ui.view = d.view;
+        if (d.tab) this.ui.compTab = d.tab;
+        this.ui.needsOpen = false;
         markViewRead(this.state, d.view);
         this.persist();
         this.ui.fixtureId = null;

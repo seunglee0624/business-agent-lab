@@ -32,7 +32,6 @@ export const FACILITIES = {
   recovery: { name: '수영장·회복 센터', effect: '경기 후 체력 회복 속도' },
   sportsScience: { name: '스포츠 과학 센터', effect: '부상 확률 감소' },
   housing: { name: '선수 숙소·클럽하우스', effect: '선수 사기 유지' },
-  jet: { name: '전용기', effect: '선수 사기 유지 (4단계: 유럽 원정 피로 감소)' },
   megastore: { name: '메가스토어', effect: '평균 관중 수와 티켓값 증가' },
 };
 export const FACILITY_KEYS = Object.keys(FACILITIES);

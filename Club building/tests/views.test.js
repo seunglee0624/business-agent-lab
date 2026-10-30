@@ -5,7 +5,7 @@ import { FORMATIONS } from '../js/data/formations.js';
 import { pitchLayout } from '../js/ui/pitch.js';
 import { transfersView } from '../js/ui/transfers.js';
 import {
-  newGameView, layout, homeView, squadView, scheduleView, tableView, settingsView, fixtureDetail,
+  newGameView, layout, homeView, squadView, scheduleView, tableView, competitionView, settingsView, fixtureDetail,
   seasonEndBanner, youthView, historyView, clubView, financeView,
 } from '../js/ui/views.js';
 import { managerView } from '../js/ui/manager.js';
@@ -30,6 +30,8 @@ function renderAll(state, ui = {}) {
     schedule: scheduleView(state, ui),
     table: tableView(state, ui),
     tableOther: tableView(state, { tableLeague: 'GER3' }),
+    competition: competitionView(state, ui),
+    competitionSchedule: competitionView(state, { ...ui, compTab: 'schedule' }),
     history: historyView(state, ui),
     settings: settingsView(state, ui),
     club: clubView(state, ui),
@@ -163,4 +165,20 @@ test('선수단: 선발순으로 정렬하면 선발 11명이 먼저, 그다음 
   assert.equal(marks.filter((m) => m === '선발').length, 11);
   assert.deepEqual(marks.slice(0, 11), Array(11).fill('선발'));
   assert.ok(marks.slice(11).every((m) => m === '교체'));
+});
+
+test('대회 정보 탭: 순위표와 일정을 안의 버튼으로 바꿔 보고, 메뉴에는 순위표·일정 대신 대회 정보가 있다', () => {
+  const state = g.createNewGame('comp');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const table = competitionView(state, {});
+  assert.match(table, /data-action="compTab" data-tab="schedule"/);
+  assert.match(table, /득점 순위/);
+  assert.match(competitionView(state, { compTab: 'schedule' }), /우리 경기/);
+  const nav = layout(state, { view: 'competition' }, '');
+  assert.match(nav, /data-view="competition"[^>]*>대회 정보/);
+  assert.doesNotMatch(nav, /data-view="table"|data-view="schedule"/);
+  // 예전 저장 파일의 순위표·일정 메시지는 대회 정보로 연결된다
+  state.inbox.push({ id: 'old', view: 'table', title: 'x', body: '', read: false });
+  g.upgradeState(state);
+  assert.equal(state.inbox.find((m) => m.id === 'old').view, 'competition');
 });

@@ -408,11 +408,11 @@ export function seasonEndMessages(state, summary) {
   const last = state.user.history.at(-1);
   const club = state.clubs[last.clubId];
   const leagueName = LEAGUES[summary.userLeague].name;
-  addMessage(state, { view: 'table', title: '시즌 결과', body: `${leagueName} ${summary.userPos}위로 시즌을 마쳤습니다.`, important: true });
+  addMessage(state, { view: 'competition', title: '시즌 결과', body: `${leagueName} ${summary.userPos}위로 시즌을 마쳤습니다.`, important: true });
   if (summary.move) {
     const up = LEAGUES[summary.move.to].tier < LEAGUES[summary.move.from].tier;
     addMessage(state, {
-      view: 'table', title: up ? '승격!' : '강등',
+      view: 'competition', title: up ? '승격!' : '강등',
       body: up ? `${withParticle(club.name, '가')} ${withParticle(LEAGUES[summary.move.to].name, '로')} 승격했습니다!` : `${withParticle(club.name, '가')} ${withParticle(LEAGUES[summary.move.to].name, '로')} 강등되었습니다.`,
       important: true,
     });
