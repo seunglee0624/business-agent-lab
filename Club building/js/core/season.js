@@ -10,7 +10,7 @@ import { resetSeasonYellows } from './discipline.js';
 import { retirementChance, isHomegrownYouth } from './development.js';
 import { withParticle } from './korean.js';
 import { addMessage, standings, topScorers, clubStrength } from './state.js';
-import { initFinance, payPrizeMoney, closeLedger, setBudgets } from './finance.js';
+import { initFinance, payPrizeMoney, closeLedger, setBudgets, updateParachutes, parachutePerSeason } from './finance.js';
 import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS, staffWage, MAX_STAFF, EUR } from '../data/economy.js';
@@ -316,6 +316,11 @@ export function processSeasonEnd(state, rng) {
   if (userId) state.user.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
 
   const moves = promoteAndRelegate(state, rng);
+  updateParachutes(state, moves);
+  const mine = userId && state.clubs[userId];
+  if (mine?.parachute?.shares.length === 2) {
+    addMessage(state, { view: 'finance', important: true, title: '강등 보조금', body: `강등으로 두 시즌 동안 ${LEAGUES[mine.parachute.leagueId].name} 중계권료 일부를 받습니다. 이번 시즌 ${won(parachutePerSeason(mine))} (매달 나눠서), 다음 시즌은 그 절반입니다.` });
+  }
   if (userId) {
     const now = state.clubs[userId].leagueId;
     const unlock = userPos === 1 ? '우승' : LEAGUES[now].tier < LEAGUES[userLeague].tier ? '승격' : null;

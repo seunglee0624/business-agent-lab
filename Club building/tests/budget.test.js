@@ -109,3 +109,21 @@ test('AI 구단 예산: 주급이 수입의 70%를 넘으면 주급 예산을 �
   assert.ok(Math.abs(ai.finance.wageBudget - weeklyWageBill(state, ai)) <= 1e6, '1.1배 여유 없이 지금 주급');
   assert.equal(ai.finance.transferBudget, 0, '적자 뒤에는 하한 없음');
 });
+
+test('강등 보조금: 강등된 구단은 두 시즌 동안 떠난 리그 중계권료의 50%, 25%를 받고, 다시 올라가면 끊긴다', async () => {
+  const { updateParachutes, parachutePerSeason, tvPerSeason } = await import('../js/core/finance.js');
+  const state = g.createNewGame('parachute');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = Object.values(state.clubs).find((c) => c.leagueId === 'ENG1' && c.id !== state.user.clubId);
+  const top = tvPerSeason(club);
+  club.leagueId = 'ENG2';
+  updateParachutes(state, [{ clubId: club.id, from: 'ENG1', to: 'ENG2' }]);
+  assert.equal(parachutePerSeason(club), top * 0.5);
+  updateParachutes(state, []);
+  assert.equal(parachutePerSeason(club), top * 0.25);
+  updateParachutes(state, []);
+  assert.equal(parachutePerSeason(club), 0);
+  updateParachutes(state, [{ clubId: club.id, from: 'ENG1', to: 'ENG2' }]);
+  updateParachutes(state, [{ clubId: club.id, from: 'ENG2', to: 'ENG1' }]);
+  assert.equal(parachutePerSeason(club), 0, '승격하면 끊긴다');
+});

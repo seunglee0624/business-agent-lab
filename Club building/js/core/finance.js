@@ -54,11 +54,30 @@ export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + roundMone
 export const weeklyWageBill = (state, club) => playerWageBill(state, club) + staffWageBill(club);
 export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + roundMoney(facilityUpkeep(club.facilities[k], k) * EUR), 0);
 
+// 강등 보조금: 강등된 구단은 두 시즌 동안 떠난 리그 중계권료의 50%, 25%를 받는다 (매달 나눠서 중계권 수입으로)
+export const PARACHUTE = [0.5, 0.25];
+export const parachutePerSeason = (club) => (club.parachute ? TV_PER_CLUB[club.parachute.leagueId] * EUR * club.parachute.shares[0] : 0);
+
+// 시즌 끝 승강 뒤: 이미 받던 보조금은 한 해 줄이고, 이번에 강등된 구단은 새로 받는다. 다시 올라가면 끊긴다
+export function updateParachutes(state, moves) {
+  for (const club of Object.values(state.clubs)) {
+    if (!club.parachute) continue;
+    club.parachute.shares.shift();
+    if (!club.parachute.shares.length) delete club.parachute;
+  }
+  for (const m of moves) {
+    const club = state.clubs[m.clubId];
+    if (!m.to) { delete club.parachute; continue; }
+    if (LEAGUES[m.to].tier > LEAGUES[m.from].tier) club.parachute = { leagueId: m.from, shares: [...PARACHUTE] };
+    else delete club.parachute;
+  }
+}
+
 // 한 시즌 예상 수입 (예산 산정용)
 export function seasonRevenueEstimate(club) {
   const rule = LEAGUES[club.leagueId];
   const homeGames = rule.teams - 1;
-  return tvPerSeason(club) + commercialPerSeason(club) + gatePerMatch(club, null, rule.teams).income * homeGames;
+  return tvPerSeason(club) + parachutePerSeason(club) + commercialPerSeason(club) + gatePerMatch(club, null, rule.teams).income * homeGames;
 }
 
 // ---- 장부 ----
@@ -130,7 +149,7 @@ export function recordGate(state, club, position, teams) {
 
 // 매달 마지막 날: 그달 몫을 정산한다
 export function monthlySettlement(state, club) {
-  income(club, 'tv', roundMoney((tvPerSeason(club) * TV_EQUAL_SHARE) / 12));
+  income(club, 'tv', roundMoney((tvPerSeason(club) * TV_EQUAL_SHARE + parachutePerSeason(club)) / 12));
   // 우리 구단의 상업 수입은 스폰서 계약(sponsors.js)과 굿즈(merch.js)로 들어온다
   if (club.id !== state.user?.clubId) income(club, 'commercial', roundMoney((commercialPerSeason(club) * fanFactor(club)) / 12));
   expense(club, 'wages', roundMoney((playerWageBill(state, club) * 52) / 12));
