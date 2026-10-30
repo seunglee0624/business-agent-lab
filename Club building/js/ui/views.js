@@ -125,7 +125,7 @@ export function layout(state, ui, content) {
           ${ended && !inMatch ? '<span class="muted">시즌이 끝났습니다</span>' : ''}
         </div>
       </header>
-      <section class="content" id="content">${content}</section>
+      <section class="content" id="content">${ui.decision ? `<p class="decision-banner">${formatShortDate(state.date)} 진행을 멈췄습니다. 결정할 일: ${ui.decision.map(esc).join(', ')}</p>` : ''}${content}</section>
     </div>`;
 }
 

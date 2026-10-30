@@ -100,7 +100,8 @@ export class App {
       return;
     }
     this.persist();
-    this.ui.view = res.stop === 'transferOffer' ? 'transfers' : 'home';
+    this.ui.view = res.stop === 'transferOffer' ? 'transfers' : res.stop === 'decision' ? res.view : 'home';
+    this.ui.decision = res.stop === 'decision' ? [...new Set(res.titles)] : null;
     this.render();
   }
 
@@ -150,7 +151,8 @@ export class App {
       }
       const res = simulateToSeasonEnd(this.state, { skipOffers: false });
       this.ui.busy = false;
-      this.ui.view = res.stop === 'transferOffer' ? 'transfers' : 'home';
+      this.ui.view = res.stop === 'transferOffer' ? 'transfers' : res.stop === 'decision' ? res.view : 'home';
+      this.ui.decision = res.stop === 'decision' ? [...new Set(res.titles)] : null;
       this.persist();
       this.render();
     }, 30);
@@ -263,6 +265,7 @@ export class App {
         this.ui.pitchSlot = null;
         this.ui.sponsorMsg = null;
         this.ui.fanMsg = null;
+        this.ui.decision = null;
         this.ui.eventFixture = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;

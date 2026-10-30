@@ -393,3 +393,4 @@ input, select { background: var(--panel); }
 .fan-bar > div { height: 100%; background: var(--accent, #2f6b3f); }
 .price-row { margin: 10px 0; }
 .price-row input[type="range"] { width: 100%; accent-color: var(--accent, #2f6b3f); }
+.decision-banner { background: var(--accent-soft, rgba(255, 193, 7, 0.15)); border-left: 3px solid #f0b400; padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; }

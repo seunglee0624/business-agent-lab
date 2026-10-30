@@ -187,7 +187,7 @@ const untilOffer = (state) => {
   for (;;) {
     const res = advance(state);
     if (res.stop === 'transferOffer') return res.offer;
-    if (res.stop !== 'week' || state.date > '2026-08-31') return null;
+    if ((res.stop !== 'week' && res.stop !== 'decision') || state.date > '2026-08-31') return null;
   }
 };
 const listed = (seed) => {

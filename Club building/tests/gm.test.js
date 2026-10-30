@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as g from '../js/core/game.js';
 import { createNewGame, chooseLeague, userClub, STATE_VERSION, advance, league, simulateToSeasonEnd, startNextSeason,
   managerCandidates, hireManager, fireManager, transferRequests, answerRequest } from '../js/core/game.js';
 import { weeklyWageBill } from '../js/core/finance.js';
@@ -29,10 +30,10 @@ const weekday = (date) => new Date(`${date}T00:00:00Z`).getUTCDay();
 
 test('한 주 진행: "계속"은 다음 월요일에 멈춘다', () => {
   const state = fresh('gm2');
-  assert.equal(advance(state).stop, 'week');
+  assert.equal(advance(state, { skipOffers: true }).stop, 'week');
   assert.equal(state.date, '2026-07-06');
   assert.equal(weekday(state.date), 1);
-  advance(state);
+  advance(state, { skipOffers: true });
   assert.equal(state.date, '2026-07-13');
 });
 
@@ -155,4 +156,20 @@ test('메시지: 전체 읽음', async () => {
   assert.ok(unreadCount(state) >= 2);
   markAllRead(state);
   assert.equal(unreadCount(state), 0);
+});
+
+test('진행 멈춤: 스폰서 제안·투어 선택처럼 단장이 답할 일이 생기면 그날 멈추고 해당 화면을 알려 준다', () => {
+  const state = g.createNewGame('decide');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  g.pitchSponsor(state, 'partner3', 'local');
+  const ready = g.sponsorsOf(state, g.userClub(state)).pitches[0].ready;
+  let res;
+  do res = advance(state, { watchMatches: true }); while (res.stop === 'week' || res.stop === 'transferOffer');
+  assert.equal(res.stop, 'decision');
+  assert.ok(state.date <= ready);
+  // skipOffers면 멈추지 않는다
+  const s2 = g.createNewGame('decide');
+  g.chooseLeague(s2, 'ENG1', '테스트');
+  g.pitchSponsor(s2, 'partner3', 'local');
+  assert.notEqual(advance(s2, { skipOffers: true }).stop, 'decision');
 });

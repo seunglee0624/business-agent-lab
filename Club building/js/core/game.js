@@ -171,6 +171,7 @@ function dailyTick(state, rng, date) {
   }
   if (user && isMonday(date)) {
     const made = requests.makeRequests(state, rng, user);
+    if (made.length) needDecision(state, 'transfers', '감독의 영입 요청');
     if (made.length) addMessage(state, { view: 'transfers', title: '감독의 영입 요청', body: `${user.headCoach.name} 감독이 ${made.length}명의 영입을 요청했습니다. 이적 화면에서 승인하거나 거절하세요.`, important: true });
     weeklyStaffWork(state, user);
     weeklySummary(state, user);
@@ -220,6 +221,12 @@ function dailyTick(state, rng, date) {
   return offer;
 }
 
+// 단장이 답해야 할 일이 생기면 그날 진행을 멈춘다 (화면은 view로 이동)
+function needDecision(state, view, title) {
+  state.decision ??= { view, titles: [] };
+  state.decision.titles.push(title);
+}
+
 const isMonday = (date) => new Date(`${date}T00:00:00Z`).getUTCDay() === 1;
 
 // 매주 월요일: 지난주 우리 경기, 순위, 모아 둔 알림을 메시지 하나로 보낸다
@@ -263,16 +270,19 @@ function weeklyStaffWork(state, club) {
 // 스폰서 영업 결과, 투어 안내와 마무리
 function userCommercialDay(state, rng, club, date) {
   for (const a of sponsors.sponsorDaily(state, rng, club)) {
+    needDecision(state, 'sponsors', `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`);
     addMessage(state, {
       view: 'sponsors', important: true, title: `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`,
       body: `${sponsors.INDUSTRIES[a.industry].name} 업종 영업 결과 ${a.offers.map((o) => o.company).join(', ')}에서 제안이 왔습니다. ${a.offers[0].expires}까지 답하세요.`,
     });
   }
   if (date.slice(5) === '07-01' && tour.canChooseTour(state, club)) {
+    needDecision(state, 'sponsors', '프리시즌 투어 선택');
     addMessage(state, { view: 'sponsors', title: '프리시즌 투어', body: '7월 15일까지 프리시즌 투어 지역을 정하세요. 정하지 않으면 투어를 가지 않습니다.' });
   }
   if (date.endsWith('-01')) {
     const made = stadium.rentalMonthly(state, rng, club, userHomeDates(state, club));
+    if (made.length) needDecision(state, 'sponsors', '경기장 대관 제안');
     if (made.length) addMessage(state, { view: 'sponsors', title: '경기장 대관 제안', body: `${made.map((o) => `${stadium.RENTALS[o.kind].name}(${formatShortDate(o.date)}, ${won(o.fee)})`).join(', ')} 대관 제안이 왔습니다. ${formatShortDate(made[0].expires)}까지 답하세요.` });
   }
   for (const r of stadium.stadiumDaily(state, club)) {
@@ -307,6 +317,7 @@ function userMerchDay(state, club, date) {
     if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
   }
   for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch)) {
+    needDecision(state, 'fans', `${w.name} 품절 임박`);
     addMessage(state, { view: 'fans', important: true, title: `${w.name} 품절 임박`, body: `${w.name} 재고가 약 ${w.days}일 치 남았습니다. 지금 주문해도 ${w.lead}일 뒤에 도착합니다.` });
   }
 }
@@ -335,13 +346,15 @@ function expiryReminder(state) {
   });
 }
 
-// date까지 하루씩 진행한다. 내 선수에게 이적 제안이 오면 그날 멈추고 제안을 돌려준다
-function moveTo(state, date) {
+// date까지 하루씩 진행한다. 내 선수에게 이적 제안이 오면 그날 멈추고 제안을 돌려준다.
+// stopOnDecision이면 단장이 답할 일(state.decision)이 생긴 날도 멈춘다
+function moveTo(state, date, stopOnDecision = false) {
   return withRng(state, (rng) => {
     while (state.date < date) {
       state.date = addDays(state.date, 1);
       const offer = dailyTick(state, rng, state.date);
-      if (offer) return offer;
+      if (!stopOnDecision) state.decision = null;
+      if (offer || state.decision) return offer;
     }
     return null;
   });
@@ -357,7 +370,8 @@ function nextMonday(date) {
 // 다음 월요일까지 한 주를 진행한다. 우리 경기는 결과로 처리한다.
 // skipOffers: 내 선수에게 온 이적 제안에서 멈추지 않는다 (답하지 않은 제안은 기한이 지나면 거절된다)
 // watchMatches: 우리 경기 날 멈춰 중계로 볼 수 있게 한다
-// 돌려주는 값: { stop: 'week' } | { stop: 'userMatch', fixture } | { stop: 'transferOffer', offer } | { stop: 'seasonEnd' } | { stop: 현재 phase }
+// skipOffers면 단장이 답할 일이 생겨도 멈추지 않는다
+// 돌려주는 값: { stop: 'week' } | { stop: 'userMatch', fixture } | { stop: 'transferOffer', offer } | { stop: 'decision', view, titles } | { stop: 'seasonEnd' } | { stop: 현재 phase }
 export function advance(state, { skipOffers = false, watchMatches = false } = {}) {
   if (state.phase !== 'season') return { stop: state.phase };
   const monday = nextMonday(state.date);
@@ -369,8 +383,11 @@ export function advance(state, { skipOffers = false, watchMatches = false } = {}
     }
     const target = date < monday ? date : monday;
     while (state.date < target) {
-      const offer = moveTo(state, target);
+      const offer = moveTo(state, target, !skipOffers);
+      const decision = state.decision;
+      state.decision = null;
       if (offer && !skipOffers) return { stop: 'transferOffer', offer };
+      if (decision && !skipOffers) return { stop: 'decision', ...decision };
     }
     if (date === state.date) {
       const fixture = userFixtureOn(state, date);
