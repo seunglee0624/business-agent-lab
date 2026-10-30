@@ -79,6 +79,12 @@ function renewals() {
     if (!canRenew(state, p) || p.renewedTry === state.date.slice(0, 7)) continue;
     p.renewedTry = state.date.slice(0, 7);
     const d = renewalDemand(state, c, p);
+    // 주급이 오르는 만큼 여유가 모자라면 재정 조정 바로 이적 예산을 주급 예산으로 옮긴다
+    const need = weeklyWageBill(state, c) - (p.contract?.wage ?? 0) + d.wage - c.finance.wageBudget;
+    if (need > 0) {
+      if (g.budgetRange(state).max >= c.finance.wageBudget + need) act('재정 조정 (재계약 주급)', { ok: true, ...g.adjustBudgets(state, c.finance.wageBudget + need) });
+      else act('재정 조정 (재계약 주급)', { ok: false, reason: '이적 예산을 옮겨도 모자랍니다' });
+    }
     act('재계약', g.renewContract(state, p.id, { wage: d.wage, years: d.years, promise: d.promise }));
   }
 }
