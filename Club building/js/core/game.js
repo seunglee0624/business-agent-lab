@@ -723,6 +723,7 @@ export function setTicketPrice(state, grade, price) {
 // 예전 저장 파일 보정: 새로 생긴 값 채우기
 export function upgradeState(state) {
   state.settings.decisions = { ...DEFAULT_SETTINGS.decisions, ...(state.settings.decisions ?? {}) };
+  if (state.user?.clubId && state.clubs[state.user.clubId].sponsors) sponsors.sponsorCatchUp(state, userClub(state));
   // 유스 탭은 선수단 탭에 합쳐졌다
   for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
   for (const club of Object.values(state.clubs)) {

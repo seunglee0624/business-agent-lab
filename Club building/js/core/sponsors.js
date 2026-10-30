@@ -131,8 +131,22 @@ function makeOffers(state, rng, club, pitch) {
   });
 }
 
+// 끝난 계약이 남아 있으면 정리하고 이어지는 계약을 시작한다 (시즌 끝 처리를 놓친 저장 파일 보정)
+export function sponsorCatchUp(state, club) {
+  const s = sponsorsOf(state, club);
+  for (const slot of SLOT_KEYS) {
+    const c = s.contracts[slot];
+    if (!c || c.until >= state.date) continue;
+    s.history.unshift({ season: Number(c.until.slice(0, 4)) - 1, slot, company: c.company, industry: c.industry, amount: c.amount });
+    s.contracts[slot] = s.pending?.[slot] ?? null;
+    if (s.contracts[slot]) delete s.contracts[slot].from;
+    if (s.pending) delete s.pending[slot];
+  }
+}
+
 // 날마다: 영업 결과가 나오면 제안을 만들고, 기한 지난 제안은 지운다
 export function sponsorDaily(state, rng, club) {
+  sponsorCatchUp(state, club);
   const s = sponsorsOf(state, club);
   const arrived = [];
   for (const p of s.pitches.filter((x) => x.ready <= state.date)) {

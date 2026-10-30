@@ -17,6 +17,7 @@ import { FACILITY_KEYS } from '../data/economy.js';
 import { fanSeasonEnd } from './fans.js';
 import { resetSeasonTickets } from './tickets.js';
 import { merchSeasonEnd } from './merch.js';
+import { sponsorSeasonEnd, SLOTS } from './sponsors.js';
 import { won } from './money.js';
 
 export const RETURN_CHANCE = 0.3;
@@ -296,6 +297,14 @@ export function processSeasonEnd(state, rng) {
     table.forEach((r, i) => payPrizeMoney(state, state.clubs[r.clubId], i + 1, table.length));
   }
   if (userId) fanSeasonEnd(state, state.clubs[userId], userPos);
+  if (userId) {
+    const { bonuses, ended } = sponsorSeasonEnd(state, state.clubs[userId], userPos);
+    const parts = [
+      ...bonuses.map((b) => `${withParticle(b.company, '가')} 성적 보너스 ${won(b.amount)}을 지급했습니다.`),
+      ...(ended.length ? [`계약이 끝나 빈자리: ${ended.map((e) => `${SLOTS[e.slot].name}(${e.company})`).join(', ')}. 스폰서 탭에서 영업하세요.`] : []),
+    ];
+    if (parts.length) addMessage(state, { view: 'sponsors', title: '스폰서 시즌 정리', body: parts.join(' '), important: ended.length > 0 });
+  }
   if (userId) state.user.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
 
   const moves = promoteAndRelegate(state, rng);

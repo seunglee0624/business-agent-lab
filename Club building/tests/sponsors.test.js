@@ -114,3 +114,21 @@ test('스폰서: 팬 만족도가 바닥이어도 제안 금액이 0이 되지 �
   const val = Number(html.match(new RegExp(`id="ask-${o.id}"[^>]*value="([0-9.]+)"`))[1]) * 1e8;
   assert.ok(val > o.amount * 0.99 && val < ask, `${val} 은 ${o.amount}~${ask} 사이`);
 });
+
+test('스폰서: 시즌이 끝나면 끝난 계약이 정리되고 이어지는 계약이 시작되며, 놓친 저장 파일도 보정된다', () => {
+  const state = fresh('sponsor-end');
+  const club = g.userClub(state);
+  const s = g.sponsorsOf(state, club);
+  const expiring = g.SLOT_KEYS.filter((k) => s.contracts[k]?.until === '2027-06-30');
+  assert.ok(expiring.length);
+  g.simulateToSeasonEnd(state);
+  g.startNextSeason(state);
+  for (const k of expiring) assert.ok(!s.contracts[k] || s.contracts[k].until > '2027-06-30', k);
+  assert.ok(state.inbox.some((m) => m.title === '스폰서 시즌 정리'));
+  // 예전 저장 파일: 끝난 계약과 다음 계약이 그대로 남아 있는 경우
+  s.contracts.chest = { company: '옛회사', industry: 'food', amount: 1e8, until: '2027-06-30', bonus: null };
+  s.pending = { chest: { company: '새회사', industry: 'tech', amount: 2e8, until: '2029-06-30', bonus: null, from: '2027-07-01' } };
+  g.upgradeState(state);
+  assert.equal(s.contracts.chest.company, '새회사');
+  assert.equal(s.contracts.chest.from, undefined);
+});
