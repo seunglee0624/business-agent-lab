@@ -8,7 +8,7 @@
 
 ```
 cd "Club building"
-python3 -m http.server 8010 --bind 127.0.0.1
+python3 tools/serve.py 8010
 ```
 브라우저에서 `http://localhost:8010` 을 연다. 테스트는 `node --test tests/*.test.js`.
 
