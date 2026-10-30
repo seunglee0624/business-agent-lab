@@ -14,6 +14,7 @@ import { FACILITY_KEYS } from '../js/data/economy.js';
 import { overall } from '../js/core/player.js';
 import { merchOf } from '../js/core/merch.js';
 import { marketValue } from '../js/core/money.js';
+import { check } from './invariants.js';
 
 const SEASONS = Number(process.argv[2] ?? 5);
 const LEAGUE = process.argv[3] ?? 'ENG1';
@@ -22,6 +23,17 @@ g.chooseLeague(state, LEAGUE, '측정');
 const club = () => g.userClub(state);
 // 운영 방식 (측정용): base 기본, wages 이적 예산을 전부 주급으로 돌려 자유계약 위주, invest 시설에 적극 투자, youth 영입 없이 유스·시설
 const STRATEGY = process.env.STRATEGY ?? 'base';
+// CHECK=1: 매주 행동 뒤와 진행 뒤에 상태 규칙(tools/invariants.js)을 검사해 처음 깨진 날짜와 횟수를 모은다
+const CHECK = process.env.CHECK === '1';
+const broken = new Map();
+function audit(when) {
+  if (!CHECK) return;
+  for (const { rule, detail } of check(state)) {
+    const b = broken.get(rule) ?? { n: 0, first: `${state.date} (${when}) ${detail}` };
+    b.n++;
+    broken.set(rule, b);
+  }
+}
 const eok = (x) => Math.round(x / 1e8);
 
 // 행동 기록: 이름 → { ok, fail: { 이유: 횟수 } }
@@ -271,7 +283,9 @@ const t0 = Date.now();
 for (let i = 0; i < SEASONS; i++) {
   for (;;) {
     weekly();
+    audit('단장 행동 뒤');
     const res = g.advance(state, {});
+    audit(`진행 뒤 ${res.stop}`);
     stops[res.stop] = (stops[res.stop] ?? 0) + 1;
     if (res.stop === 'transferOffer') sellOffers(res.offer);
     if (res.stop === 'userMatch') { g.simulateUserMatch(state); g.finishUserMatch(state); }
@@ -294,6 +308,11 @@ for (const [name, r] of Object.entries(log)) {
 }
 console.log('\n== 진행 멈춤 ==');
 console.log(Object.entries(stops).map(([k, v]) => `${k} ${v}`).join(' · '));
+if (CHECK) {
+  console.log('\n== 상태 규칙 위반 ==');
+  if (!broken.size) console.log('없음');
+  for (const [rule, b] of broken) console.log(`${rule}: ${b.n}번 · 처음 ${b.first}`);
+}
 const t3 = seasons.findIndex((x) => x.리그.endsWith('3') && x.순위 <= 3);
 console.log(`\n전략 ${STRATEGY} · 경로 ${seasons.map((x) => `${x.리그} ${x.순위}`).join(' → ')} · 3부 상위 3위 첫 달성: ${t3 < 0 ? '없음' : `${t3 + 1}시즌째`}`);
 console.log(`\n최종 주급 ${eok(weeklyWageBill(state, club()) * 52)}억/년 · 주급 예산 ${eok(club().finance.wageBudget * 52)}억/년 · 이적 예산 ${eok(club().finance.transferBudget)}억`);

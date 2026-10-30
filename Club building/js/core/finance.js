@@ -131,7 +131,7 @@ export function setBudgets(state, club) {
   f.wageBudget = Math.max(Math.ceil(bill), roundMoney(Math.max(user ? bill * WAGE_HEADROOM : bill, byRevenue)));
   const last = f.history[0];
   if (!last) {
-    f.transferBudget = roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO));
+    f.transferBudget = Math.min(Math.max(0, f.balance), roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO)));
     return null;
   }
   const carried = f.transferBudget;
@@ -140,7 +140,8 @@ export function setBudgets(state, club) {
   // 잔고의 20% 하한은 내 구단, 그리고 지난 시즌 흑자인 AI 구단만 (적자 AI가 큰 잔고로 매년 선수를 사지 않게)
   const deficit = ledgerTotal(last.income) < ledgerTotal(last.expense);
   const floor = user || !deficit ? f.balance * TRANSFER_FLOOR : 0;
-  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), Math.max(carried + added, floor))));
+  // 반올림한 뒤에 잔고로 묶는다 (먼저 묶고 반올림하면 잔고를 조금 넘을 수 있다)
+  f.transferBudget = Math.max(0, Math.min(Math.max(0, f.balance), roundMoney(Math.max(carried + added, floor))));
   return { carried, added, total: f.transferBudget };
 }
 
@@ -215,6 +216,6 @@ export function adjustBudgets(state, club, wageBudget) {
     return { ok: true };
   }
   f.wageBudget = roundMoney(Math.max(min, wageBudget));
-  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), pool - f.wageBudget * weeks)));
+  f.transferBudget = Math.max(0, Math.min(Math.max(0, f.balance), roundMoney(pool - f.wageBudget * weeks)));
   return { ok: true };
 }

@@ -345,6 +345,9 @@ export function processSeasonEnd(state, rng) {
   const active = Object.values(state.clubs).filter((c) => c.status === 'active');
   const fill = fillSquads(state, rng, active, endDate);
   releaseYouth(state, endDate);
+  // 지워진 선수(오래된 자유계약·방출 유스)의 협상·요청 기록도 지운다 (저장 크기가 계속 늘지 않게)
+  for (const id of Object.keys(state.transfers.deals)) if (!state.players[id]) delete state.transfers.deals[id];
+  if (state.transfers.requests) state.transfers.requests = state.transfers.requests.filter((r) => state.players[r.playerId]);
   rerateClubs(state);
   if (repGain) state.clubs[userId].reputation = Math.min(99, state.clubs[userId].reputation + repGain);
   resetSeasonYellows(state.discipline);
