@@ -266,6 +266,7 @@ export class App {
         this.ui.sponsorMsg = null;
         this.ui.fanMsg = null;
         this.ui.decision = null;
+        this.ui.tourRegion = null;
         this.ui.eventFixture = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
@@ -317,6 +318,10 @@ export class App {
         this.render();
         break;
       }
+      case 'openTour':
+        this.ui.tourRegion = d.region || null;
+        this.render();
+        break;
       case 'openPitch':
         this.ui.pitchSlot = d.slot || null;
         this.render();

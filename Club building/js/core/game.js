@@ -272,28 +272,18 @@ function weeklySummary(state, club) {
   state.notices = [];
 }
 
-const INCOME_NAMES = { tv: '중계권', prize: '상금', gate: '입장', commercial: '스폰서·상업', merch: '굿즈', rental: '대관', transfers: '선수 판매' };
-const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프', facilities: '시설 유지', construction: '공사', merch: '굿즈 생산', events: '행사·SNS', transfers: '영입' };
 const signed = (x, f) => `${x >= 0 ? '+' : '-'}${f(Math.abs(x))}`;
 
-// 주간 요약의 재정·팬 줄. 지난 요약 때 값과 비교한다 (시즌이 바뀌면 장부는 새로 시작)
+// 주간 요약의 재정·팬 줄. 지난 요약 때 값과 비교한다
 function weeklyMoneyAndFans(state, club) {
   const f = club.finance;
   const fans = fansOf(club);
-  const now = { season: state.season, balance: f.balance, income: { ...f.season.income }, expense: { ...f.season.expense }, satisfaction: fans.satisfaction, overseas: fans.overseas };
+  const now = { balance: f.balance, satisfaction: fans.satisfaction, overseas: fans.overseas };
   const prev = club.weekSnap;
   club.weekSnap = now;
   const lines = [];
   if (prev) {
-    const sameSeason = prev.season === now.season;
-    const diff = (part, names) => Object.entries(now[part])
-      .map(([k, v]) => [k, v - (sameSeason ? prev[part][k] ?? 0 : 0)]).filter(([, v]) => Math.abs(v) >= 1)
-      .map(([k, v]) => `${names[k] ?? k} ${won(v)}`);
-    const inc = diff('income', INCOME_NAMES);
-    const exp = diff('expense', EXPENSE_NAMES);
     lines.push(`재정: 잔고 ${won(now.balance)} (${signed(now.balance - prev.balance, won)})`);
-    if (inc.length) lines.push(`  수입: ${inc.join(', ')}`);
-    if (exp.length) lines.push(`  지출: ${exp.join(', ')}`);
     const ds = Math.round((now.satisfaction - prev.satisfaction) * 10) / 10;
     const dov = now.overseas - prev.overseas;
     lines.push(`팬: 만족도 ${Math.round(now.satisfaction)} (${signed(ds, (x) => x)})${dov ? `, 해외 팬 ${signed(dov, (x) => x.toLocaleString())}명` : ''}${now.satisfaction < PROTEST_LINE ? ' · 팬들이 항의 중' : ''}`);

@@ -1001,7 +1001,8 @@ export function sponsorsView(state, ui = {}) {
     </div>
     ${rentalCard(state, club)}
     ${tourCard(state, club)}
-    ${ui.pitchSlot ? pitchDetail(state, club, ui.pitchSlot) : ''}`;
+    ${ui.pitchSlot ? pitchDetail(state, club, ui.pitchSlot) : ''}
+    ${ui.tourRegion ? tourDetail(club, ui.tourRegion) : ''}`;
 }
 
 function pitchDetail(state, club, slot) {
@@ -1021,7 +1022,7 @@ function tourCard(state, club) {
   if (canChooseTour(state, club)) {
     const rows = TOUR_KEYS.map((r) => {
       const stars = tourStars(state, club, r);
-      return `<tr><td><strong>${TOURS[r].name}</strong></td><td class="num">${won(tourFee(club, r))}</td><td class="num">+${tourGain(state, club, r).toLocaleString()}명</td>
+      return `<tr><td><button class="link" data-action="openTour" data-region="${r}"><strong>${TOURS[r].name}</strong></button></td><td class="num">${won(tourFee(club, r))}</td><td class="num">+${tourGain(state, club, r).toLocaleString()}명</td>
         <td class="num">${TOURS[r].fatigue}</td><td class="small">${stars.length ? stars.map((p) => esc(p.name)).join(', ') : '-'}</td>
         <td><button class="btn small primary" data-action="chooseTour" data-region="${r}">선택</button></td></tr>`;
     }).join('');
@@ -1037,7 +1038,19 @@ function tourCard(state, club) {
     : t.region === 'none' ? '이번 시즌은 투어를 가지 않았습니다.'
     : t.done ? `${TOURS[t.region].name} 투어: 초청료 ${won(t.fee)}, 해외 팬 +${t.gain.toLocaleString()}명${t.injured.length ? `, 부상 ${t.injured.length}명` : ''}`
     : `${TOURS[t.region].name} 투어 중 (7월 31일까지)`;
-  return `<div class="card"><h3>프리시즌 투어</h3><p>${status}</p></div>`;
+  const regions = [...new Set((club.tourHistory ?? []).map((h) => h.region))];
+  return `<div class="card"><h3>프리시즌 투어</h3><p>${status}</p>
+    ${regions.length ? `<p class="small">지난 투어: ${regions.map((r) => `<button class="link" data-action="openTour" data-region="${r}">${TOURS[r].name}</button>`).join(' · ')}</p>` : ''}</div>`;
+}
+
+// 지역별 지난 투어 실적
+function tourDetail(club, region) {
+  const hist = (club.tourHistory ?? []).filter((h) => h.region === region);
+  const rows = hist.map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td class="num">${won(h.fee)}</td><td class="num">+${h.gain.toLocaleString()}명</td><td class="num">${h.stars}명</td><td class="num">${h.injured}명</td></tr>`).join('');
+  const t = TOURS[region];
+  const body = `<p class="small">피로 ${t.fatigue}, 부상 확률 선수당 ${Math.round(t.injury * 1000) / 10}%</p>
+    ${rows ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">초청료</th><th class="num">해외 팬</th><th class="num">그 나라 주전</th><th class="num">부상</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">이 지역으로 간 적이 없습니다.</p>'}`;
+  return modal({ title: `${t.name} 투어 실적`, body, close: 'data-action="openTour" data-region=""' });
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산

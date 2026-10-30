@@ -205,5 +205,6 @@ test('주간 요약: 잔고와 지난주 대비 변화, 수입·지출 항목, �
   assert.ok(weekly.length >= 2);
   const body = weekly[0].body;
   assert.match(body, /재정: 잔고 .+ \([+-]/);
+  assert.ok(!body.includes("수입:"));
   assert.match(body, /팬: 만족도 \d+ \([+-]/);
 });

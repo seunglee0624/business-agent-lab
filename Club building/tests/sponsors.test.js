@@ -132,3 +132,17 @@ test('스폰서: 시즌이 끝나면 끝난 계약이 정리되고 이어지는 
   assert.equal(s.contracts.chest.company, '새회사');
   assert.equal(s.contracts.chest.from, undefined);
 });
+
+test('투어: 다녀오면 지역별 실적이 남고, 지역을 누르면 지난 실적 창이 열린다', () => {
+  const state = fresh('tour-hist');
+  const club = g.userClub(state);
+  state.date = '2026-07-02';
+  assert.ok(g.chooseTour(state, 'asia').ok);
+  state.date = '2026-07-31';
+  finishTour(state, new Rng('t'), club);
+  assert.equal(club.tourHistory[0].region, 'asia');
+  const html = sponsorsView(state, { tourRegion: 'asia' });
+  assert.match(html, /아시아 투어 실적/);
+  assert.match(html, /2026-27/);
+  assert.match(sponsorsView(state, {}), /data-action="openTour" data-region="asia"/);
+});

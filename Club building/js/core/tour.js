@@ -65,5 +65,7 @@ export function finishTour(state, rng, club) {
     }
   }
   Object.assign(t, { done: true, fee, gain, injured });
+  club.tourHistory ??= [];
+  club.tourHistory.unshift({ season: t.season, region: t.region, fee, gain, injured: injured.length, stars: tourStars(state, club, t.region).length });
   return t;
 }
