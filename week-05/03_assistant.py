@@ -11,10 +11,14 @@ from datetime import date
 from model_api import ModelRequestError, request_model
 from tools import (
     CALCULATOR,
+    CONVERT_CURRENCY,
+    GET_STOCK_PRICE,
     READ_SCHEDULE,
     SAVE_NOTE,
     SEARCH_WIKIPEDIA,
     calculator,
+    convert_currency,
+    get_stock_price,
     read_schedule,
     save_note,
     search_wikipedia,
@@ -24,16 +28,16 @@ from tools import (
 MAX_ROUNDS = 5
 
 # The tool definitions sent to the model.
-# Exercise: add CONVERT_CURRENCY to this list.
-TOOLS = [CALCULATOR, READ_SCHEDULE, SEARCH_WIKIPEDIA, SAVE_NOTE]
+TOOLS = [CALCULATOR, READ_SCHEDULE, SEARCH_WIKIPEDIA, SAVE_NOTE, CONVERT_CURRENCY, GET_STOCK_PRICE]
 
 # The functions this program allows the model to request.
-# Exercise: register convert_currency here.
 FUNCTIONS = {
     "calculator": calculator,
     "read_schedule": read_schedule,
     "search_wikipedia": search_wikipedia,
     "save_note": save_note,
+    "convert_currency": convert_currency,
+    "get_stock_price": get_stock_price,
 }
 
 SYSTEM_PROMPT = (
@@ -42,7 +46,10 @@ SYSTEM_PROMPT = (
     "Use the calculator for arithmetic. "
     "If a request is missing information that you need, ask one short question instead of guessing. "
     "If a tool returns an error, say that the action failed. Do not invent a result. "
-    "Keep answers short. Write plain text, without Markdown."
+    "Always answer in English, even when the user writes in another language. "
+    "Keep answers short, but answer in a full sentence that names what the result refers to. "
+    "For stock prices, give the price with the change from the previous day in parentheses, such as 236,000 KRW (-5.98%). "
+    "Write plain text, without Markdown."
 )
 
 
@@ -75,7 +82,7 @@ def answer(messages):
         messages.append({"role": "assistant", "content": reply.get("content"), "tool_calls": reply.get("tool_calls")})
         if not reply.get("tool_calls"):
             messages[-1].pop("tool_calls")
-            trace("assistant", reply.get("content") or "(no text)")
+            trace("assistant", f"{reply.get('content') or '(no text)'} ({date.today()})")
             return
         for call in reply["tool_calls"]:
             trace("tool call", describe(call))

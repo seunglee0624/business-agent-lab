@@ -30,7 +30,9 @@ def main():
     body = {
         "model": MODEL,
         "messages": [
-            {"role": "user", "content": "What is the capital of France?"},
+            {"role": "user",
+             "content": "What is the capital of France?"
+             },
         ],
     }
 
