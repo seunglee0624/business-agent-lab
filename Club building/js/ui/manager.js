@@ -58,6 +58,6 @@ function needsCard(state) {
       <table class="table compact"><thead><tr><th>포지션</th><th class="num">인원/권장</th><th class="num">최고 능력</th><th class="num">부상</th><th>상태</th></tr></thead><tbody>${rows}</tbody></table>
       <p><button class="btn primary small" data-action="askCoach" ${club.headCoach ? '' : 'disabled'}>추천 선수 요구</button>
         ${reqs ? `<span class="small">지금 감독의 영입 요청 ${reqs}명 · <button class="link" data-action="nav" data-view="transfers">이적 탭에서 승인</button></span>` : ''}</p>
-      <p class="muted small">이적시장이 열려 있을 때 일주일에 한 번 요구할 수 있습니다. 감독이 약한 자리부터, 이적 예산 안에서 지금 선수보다 나은 후보를 최대 3명 골라 영입 요청에 올립니다.</p>
+      <p class="muted small">일주일에 한 번 요구할 수 있습니다. 이적시장이 닫혀 있을 때는 다음 시장까지 유효한 요청으로 올라갑니다. 감독이 약한 자리부터, 이적 예산 안에서 지금 선수보다 나은 후보를 최대 3명 골라 영입 요청에 올립니다.</p>
     </div>`;
 }

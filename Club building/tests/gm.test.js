@@ -227,5 +227,7 @@ test('감독: 포지션 진단으로 부족한 자리를 알려 주고, 추천 �
   assert.match(html, /선수단 진단/);
   assert.match(html, /data-action="askCoach"/);
   state.date = '2026-10-01';
-  assert.match(g.askCoach(state).reason, /이적시장이 닫혀/);
+  const closed = g.askCoach(state);
+  assert.ok(closed.ok && !closed.open, closed.reason);
+  assert.ok(closed.made.every((r) => r.until === '2027-01-31'));
 });

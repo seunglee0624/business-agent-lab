@@ -366,6 +366,14 @@ function calendarDecisions(state, club, date) {
   }
 }
 
+// 굿즈 주문 창: 지금 재고로 언제 품절되는지, 시즌 끝까지 얼마나 팔릴지, 지금 주문하면 얼마나 필요한지
+export function merchProjection(state, item) {
+  const club = userClub(state);
+  const homeDates = new Set(state.competitions[club.leagueId].fixtures.filter((f) => f.home === club.id && !f.result).map((f) => f.date));
+  const lead = merch.leadTime(merch.merchOf(club), item) ?? merch.ITEMS[item].leadDays ?? 0;
+  return merch.projectStock(state, club, item, homeDates, LEAGUES[club.leagueId].teams - 1, lead);
+}
+
 // 앞으로 남은 우리 홈 경기 날짜
 function userHomeDates(state, club) {
   return new Set(Object.values(state.competitions).flatMap((c) => c.fixtures)

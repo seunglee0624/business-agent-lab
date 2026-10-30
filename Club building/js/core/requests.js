@@ -76,17 +76,24 @@ export function makeRequests(state, rng, club) {
   return buildRequests(state, club, rng.int(MIN_REQUESTS, MAX_REQUESTS), end);
 }
 
-// 단장이 감독에게 추천 선수를 요구한다 (이적시장이 열려 있을 때, 일주일에 한 번)
+// 지금 열린 시장의 마감일, 닫혀 있으면 다음 시장의 마감일
+function nextWindowEnd(date) {
+  const open = windowEnd(date);
+  if (open) return open;
+  const y = Number(date.slice(0, 4));
+  return date.slice(5) < '07-01' ? `${y}-08-31` : `${y + 1}-01-31`;
+}
+
+// 단장이 감독에게 추천 선수를 요구한다 (일주일에 한 번). 시장이 닫혀 있으면 다음 시장까지 유효한 요청이 된다
 export function askCoach(state, club) {
-  const end = windowEnd(state.date);
+  const end = nextWindowEnd(state.date);
   if (!club.headCoach) return { ok: false, reason: '감독이 없습니다.' };
-  if (!end) return { ok: false, reason: '이적시장이 닫혀 있습니다. (여름 7/1~8/31, 겨울 1월)' };
   const last = state.transfers.lastAsk;
   if (last && daysBetween(last, state.date) < ASK_COOLDOWN_DAYS) return { ok: false, reason: `감독이 지난 ${formatShortDate(last)}에 이미 추천했습니다. 일주일 뒤에 다시 요청하세요.` };
   state.transfers.lastAsk = state.date;
   const made = buildRequests(state, club, 3, end);
   if (!made.length) return { ok: false, reason: '이적 예산 안에서 지금 선수보다 나은 후보를 찾지 못했습니다.' };
-  return { ok: true, made };
+  return { ok: true, made, open: !!windowEnd(state.date) };
 }
 
 export const activeRequests = (state) => (state.transfers.requests ?? []).filter((r) => r.until >= state.date && state.players[r.playerId]);

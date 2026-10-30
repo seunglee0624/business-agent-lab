@@ -100,3 +100,14 @@ test('굿즈: 품절 경고는 남은 홈 경기 날짜로 품절 날짜와 시�
   it.stock = 1e6;
   assert.equal(projectStock(state, club, 'scarf', homeDates, 19, 14).outDate, null);
 });
+
+test('굿즈 주문 창에 품절 예상 날짜와 시즌 끝까지 예상 판매·주문할 양이 나온다', async () => {
+  const { fansView } = await import('../js/ui/views.js');
+  const state = g.createNewGame('merch-modal');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  g.merchOf(g.userClub(state)).items.scarf.stock = 300;
+  const html = fansView(state, { merchItem: 'scarf' });
+  assert.match(html, /쯤<\/strong>\(약 \d+일 뒤\) 품절/);
+  assert.match(html, /시즌 끝\(6\/30\)까지 예상 판매/);
+  assert.match(html, /팔 물량 약/);
+});

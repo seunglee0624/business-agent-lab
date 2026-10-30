@@ -9,7 +9,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS } from '../core/game.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
@@ -934,6 +934,20 @@ export function merchForecastText(state, club, item, price, design) {
   return `시즌 예상 판매 ${fc[0].toLocaleString()}~${fc[1].toLocaleString()}개 · 수입 약 ${won(mid * price)}`;
 }
 
+// 재고 전망: 남은 홈 경기 날짜를 따라 계산한 품절 날짜와 남은 시즌 예상 판매
+function merchProjectionText(state, item, it) {
+  const p = merchProjection(state, item);
+  if (!p.total) return '';
+  const out = !it.stock ? '<span class="error">지금 품절입니다.</span>'
+    : p.outDate ? `지금 재고(${it.stock.toLocaleString()}개)는 <strong>${formatShortDate(p.outDate)}쯤</strong>(약 ${p.days}일 뒤) 품절될 것으로 보입니다.`
+    : `지금 재고(${it.stock.toLocaleString()}개)로 시즌 끝까지 버틸 것으로 보입니다.`;
+  return `<div class="merch-projection small">
+      <p>${out}</p>
+      <p>시즌 끝(6/30)까지 예상 판매 약 ${p.total.toLocaleString()}개${p.shortfall ? ` · 약 <strong>${p.shortfall.toLocaleString()}개</strong> 모자람` : ''}</p>
+      ${p.suggest ? `<p>지금 주문하면 ${formatShortDate(p.arrive)} 도착 → 그때부터 시즌 끝까지 팔 물량 약 <strong>${p.suggest.toLocaleString()}개</strong></p>` : ''}
+    </div>`;
+}
+
 function merchDetail(state, club, item, msg) {
   const m = merchOf(club);
   const it = m.items[item];
@@ -950,7 +964,8 @@ function merchDetail(state, club, item, msg) {
         <p class="muted small">충성층은 클래식·레트로, 유행층은 모던·스타 마킹, 가족층은 스타 마킹, 지역층은 레트로를 좋아합니다.</p>` : ''}
       ${def.segment ? `<p class="muted small">${def.segment === 'loyal' ? '충성층' : '가족층'}이 많이 삽니다.</p>` : ''}
       ${def.limited ? '<p class="muted small">주문하면 2주 동안만 팔립니다.</p>' : ''}
-      <p class="small">지금 설정 기준 ${fc[0].toLocaleString()}~${fc[1].toLocaleString()}개</p>`;
+      <p class="small">지금 설정 기준 ${fc[0].toLocaleString()}~${fc[1].toLocaleString()}개</p>
+      ${def.limited ? '' : merchProjectionText(state, item, it)}`;
   const side = `
       ${msg ? `<p class="${msg.ok ? 'good' : 'error'} small">${esc(msg.text)}</p>` : ''}
       <div class="renew">

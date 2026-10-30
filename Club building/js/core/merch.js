@@ -198,7 +198,7 @@ export function projectStock(state, club, item, homeDates, homeGames, lead = 0) 
 }
 
 // 지금 주문하면 며칠 뒤 오는지 (더 주문할 수 없으면 null)
-function leadTime(m, item) {
+export function leadTime(m, item) {
   const def = ITEMS[item];
   const it = m.items[item];
   if (def.limited || it.incoming) return null;

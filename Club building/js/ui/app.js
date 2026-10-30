@@ -321,7 +321,7 @@ export class App {
       }
       case 'askCoach': {
         const res = askCoach(s);
-        this.ui.managerMsg = { ok: res.ok, text: res.ok ? `감독이 ${res.made.length}명을 추천했습니다. 이적 탭의 영입 요청에서 승인하거나 거절하세요.` : res.reason };
+        this.ui.managerMsg = { ok: res.ok, text: res.ok ? `감독이 ${res.made.length}명을 추천했습니다. 이적 탭의 영입 요청에서 승인하거나 거절하세요.${res.open ? '' : ' 지금은 이적시장이 닫혀 있어, 승인하면 다음 시장이 열릴 때 협상할 수 있습니다.'}` : res.reason };
         this.persist();
         this.render();
         break;
