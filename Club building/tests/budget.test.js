@@ -83,3 +83,14 @@ test('이적 예산은 잔고 안에 묶인다: 시설·행사는 그 돈을 못
   assert.equal(f.balance, 30e8);
   assert.equal(f.transferBudget, 30e8);
 });
+
+test('재정 조정: 주급 예산을 줄여도 이적 예산은 잔고를 넘지 않는다', async () => {
+  const state = g.createNewGame('budget-cap');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const f = g.userClub(state).finance;
+  f.balance = f.transferBudget + 1e8;
+  const r = g.budgetRange(state);
+  assert.ok(g.adjustBudgets(state, r.min).ok);
+  assert.ok(f.transferBudget <= f.balance);
+  assert.ok(Math.abs(f.transferBudget - f.balance) <= r.weeks * 1e6);
+});

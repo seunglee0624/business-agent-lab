@@ -12,7 +12,7 @@ import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
-import { weeklyWageBill, ledgerTotal, monthlyUpkeep, spendable, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
 import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -1103,11 +1103,8 @@ export function financeView(state) {
         <h3>잔고와 예산</h3>
         <table class="table compact">
           <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
-          <tr><td>이적 예산 (잔고 안에 묶임)</td><td class="num">${won(f.transferBudget)}</td></tr>
-          <tr><td>시설·행사에 쓸 수 있는 돈</td><td class="num">${won(spendable(club))}</td></tr>
-          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
-          <tr><td>남은 주급 여유</td><td class="num">${won(f.wageBudget - bill)}</td></tr>
-          <tr><td>시설 유지비 (월)</td><td class="num">${won(monthlyUpkeep(club))}</td></tr>
+          <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
+          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
         </table>
         ${budgetSlider(state, f)}
         <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>

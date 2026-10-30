@@ -166,23 +166,26 @@ export function budgetRange(state, club) {
   const weeks = Math.max(1, Math.ceil((end - new Date(state.date)) / (7 * 864e5)));
   const bill = weeklyWageBill(state, club);
   const unit = bill >= 1e8 ? 1e6 : 1e4;
-  const min = Math.min(f.wageBudget, Math.ceil(bill / unit) * unit);
   const max = f.wageBudget + f.transferBudget / weeks;
+  // 이적 예산은 잔고를 넘을 수 없으므로, 주급 예산을 줄여 이적 예산으로 옮기는 것도 잔고까지만
+  const byBalance = Math.ceil((f.wageBudget - (Math.max(0, f.balance) - f.transferBudget) / weeks) / unit) * unit;
+  const min = Math.min(max, Math.max(Math.min(f.wageBudget, Math.ceil(bill / unit) * unit), byBalance));
   return { weeks, min, max, pool: f.transferBudget + f.wageBudget * weeks };
 }
 
 export function adjustBudgets(state, club, wageBudget) {
   const { weeks, min, max, pool } = budgetRange(state, club);
-  if (!(wageBudget >= min - 1 && wageBudget <= max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
   const f = club.finance;
-  // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산을 모두 주급으로 돌린다
   const unit = max >= 1e8 ? 1e6 : 1e4;
+  // 반올림 단위 안의 차이는 허용하고 범위 끝으로 맞춘다
+  if (!(wageBudget >= min - unit && wageBudget <= max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
+  // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산을 모두 주급으로 돌린다
   if (wageBudget >= max - unit) {
     f.wageBudget = roundMoney(max);
     f.transferBudget = 0;
     return { ok: true };
   }
   f.wageBudget = roundMoney(Math.max(min, wageBudget));
-  f.transferBudget = roundMoney(Math.max(0, pool - f.wageBudget * weeks));
+  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), pool - f.wageBudget * weeks)));
   return { ok: true };
 }

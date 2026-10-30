@@ -724,6 +724,8 @@ export function setTicketPrice(state, grade, price) {
 export function upgradeState(state) {
   state.settings.decisions = { ...DEFAULT_SETTINGS.decisions, ...(state.settings.decisions ?? {}) };
   if (state.user?.clubId && state.clubs[state.user.clubId].sponsors) sponsors.sponsorCatchUp(state, userClub(state));
+  // 이적 예산은 잔고 안에 묶인 돈이다 (예전에는 재정 조정으로 잔고를 넘을 수 있었다)
+  for (const c of Object.values(state.clubs)) if (c.finance) c.finance.transferBudget = Math.max(0, Math.min(c.finance.transferBudget, c.finance.balance));
   // 유스 탭은 선수단 탭에 합쳐졌다
   for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
   for (const club of Object.values(state.clubs)) {
