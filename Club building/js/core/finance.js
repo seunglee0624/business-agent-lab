@@ -110,11 +110,20 @@ export function expense(club, key, amount) {
   f.transferBudget = Math.max(0, Math.min(f.transferBudget, f.balance));
 }
 
-// 시설·행사처럼 고를 수 있는 지출에 쓸 수 있는 돈: 잔고에서 이적 예산을 뺀 만큼
-export const spendable = (club) => Math.max(0, club.finance.balance - club.finance.transferBudget);
-export function spendCheck(club, cost) {
-  if (cost <= spendable(club)) return null;
-  return club.finance.balance >= cost ? '이적 예산으로 묶인 돈은 쓸 수 없습니다. 재정 조정에서 이적 예산을 줄이세요.' : '잔고가 부족합니다.';
+// 남은 시즌 주 수 (6/30까지)
+export function weeksLeft(state) {
+  const end = new Date(`${state.season + 1}-06-30`);
+  return Math.max(1, Math.ceil((end - new Date(state.date)) / (7 * 864e5)));
+}
+
+// 재정 조정으로 주급 예산을 시즌 시작 값(baseWage)보다 올리면, 넘는 주급의 남은 시즌 치를 잔고에서 떼어 둔다
+export const wageReserve = (state, club) => Math.max(0, club.finance.wageBudget - (club.finance.baseWage ?? club.finance.wageBudget)) * weeksLeft(state);
+
+// 시설·행사처럼 고를 수 있는 지출에 쓸 수 있는 돈: 잔고에서 이적 예산과 주급용으로 떼어 둔 돈을 뺀 만큼
+export const spendable = (state, club) => Math.max(0, club.finance.balance - club.finance.transferBudget - wageReserve(state, club));
+export function spendCheck(state, club, cost) {
+  if (cost <= spendable(state, club)) return null;
+  return club.finance.balance >= cost ? '이적 예산·주급용으로 묶인 돈은 쓸 수 없습니다. 재정 조정에서 이적 예산이나 주급 예산을 줄이세요.' : '잔고가 부족합니다.';
 }
 
 export const PROFIT_TO_BUDGET = 0.5;
@@ -129,6 +138,7 @@ export function setBudgets(state, club) {
   const byRevenue = (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52;
   // AI 구단은 주급이 수입의 70%를 넘었으면 지금 주급에서 묶는다 (1.1배 여유를 매년 주면 주급이 끝없이 오른다)
   f.wageBudget = Math.max(Math.ceil(bill), roundMoney(Math.max(user ? bill * WAGE_HEADROOM : bill, byRevenue)));
+  f.baseWage = f.wageBudget;
   const last = f.history[0];
   if (!last) {
     f.transferBudget = Math.min(Math.max(0, f.balance), roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO)));
@@ -189,33 +199,38 @@ export function closeLedger(club, season) {
   f.season = emptyLedger();
 }
 
-// 예산 조정: 남은 시즌 주 수만큼의 주급이 이적 예산과 맞바뀐다. 주급 예산은 지금 주급보다 낮출 수 없다
+// 예산 조정: 주급 1주 치 = 남은 시즌 주 수만큼의 돈. 오른쪽으로 밀면 이적 예산을 먼저 쓰고, 0이 되면 남는 잔고로 주급 예산을 올린다.
+// 주급 예산은 지금 주급보다 낮출 수 없고, 이적 예산 + 시즌 시작 값을 넘는 주급(남은 주 수만큼)은 잔고를 넘을 수 없다
 export function budgetRange(state, club) {
   const f = club.finance;
-  const end = new Date(`${state.season + 1}-06-30`);
-  const weeks = Math.max(1, Math.ceil((end - new Date(state.date)) / (7 * 864e5)));
+  const weeks = weeksLeft(state);
   const bill = weeklyWageBill(state, club);
   const unit = bill >= 1e8 ? 1e6 : 1e4;
-  const max = f.wageBudget + f.transferBudget / weeks;
-  // 이적 예산은 잔고를 넘을 수 없으므로, 주급 예산을 줄여 이적 예산으로 옮기는 것도 잔고까지만
-  const byBalance = Math.ceil((f.wageBudget - (Math.max(0, f.balance) - f.transferBudget) / weeks) / unit) * unit;
+  const base = f.baseWage ?? f.wageBudget;
+  const balance = Math.max(0, f.balance);
+  const max = Math.max(f.wageBudget, base + balance / weeks);
+  // 주급 예산을 줄여 이적 예산으로 옮기는 것도 잔고까지만
+  const byBalance = Math.ceil((f.wageBudget - (balance - f.transferBudget) / weeks) / unit) * unit;
   const min = Math.min(max, Math.max(Math.min(f.wageBudget, Math.ceil(bill / unit) * unit), byBalance));
-  return { weeks, min, max, pool: f.transferBudget + f.wageBudget * weeks };
+  return { weeks, min, max, pool: f.transferBudget + f.wageBudget * weeks, base, balance };
 }
 
+// 주급 예산을 wage로 정했을 때의 이적 예산 (화면 미리보기와 같은 계산)
+export const transferAfter = ({ weeks, pool, base, balance }, wage) => Math.max(0, Math.min(pool - wage * weeks, balance - Math.max(0, wage - base) * weeks));
+
 export function adjustBudgets(state, club, wageBudget) {
-  const { weeks, min, max, pool } = budgetRange(state, club);
+  const r = budgetRange(state, club);
   const f = club.finance;
-  const unit = max >= 1e8 ? 1e6 : 1e4;
+  const unit = r.max >= 1e8 ? 1e6 : 1e4;
   // 반올림 단위 안의 차이는 허용하고 범위 끝으로 맞춘다
-  if (!(wageBudget >= min - unit && wageBudget <= max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
-  // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산을 모두 주급으로 돌린다
-  if (wageBudget >= max - unit) {
-    f.wageBudget = roundMoney(max);
+  if (!(wageBudget >= r.min - unit && wageBudget <= r.max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
+  // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산과 남는 잔고를 모두 주급으로 돌린다
+  if (wageBudget >= r.max - unit) {
+    f.wageBudget = Math.max(f.wageBudget, Math.floor(r.max / unit) * unit);
     f.transferBudget = 0;
     return { ok: true };
   }
-  f.wageBudget = roundMoney(Math.max(min, wageBudget));
-  f.transferBudget = Math.max(0, Math.min(Math.max(0, f.balance), roundMoney(pool - f.wageBudget * weeks)));
+  f.wageBudget = roundMoney(Math.max(r.min, wageBudget));
+  f.transferBudget = roundMoney(transferAfter(r, f.wageBudget));
   return { ok: true };
 }

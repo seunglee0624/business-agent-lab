@@ -6,7 +6,7 @@ import { POSITIONS } from '../data/positions.js';
 import { windowEnd, askingPrice, openDeal } from './transfers.js';
 import { daysBetween, formatShortDate } from './calendar.js';
 import { transferDemand } from './contracts.js';
-import { weeklyWageBill, budgetRange } from './finance.js';
+import { weeklyWageBill, budgetRange, spendable } from './finance.js';
 
 const MIN_REQUESTS = 2;
 const MAX_REQUESTS = 4;
@@ -46,10 +46,14 @@ function buildRequests(state, club, n, end, onlyNeeds = false) {
   const style = club.headCoach.style;
   const all = Object.values(state.players);
   const taken = new Set(activeRequests(state).map((r) => r.playerId));
-  // 이적료 + 주급 여유를 넘는 주급(남은 주 수만큼 이적 예산에서 옮겨야 할 돈)이 이적 예산 안이면 고른다
+  // 이적료는 이적 예산 안, 이적료 + 주급 여유를 넘는 주급(남은 주 수만큼)은 이적 예산 + 남는 잔고 안이면 고른다 (재정 조정으로 옮길 수 있는 돈)
   const wageRoom = club.finance.wageBudget - weeklyWageBill(state, club);
   const { weeks } = budgetRange(state, club);
-  const affordable = (p) => (p.clubId ? askingPrice(state, p) : 0) + Math.max(0, transferDemand(state, club, p).wage - wageRoom) * weeks <= club.finance.transferBudget;
+  const money = club.finance.transferBudget + spendable(state, club);
+  const affordable = (p) => {
+    const fee = p.clubId ? askingPrice(state, p) : 0;
+    return fee <= club.finance.transferBudget && fee + Math.max(0, transferDemand(state, club, p).wage - wageRoom) * weeks <= money;
+  };
   const made = [];
   for (const need of weakPositions(state, club)) {
     if (made.length >= n) break;

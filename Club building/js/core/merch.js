@@ -137,7 +137,7 @@ export function orderMerch(state, club, item, { quantity, price, design }) {
     arrive = addDays(state.date, def.leadDays);
   }
   const cost = roundMoney(unit * quantity);
-  const short = spendCheck(club, cost);
+  const short = spendCheck(state, club, cost);
   if (short) return { ok: false, reason: short };
   expense(club, 'merch', cost);
   it.price = roundMoney(price);

@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
+  adjustBudgets, transferAfter, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -600,7 +600,8 @@ export class App {
     if (el.dataset?.change !== 'wageBudget') return;
     const wage = Number(el.value);
     this.root.querySelector('#budgetWage').textContent = won(wage);
-    this.root.querySelector('#budgetTransfer').textContent = won(Math.max(0, Number(el.dataset.pool) - wage * Number(el.dataset.weeks)));
+    const r = { pool: Number(el.dataset.pool), weeks: Number(el.dataset.weeks), base: Number(el.dataset.base), balance: Number(el.dataset.balance) };
+    this.root.querySelector('#budgetTransfer').textContent = won(transferAfter(r, wage));
   }
 
   onChange(ev) {
@@ -618,6 +619,8 @@ export class App {
         adjustBudgets(s, Number(el.value));
         this.persist();
         this.render();
+        // 다시 그려도 바에 포커스를 남겨 키보드 화살표로 이어서 조정할 수 있게
+        this.root.querySelector('input[data-change="wageBudget"]')?.focus();
         return;
       case 'importSave': {
         const file = el.files?.[0];

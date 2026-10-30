@@ -29,7 +29,8 @@ import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development
 import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount, MAX_SQUAD } from './season.js';
 import { fanMatchResult, fanMonthly, fansOf, PROTEST_LINE } from './fans.js';
 import { recordHomeGate, priceLevel } from './tickets.js';
-import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
+import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets, transferAfter } from './finance.js';
+export { transferAfter };
 import { signNew, offerRenewal } from './contracts.js';
 import * as contracts from './contracts.js';
 import { monthlyMorale } from './morale.js';
@@ -741,6 +742,8 @@ export function upgradeState(state) {
   if (state.user?.clubId && state.clubs[state.user.clubId].sponsors) sponsors.sponsorCatchUp(state, userClub(state));
   // 이적 예산은 잔고 안에 묶인 돈이다 (예전에는 재정 조정으로 잔고를 넘을 수 있었다)
   for (const c of Object.values(state.clubs)) if (c.finance) c.finance.transferBudget = Math.max(0, Math.min(c.finance.transferBudget, c.finance.balance));
+  // 재정 조정의 기준인 시즌 시작 주급 예산 (예전 저장 파일은 지금 주급 예산)
+  for (const c of Object.values(state.clubs)) if (c.finance) c.finance.baseWage ??= c.finance.wageBudget;
   // 유스 탭은 선수단 탭에 합쳐졌다
   for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
   // 순위표·일정 탭은 대회 정보 탭에 합쳐졌다

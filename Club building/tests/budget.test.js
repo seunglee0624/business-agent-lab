@@ -7,15 +7,17 @@ test('재정 조정: 주급 예산을 올리면 이적 예산이 남은 주 수�
   const state = g.createNewGame('budget');
   g.chooseLeague(state, 'ENG1', '테스트');
   const f = g.userClub(state).finance;
-  const { weeks, min, max } = g.budgetRange(state);
+  const { weeks, max } = g.budgetRange(state);
   const before = { wage: f.wageBudget, transfer: f.transferBudget };
   assert.ok(g.adjustBudgets(state, before.wage + 1e7).ok);
   assert.ok(Math.abs(f.transferBudget - (before.transfer - 1e7 * weeks)) < 1e7);
   assert.ok(g.adjustBudgets(state, max).ok);
   assert.ok(f.transferBudget < 1e7);
-  assert.ok(g.adjustBudgets(state, min).ok);
+  // 잔고를 다 주급으로 돌린 뒤에는 범위를 다시 구한다 (이적 예산은 잔고를 넘을 수 없다)
+  const now = g.budgetRange(state);
+  assert.ok(g.adjustBudgets(state, now.min).ok);
   assert.ok(f.wageBudget >= Math.min(before.wage, weeklyWageBill(state, g.userClub(state))) - 1e4);
-  assert.equal(g.adjustBudgets(state, min - 1e9).ok, false);
+  assert.equal(g.adjustBudgets(state, g.budgetRange(state).min - 1e9).ok, false);
 });
 
 test('재정 화면에 재정 조정 바가 보인다', async () => {
@@ -72,7 +74,7 @@ test('이적 예산은 잔고 안에 묶인다: 시설·행사는 그 돈을 못
   const f = club.finance;
   f.balance = 100e8;
   f.transferBudget = 99e8;
-  assert.equal(spendable(club), 1e8);
+  assert.equal(spendable(state, club), 1e8);
   const res = g.startCampaign(state, 'documentary');
   assert.equal(res.ok, false);
   assert.match(res.reason, /이적 예산/);
@@ -126,4 +128,34 @@ test('강등 보조금: 강등된 구단은 두 시즌 동안 떠난 리그 중�
   updateParachutes(state, [{ clubId: club.id, from: 'ENG1', to: 'ENG2' }]);
   updateParachutes(state, [{ clubId: club.id, from: 'ENG2', to: 'ENG1' }]);
   assert.equal(parachutePerSeason(club), 0, '승격하면 끊긴다');
+});
+
+test('재정 조정: 이적 예산이 0이어도 남는 잔고로 주급 예산을 올리고, 올린 만큼 잔고에서 떼어 두어 시설·행사에 못 쓴다', async () => {
+  const { spendable, wageReserve } = await import('../js/core/finance.js');
+  const state = g.createNewGame('budget-free');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const f = club.finance;
+  f.balance = 100e8;
+  f.transferBudget = 0;
+  const base = f.wageBudget;
+  const r = g.budgetRange(state);
+  assert.ok(r.max > base, '남는 잔고만큼 올릴 수 있다');
+  assert.ok(Math.abs(r.max - (base + 100e8 / r.weeks)) < 1);
+  // 반쯤 올리면 잔고의 절반이 주급용으로 묶인다
+  assert.ok(g.adjustBudgets(state, base + 50e8 / r.weeks).ok);
+  assert.equal(f.transferBudget, 0);
+  assert.ok(Math.abs(wageReserve(state, club) - 50e8) <= r.weeks * 1e6);
+  assert.ok(Math.abs(spendable(state, club) - 50e8) <= r.weeks * 1e6);
+  // 다시 열어도 같은 잔고로 끝없이 올릴 수는 없다
+  const again = g.budgetRange(state);
+  assert.ok(Math.abs(again.max - r.max) < 1, '한도는 그대로');
+  assert.ok(g.adjustBudgets(state, again.max).ok);
+  assert.ok(spendable(state, club) <= r.weeks * 1e6, '끝까지 올리면 시설·행사에 쓸 돈이 없다');
+  const res = g.startCampaign(state, 'documentary');
+  assert.equal(res.ok, false);
+  // 되돌리면 이적 예산으로 돌아온다
+  assert.ok(g.adjustBudgets(state, base).ok);
+  assert.ok(Math.abs(f.transferBudget - 100e8) <= r.weeks * 1e6);
+  assert.equal(wageReserve(state, club), 0);
 });

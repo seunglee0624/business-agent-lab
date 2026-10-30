@@ -1102,8 +1102,8 @@ export function budgetSlider(state, f) {
         <div class="budget-slider">
           <h4>재정 조정</h4>
           <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주</span></div>
-          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" min="${r.min}" max="${Math.floor(r.max / step) * step}" step="${step}" value="${f.wageBudget}">
-          <p class="muted small">오른쪽으로 밀면 주급 예산이 늘고 이적 예산이 줄어듭니다. 주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 이적 예산과 같습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
+          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" data-base="${r.base}" data-balance="${r.balance}" min="${r.min}" max="${Math.max(f.wageBudget, Math.floor(r.max / step) * step)}" step="${step}" value="${f.wageBudget}">
+          <p class="muted small">오른쪽으로 밀면 주급 예산이 늘고 이적 예산이 줄어듭니다. 이적 예산이 0이 되면 남는 잔고로 주급 예산을 더 올릴 수 있습니다. 주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 돈과 같고, 시즌 시작 값(${won(r.base)})을 넘는 주급은 그만큼 잔고에서 떼어 두어 시설·행사에 쓸 수 없습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
         </div>`;
 }
 

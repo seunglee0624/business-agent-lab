@@ -48,7 +48,7 @@ export function startCampaign(state, rng, club, kind) {
   if (reason) return { ok: false, reason };
   const def = CAMPAIGNS[kind];
   const cost = campaignCost(club, kind);
-  const short = spendCheck(club, cost);
+  const short = spendCheck(state, club, cost);
   if (short) return { ok: false, reason: short };
   expense(club, 'events', cost);
   // 반응은 운: 0.6~1.4배, 같은 캠페인을 반복하면 줄어든다

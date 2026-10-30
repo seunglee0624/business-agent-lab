@@ -56,7 +56,7 @@ export function bookEvent(state, club, fixture, kind) {
   const s = stadiumOf(club);
   if (s.events.booked[fixture.id]) return { ok: false, reason: '이 경기에는 이미 행사가 잡혀 있습니다.' };
   const cost = eventCost(club, kind);
-  const short = spendCheck(club, cost);
+  const short = spendCheck(state, club, cost);
   if (short) return { ok: false, reason: short };
   expense(club, 'events', cost);
   s.events.booked[fixture.id] = { kind, cost, date: fixture.date };
@@ -102,7 +102,7 @@ export function buildPitchSystem(state, club) {
   if (s.pitchSystem) return { ok: false, reason: s.pitchSystem.done <= state.date ? '이미 잔디 보호 시스템이 있습니다.' : '이미 공사 중입니다.' };
   if (club.facilities.stadium < PITCH_SYSTEM.minStadium) return { ok: false, reason: `경기장이 ${PITCH_SYSTEM.minStadium}레벨 이상이어야 합니다.` };
   const cost = pitchSystemCost();
-  const short = spendCheck(club, cost);
+  const short = spendCheck(state, club, cost);
   if (short) return { ok: false, reason: short };
   expense(club, 'construction', cost);
   s.pitchSystem = { start: state.date, done: addMonths(state.date, PITCH_SYSTEM.months) };
