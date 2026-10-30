@@ -20,12 +20,14 @@ test('재정 조정: 주급 예산을 올리면 이적 예산이 남은 주 수�
   assert.equal(g.adjustBudgets(state, g.budgetRange(state).min - 1e9).ok, false);
 });
 
-test('재정 화면에 재정 조정 바가 보인다', async () => {
+test('재정 화면에 재정 조정 바와 남은 주급 여유가 보인다', async () => {
   const { financeView } = await import('../js/ui/views.js');
   const state = g.createNewGame('budget-view');
   g.chooseLeague(state, 'ENG1', '테스트');
   const html = financeView(state);
   assert.match(html, /type="range" data-change="wageBudget"/);
+  assert.match(html, /남은 주급 여유/);
+  assert.match(html, /id="budgetRoom"/);
   assert.match(html, /재정 조정/);
 });
 
@@ -86,15 +88,30 @@ test('이적 예산은 잔고 안에 묶인다: 시설·행사는 그 돈을 못
   assert.equal(f.transferBudget, 30e8);
 });
 
-test('재정 조정: 주급 예산을 줄여도 이적 예산은 잔고를 넘지 않는다', async () => {
+test('재정 조정: 주급 예산을 줄이면 줄인 주급 × 남은 주가 그대로 이적 예산이 되고(잔고를 넘어 당겨 씀), 시즌이 지나며 당겨 쓴 한도가 줄어든다', async () => {
+  const { refreshWageCredit } = await import('../js/core/finance.js');
   const state = g.createNewGame('budget-cap');
   g.chooseLeague(state, 'ENG1', '테스트');
-  const f = g.userClub(state).finance;
-  f.balance = f.transferBudget + 1e8;
+  const club = g.userClub(state);
+  const f = club.finance;
+  f.balance = 60e8;
+  f.transferBudget = 40e8;
   const r = g.budgetRange(state);
-  assert.ok(g.adjustBudgets(state, r.min).ok);
-  assert.ok(f.transferBudget <= f.balance);
-  assert.ok(Math.abs(f.transferBudget - f.balance) <= r.weeks * 1e6);
+  const cut = 3e8;
+  assert.ok(g.adjustBudgets(state, f.wageBudget - cut).ok);
+  assert.ok(Math.abs(f.transferBudget - (40e8 + cut * r.weeks)) <= 1e6 * r.weeks, '잔고를 넘어 늘어난다');
+  assert.ok(f.transferBudget > f.balance);
+  assert.ok(Math.abs(f.wageCredit - cut * r.weeks) <= 1e6 * r.weeks, '당겨 쓸 수 있는 한도 = 줄인 주급 × 남은 주');
+  // 다 써서 잔고가 마이너스가 되어도 된다
+  f.balance -= f.transferBudget;
+  f.transferBudget = 0;
+  assert.ok(f.balance < 0);
+  // 몇 주 지나면 당겨 쓴 한도가 그만큼 줄고, 이적 예산이 그 한도를 넘으면 맞춰 줄어든다
+  f.transferBudget = f.wageCredit;
+  state.date = '2027-03-01';
+  refreshWageCredit(state, club);
+  assert.ok(f.wageCredit < cut * r.weeks / 2);
+  assert.equal(f.transferBudget, f.wageCredit);
 });
 
 test('AI 구단 예산: 주급이 수입의 70%를 넘으면 주급 예산을 지금 주급에서 묶고, 적자 시즌 뒤에는 잔고 20% 하한이 없다', async () => {

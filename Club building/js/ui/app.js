@@ -602,6 +602,7 @@ export class App {
     this.root.querySelector('#budgetWage').textContent = won(wage);
     const r = { pool: Number(el.dataset.pool), weeks: Number(el.dataset.weeks), base: Number(el.dataset.base), balance: Number(el.dataset.balance) };
     this.root.querySelector('#budgetTransfer').textContent = won(transferAfter(r, wage));
+    this.root.querySelector('#budgetRoom').textContent = won(Math.max(0, wage - Number(el.dataset.bill)));
   }
 
   onChange(ev) {

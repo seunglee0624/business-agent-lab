@@ -1101,9 +1101,9 @@ export function budgetSlider(state, f) {
   return `
         <div class="budget-slider">
           <h4>재정 조정</h4>
-          <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주</span></div>
-          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" data-base="${r.base}" data-balance="${r.balance}" min="${r.min}" max="${Math.max(f.wageBudget, Math.floor(r.max / step) * step)}" step="${step}" value="${f.wageBudget}">
-          <p class="muted small">오른쪽으로 밀면 주급 예산이 늘고 이적 예산이 줄어듭니다. 이적 예산이 0이 되면 남는 잔고로 주급 예산을 더 올릴 수 있습니다. 주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 돈과 같고, 시즌 시작 값(${won(r.base)})을 넘는 주급은 그만큼 잔고에서 떼어 두어 시설·행사에 쓸 수 없습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
+          <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주 · 여유 <strong id="budgetRoom">${won(Math.max(0, f.wageBudget - r.bill))}</strong>/주</span></div>
+          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" data-base="${r.base}" data-balance="${r.balance}" data-bill="${r.bill}" min="${r.min}" max="${Math.max(f.wageBudget, Math.floor(r.max / step) * step)}" step="${step}" value="${f.wageBudget}">
+          <p class="muted small">주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 돈과 같습니다. 왼쪽으로 밀면 줄인 주급만큼 이적 예산이 늘고, 잔고를 넘는 몫은 남은 시즌 수입에서 당겨 씁니다(다 쓰면 잔고가 잠시 마이너스가 될 수 있음). 오른쪽으로 밀면 이적 예산을 먼저 옮기고, 이적 예산이 0이 되면 남는 잔고로 주급 예산을 더 올립니다. 시즌 시작 값(${won(r.base)})을 넘는 주급은 그만큼 잔고에서 떼어 두어 시설·행사에 쓸 수 없습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
         </div>`;
 }
 
@@ -1119,7 +1119,8 @@ export function financeView(state) {
         <table class="table compact">
           <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
           <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
-          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
+          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
+          <tr><td>남은 주급 여유 (주)</td><td class="num">${won(Math.max(0, f.wageBudget - bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
         </table>
         ${budgetSlider(state, f)}
         <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>

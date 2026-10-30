@@ -16,7 +16,7 @@ export function check(state) {
     const f = c.finance;
     for (const k of ['balance', 'transferBudget', 'wageBudget']) if (bad(f[k])) v(`재정 값이 숫자가 아님: ${k}`, c.name);
     for (const side of ['income', 'expense']) for (const [k, x] of Object.entries(f.season[side])) if (bad(x)) v(`장부 값이 숫자가 아님: ${side}.${k}`, c.name);
-    if (f.transferBudget > Math.max(0, f.balance) + 1) v('이적 예산이 잔고보다 큼', `${c.name} ${f.transferBudget} > ${f.balance}`);
+    if (f.transferBudget > Math.max(0, f.balance) + (f.wageCredit ?? 0) + 1) v('이적 예산이 잔고(+당겨 쓴 몫)보다 큼', `${c.name} ${f.transferBudget} > ${f.balance} + ${f.wageCredit ?? 0}`);
     if (f.transferBudget < 0) v('이적 예산이 음수', c.name);
     if (f.wageBudget < 0) v('주급 예산이 음수', c.name);
 

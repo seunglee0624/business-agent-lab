@@ -16,14 +16,18 @@ test('시즌 시작 이적 예산: 반올림 때문에 잔고를 넘지 않는�
   assert.ok(f.transferBudget <= f.balance, `${f.transferBudget} > ${f.balance}`);
 });
 
-test('재정 조정: 반올림 때문에 이적 예산이 잔고를 넘지 않는다', () => {
+test('재정 조정: 반올림 때문에 이적 예산이 잔고 + 당겨 쓴 한도를 넘지 않는다', () => {
   const state = g.createNewGame('inv-round2');
   g.chooseLeague(state, 'ENG1', '테스트');
   const f = g.userClub(state).finance;
   f.balance = f.transferBudget + 4.9e5; // 잔고가 이적 예산보다 반올림 단위 절반만큼만 많다
   const r = g.budgetRange(state);
   g.adjustBudgets(state, r.min);
-  assert.ok(f.transferBudget <= f.balance, `${f.transferBudget} > ${f.balance}`);
+  assert.ok(f.transferBudget <= f.balance + f.wageCredit, `${f.transferBudget} > ${f.balance} + ${f.wageCredit}`);
+  // 오른쪽 끝(남는 잔고까지 주급으로)에서는 이적 예산 0, 당겨 쓴 몫 없음
+  g.adjustBudgets(state, g.budgetRange(state).max);
+  assert.equal(f.transferBudget, 0);
+  assert.equal(f.wageCredit, 0);
 });
 
 test('시즌 끝에 지워진 선수(오래된 자유계약)는 협상 목록에서도 빠진다', () => {
