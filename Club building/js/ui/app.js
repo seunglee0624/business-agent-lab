@@ -267,6 +267,7 @@ export class App {
         this.ui.fanMsg = null;
         this.ui.decision = null;
         this.ui.tourRegion = null;
+        this.ui.budgetOpen = false;
         this.ui.eventFixture = null;
         this.ui.clubMsg = null;
         this.ui.transferMsg = null;
@@ -318,6 +319,10 @@ export class App {
         this.render();
         break;
       }
+      case 'openBudget':
+        this.ui.budgetOpen = !!d.open;
+        this.render();
+        break;
       case 'openTour':
         this.ui.tourRegion = d.region || null;
         this.render();

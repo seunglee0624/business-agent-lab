@@ -13,7 +13,7 @@ import { weeklyWageBill } from '../core/finance.js';
 import { formatDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
 import { esc, posLabel, won, age, attrClass, modal } from './format.js';
-import { playerProfile } from './views.js';
+import { playerProfile, budgetSlider } from './views.js';
 
 const eok = (amount) => Math.round(amount / 1e6) / 100; // 원 → 억 (소수 둘째 자리)
 
@@ -33,8 +33,10 @@ export function transfersView(state, ui) {
     <div class="card transfer-head">
       <div><strong>${end ? `이적시장 열림 · ${formatDate(end)} 마감` : `이적시장 닫힘 · 다음 시장 ${nextOpen}`}</strong>
         <span class="muted small">${end ? '' : '자유계약 선수는 언제든 영입할 수 있습니다.'}</span></div>
-      <div class="small">이적 예산 <strong>${won(f.transferBudget)}</strong> · 주급 여유 <strong>${won(f.wageBudget - weeklyWageBill(state, club))}</strong>/주 · 1군 등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명</div>
+      <div class="small">이적 예산 <strong>${won(f.transferBudget)}</strong> · 주급 여유 <strong>${won(f.wageBudget - weeklyWageBill(state, club))}</strong>/주 · 1군 등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명
+        <button class="btn small" data-action="openBudget" data-open="1">재정 조정</button></div>
     </div>
+    ${ui.budgetOpen ? modal({ title: '재정 조정', body: budgetSlider(state, f), close: 'data-action="openBudget" data-open=""' }) : ''}
     ${ui.transferMsg && !target ? `<p class="${ui.transferMsg.ok ? 'good' : 'error'}">${esc(ui.transferMsg.text)}</p>` : ''}
     ${requestsCard(state)}
     <div class="grid two">

@@ -1054,7 +1054,7 @@ function tourDetail(club, region) {
 }
 
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산
-function budgetSlider(state, f) {
+export function budgetSlider(state, f) {
   const r = budgetRange(state);
   const step = r.max >= 1e8 ? 1e6 : 1e4;
   return `

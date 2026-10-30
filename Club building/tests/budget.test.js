@@ -48,3 +48,12 @@ test('새 시즌 이적 예산: 남은 예산에 지난 시즌 수익의 절반�
   setBudgets(state, g.userClub(state));
   assert.equal(f.transferBudget, 30e8);
 });
+
+test('재정 조정: 이적 탭에서도 버튼으로 재정 조정 창을 열 수 있다', async () => {
+  const { transfersView } = await import('../js/ui/transfers.js');
+  const state = g.createNewGame('budget-tr');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  assert.match(transfersView(state, {}), /data-action="openBudget"/);
+  const html = transfersView(state, { budgetOpen: true });
+  assert.match(html, /data-change="wageBudget"/);
+});
