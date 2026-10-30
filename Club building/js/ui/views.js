@@ -2,7 +2,8 @@
 // 버튼은 data-action, 입력은 data-change 속성으로 app.js의 처리 함수와 연결된다.
 
 import { ATTRIBUTES, POSITIONS } from '../data/positions.js';
-import { MENTALITIES, PRESSING, TEMPO, LINE } from '../core/tactics.js';
+import { MENTALITIES, PRESSING, TEMPO, LINE, resolveLineup } from '../core/tactics.js';
+import { unavailableSet } from '../core/state.js';
 import { NATIONS } from '../data/nations.js';
 import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
@@ -226,7 +227,16 @@ export function squadView(state, ui) {
   const players = club.squad.map((id) => state.players[id]);
   const order = Object.keys(POSITIONS);
   const sort = ui.squadSort ?? 'pos';
+  // 선발순: 감독이 다음 경기에 낼 선발(포메이션 순서) → 교체 명단 → 나머지(포지션순)
+  const lineupRank = new Map();
+  if (sort === 'lineup') {
+    const { lineup, bench } = resolveLineup(club, state.players, { unavailable: unavailableSet(state, leagueId, club) });
+    lineup.forEach((e, i) => e && lineupRank.set(e.playerId, i));
+    bench.forEach((id, i) => lineupRank.set(id, 100 + i));
+  }
+  const rank = (p) => lineupRank.get(p.id) ?? 1000 + order.indexOf(p.position);
   const sorted = players.slice().sort((a, b) => {
+    if (sort === 'lineup') return rank(a) - rank(b) || overall(b) - overall(a);
     if (sort === 'ovr') return overall(b) - overall(a);
     if (sort === 'age') return age(a, state.date) - age(b, state.date);
     return order.indexOf(a.position) - order.indexOf(b.position) || overall(b) - overall(a);
@@ -240,7 +250,7 @@ export function squadView(state, ui) {
   return `${tabs}
     <div class="squad">
       <div class="card">
-        <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
+        <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('lineup', '선발순')} ${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
           <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>사기</th><th>주급</th><th>계약</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
           <tbody>
@@ -249,7 +259,7 @@ export function squadView(state, ui) {
               const banned = state.discipline[leagueId]?.[p.id]?.ban > 0;
               return `<tr class="${ui.playerId === p.id ? 'selected' : ''}" data-action="selectPlayer" data-id="${p.id}">
                 <td>${posLabel(p.position)}${p.secondary.length ? `<span class="muted small"> ${p.secondary.join(' ')}</span>` : ''}</td>
-                <td>${esc(p.name)}</td>
+                <td>${esc(p.name)}${sort === 'lineup' && lineupRank.has(p.id) ? ` <span class="muted small">${lineupRank.get(p.id) < 100 ? '선발' : '교체'}</span>` : ''}</td>
                 <td>${age(p, state.date)}</td>
                 <td>${esc(nationName(p.nation))}</td>
                 <td>${ovrCell(p)}</td>

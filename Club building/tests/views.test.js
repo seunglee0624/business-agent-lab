@@ -154,3 +154,13 @@ test('선수단 탭에서 1군과 유스를 나눠 보고, 유스 탭은 따로 
   assert.ok(squadView(state, { squadTab: 'youth' }).includes('U-21 팀'));
   assert.ok(!layout(state, { view: 'home' }, '').includes('data-view="youth"'));
 });
+
+test('선수단: 선발순으로 정렬하면 선발 11명이 먼저, 그다음 교체 명단이 나온다', () => {
+  const state = g.createNewGame('lineup-sort');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const html = squadView(state, { squadSort: 'lineup' });
+  const marks = [...html.matchAll(/<span class="muted small">(선발|교체)<\/span>/g)].map((m) => m[1]);
+  assert.equal(marks.filter((m) => m === '선발').length, 11);
+  assert.deepEqual(marks.slice(0, 11), Array(11).fill('선발'));
+  assert.ok(marks.slice(11).every((m) => m === '교체'));
+});
