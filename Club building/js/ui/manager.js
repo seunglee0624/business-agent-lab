@@ -5,6 +5,7 @@ import { COACH_STYLES } from '../core/coaches.js';
 import { NATIONS } from '../data/nations.js';
 import { formatDate } from '../core/calendar.js';
 import { esc, won } from './format.js';
+import { teamTacticsCard } from './views.js';
 
 export function managerView(state, ui) {
   const club = userClub(state);
@@ -26,6 +27,7 @@ export function managerView(state, ui) {
         <p class="muted small">해고하면 남은 계약 주급의 절반을 위약금으로 냅니다. 새 감독을 뽑을 때까지는 코치가 임시로 팀을 맡습니다.</p>`
       : '<p class="error">감독 자리가 비어 있습니다. 아래 후보 중에서 고르세요. 그동안 코치가 임시로 팀을 맡습니다.</p>'}
     </div>
+    ${teamTacticsCard(state)}
     <div class="card">
       <h3>감독 후보</h3>
       <p class="muted small">능력이 높을수록 선수 성장과 경기 운영이 좋아지고 주급이 비쌉니다. 구단 평판보다 너무 뛰어난 감독은 오지 않습니다.</p>

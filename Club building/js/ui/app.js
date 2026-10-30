@@ -15,7 +15,7 @@ import { upgradeInfo } from '../core/facilities.js';
 import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
-  newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView,
+  newGameView, layout, homeView, squadView, scheduleView, tableView, settingsView,
   fixtureDetail, seasonEndBanner, confirmModal, youthView, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
@@ -76,7 +76,7 @@ export class App {
       return;
     }
     const views = {
-      home: homeView, squad: squadView, tactics: tacticsView, youth: youthView, schedule: scheduleView,
+      home: homeView, squad: squadView, youth: youthView, schedule: scheduleView,
       table: tableView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);

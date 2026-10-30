@@ -1,12 +1,9 @@
 // 화면별 HTML. 모든 함수는 (state, ui) → 문자열이고, 상태를 바꾸지 않는다.
 // 버튼은 data-action, 입력은 data-change 속성으로 app.js의 처리 함수와 연결된다.
 
-import { FORMATIONS } from '../data/formations.js';
-import { ROLES } from '../data/roles.js';
 import { ATTRIBUTES, POSITIONS } from '../data/positions.js';
-import { MENTALITIES, PRESSING, TEMPO, LINE, resolveLineup } from '../core/tactics.js';
+import { MENTALITIES, PRESSING, TEMPO, LINE } from '../core/tactics.js';
 import { NATIONS } from '../data/nations.js';
-import { unavailableSet } from '../core/state.js';
 import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
@@ -18,7 +15,6 @@ import { weeklyWageBill, ledgerTotal, monthlyUpkeep, attendanceRate, commercialP
 import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
-import { pitchHtml, shortName } from './pitch.js';
 import { COACH_STYLES } from '../core/coaches.js';
 import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won, modal } from './format.js';
 
@@ -89,7 +85,6 @@ const countBadge = (n) => (n ? ` <span class="count">${n}</span>` : '');
 const NAV = [
   ['home', '홈'],
   ['squad', '선수단'],
-  ['tactics', '전술'],
   ['manager', '감독'],
   ['youth', '유스'],
   ['schedule', '일정'],
@@ -342,34 +337,11 @@ function contractBox(state, p, ui) {
 
 // ---- 전술 ----
 
-// 감독이 정한 전술과 선발 (단장은 보기만 한다)
-export function tacticsView(state) {
+// 감독이 정한 팀 전술 (단장은 보기만 한다). 감독 화면에 나온다
+export function teamTacticsCard(state) {
   const club = userClub(state);
   const t = club.tactics;
-  const slots = FORMATIONS[t.formation];
-  const lineup = resolveLineup(club, state.players, { unavailable: unavailableSet(state, userLeagueId(state), club) });
   const coach = club.headCoach;
-
-  const slotRows = slots.map((pos, i) => {
-    const entry = lineup.lineup[i];
-    const p = entry ? state.players[entry.playerId] : null;
-    return `<tr><td>${posLabel(pos)}</td><td>${p ? `${esc(p.name)} <span class="muted small">${p.position} · ${ratingAt(p, pos)}</span>` : '<span class="muted">비어 있음</span>'}</td>
-      <td>${entry ? esc(ROLES[entry.role].name) : ''}</td><td>${p ? conditionBar(p.condition) : ''}</td></tr>`;
-  }).join('');
-
-  const spots = slots.map((pos, i) => {
-    const entry = lineup.lineup[i];
-    const p = entry ? state.players[entry.playerId] : null;
-    if (!p) return { pos, cls: 'empty', html: `${posLabel(pos)}<div class="spot-name">비어 있음</div>` };
-    return {
-      pos,
-      cls: p.position === pos || p.secondary?.includes(pos) ? '' : 'offpos',
-      html: `${posLabel(pos)}<div class="spot-name" title="${esc(p.name)}">${esc(shortName(p.name))} <b>${ratingAt(p, pos)}</b></div>
-        <div class="spot-role">${esc(ROLES[entry.role].name)}</div>${conditionBar(p.condition)}`,
-    };
-  });
-  const bench = lineup.bench.map((id) => state.players[id]);
-
   return `
     <div class="card">
       <h3>팀 전술</h3>
@@ -380,19 +352,6 @@ export function tacticsView(state) {
         <tr><td>압박 강도</td><td>${esc(PRESSING[t.pressing])}</td><td>템포</td><td>${esc(TEMPO[t.tempo])}</td></tr>
         <tr><td>수비 라인</td><td>${esc(LINE[t.line])}</td><td></td><td></td></tr>
       </tbody></table>
-    </div>
-    <div class="grid two pitch-left">
-      <div class="card">
-        <h3>포메이션 <span class="muted small">${t.formation}</span></h3>
-        ${pitchHtml(spots)}
-        <p class="muted small">숫자는 그 자리에서의 능력입니다. 주황 테두리는 익숙하지 않은 자리입니다.</p>
-      </div>
-      <div class="card">
-        <h3>다음 경기 선발</h3>
-        <table class="table"><thead><tr><th>자리</th><th>선수</th><th>역할</th><th>컨디션</th></tr></thead><tbody>${slotRows}</tbody></table>
-        <h4>교체 명단</h4>
-        <p class="chips small">${bench.map((p) => `<span class="chip">${posLabel(p.position)} ${esc(p.name)}</span>`).join('')}</p>
-      </div>
     </div>`;
 }
 

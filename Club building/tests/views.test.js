@@ -5,7 +5,7 @@ import { FORMATIONS } from '../js/data/formations.js';
 import { pitchLayout } from '../js/ui/pitch.js';
 import { transfersView } from '../js/ui/transfers.js';
 import {
-  newGameView, layout, homeView, squadView, tacticsView, scheduleView, tableView, settingsView, fixtureDetail,
+  newGameView, layout, homeView, squadView, scheduleView, tableView, settingsView, fixtureDetail,
   seasonEndBanner, youthView, historyView, clubView, financeView,
 } from '../js/ui/views.js';
 import { managerView } from '../js/ui/manager.js';
@@ -26,7 +26,6 @@ function renderAll(state, ui = {}) {
     home: homeView(state, ui),
     squad: squadView(state, ui),
     squadDetail: squadView(state, { ...ui, playerId: club.squad[0] }),
-    tactics: tacticsView(state, ui),
     youth: youthView(state, ui),
     schedule: scheduleView(state, ui),
     table: tableView(state, ui),
@@ -93,12 +92,13 @@ test('포메이션 그림: 모든 포메이션에서 선수 칸이 겹치지 않
   }
 });
 
-test('전술 화면에 포메이션 그림과 역할이 나온다', () => {
+test('전술 탭은 없고, 감독 화면에서 팀 전술을 본다', () => {
   const state = g.createNewGame('p');
   g.chooseLeague(state, 'ENG1', '테스트');
-  const html = tacticsView(state, {});
-  assert.equal((html.match(/class="spot /g) ?? []).length, 11);
-  assert.ok(html.includes('spot-role'));
+  const html = managerView(state, {});
+  assert.ok(html.includes('팀 전술'));
+  assert.ok(html.includes(g.userClub(state).tactics.formation));
+  assert.ok(!layout(state, { view: 'home' }, '').includes('data-view="tactics"'));
 });
 
 test('재계약 협상 화면, 구단·재정 화면', () => {
