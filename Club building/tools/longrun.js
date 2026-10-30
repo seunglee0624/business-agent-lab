@@ -238,13 +238,19 @@ function record() {
 
 // 리그 전체(우리 구단 제외) 재정: 단계별 주급/수입, 적자 구단 비율, 평균 잔고
 const world = [];
+// 최소~평균~최대
+const range = (xs) => `${Math.round(Math.min(...xs))}~${Math.round(xs.reduce((a, b) => a + b, 0) / xs.length)}~${Math.round(Math.max(...xs))}`;
 function recordWorld() {
   const byTier = {};
   for (const c of Object.values(state.clubs)) {
     if (c.status !== 'active' || c.id === state.user.clubId || !c.finance.history[0]) continue;
     const h = c.finance.history[0];
     const tier = LEAGUES[c.leagueId].tier;
-    const t = (byTier[tier] ??= { n: 0, ratio: 0, deficit: 0, balance: 0, income: 0 });
+    const t = (byTier[tier] ??= { n: 0, ratio: 0, deficit: 0, balance: 0, income: 0, top11: [], rep: [], level: [] });
+    const top = c.squad.map((id) => overall(state.players[id])).sort((a, b) => b - a).slice(0, 11);
+    t.top11.push(top.reduce((a, b) => a + b, 0) / top.length);
+    t.rep.push(c.reputation);
+    t.level.push(c.level);
     const inc = ledgerTotal(h.income) - h.income.transfers;
     t.n++;
     t.ratio += h.expense.wages / Math.max(1, inc);
@@ -253,7 +259,7 @@ function recordWorld() {
     t.income += inc;
   }
   for (const [tier, t] of Object.entries(byTier)) {
-    world.push({ 시즌: state.season - 1, 단계: `${tier}부`, 평균수입: eok(t.income / t.n), 주급비율: (t.ratio / t.n).toFixed(2), 적자구단: `${Math.round((t.deficit / t.n) * 100)}%`, 평균잔고: eok(t.balance / t.n) });
+    world.push({ 시즌: state.season - 1, 단계: `${tier}부`, 평균수입: eok(t.income / t.n), 주급비율: (t.ratio / t.n).toFixed(2), 적자구단: `${Math.round((t.deficit / t.n) * 100)}%`, 평균잔고: eok(t.balance / t.n), 주전능력: range(t.top11), 평판: range(t.rep), 구단수준: range(t.level) });
   }
 }
 

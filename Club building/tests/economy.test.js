@@ -139,3 +139,19 @@ test('시즌이 끝나면 순위 상금, 장부 기록, 계약 만료 처리, �
   for (const id of c.squad) assert.ok(s.players[id].contract.until > s.date);
   assert.ok(s.user.history.at(-1).position >= 1);
 });
+
+test('유스: 입단 능력은 아카데미, 잠재력 보정은 유스 코치로만 정하고, 아카데미·유스 코치는 비용이 절반이다', async () => {
+  const { youthIntakeAbility, youthPotentialBoost } = await import('../js/core/facilities.js');
+  const { upgradeCost, facilityUpkeep, staffWage } = await import('../js/data/economy.js');
+  const club = { level: 80, reputation: 90, staff: { youthCoach: 10 }, facilities: { academy: 1 } };
+  assert.equal(youthIntakeAbility(club), 27);
+  assert.equal(youthPotentialBoost(club), 0);
+  club.level = 40; club.reputation = 30;
+  assert.equal(youthIntakeAbility(club), 27, '구단 수준·평판과 상관없다');
+  club.facilities.academy = 5; club.staff.youthCoach = 20;
+  assert.equal(youthIntakeAbility(club), 39);
+  assert.equal(youthPotentialBoost(club), 8);
+  assert.equal(upgradeCost('academy', 2), upgradeCost('training', 2) / 2);
+  assert.equal(facilityUpkeep(3, 'academy'), facilityUpkeep(3, 'training') / 2);
+  assert.equal(staffWage(10, 'youthCoach'), staffWage(10, 'coach') / 2);
+});

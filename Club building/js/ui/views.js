@@ -664,13 +664,13 @@ export function clubView(state, ui) {
 
   const staffRows = STAFF_KEYS.map((key) => {
     const level = club.staff[key];
-    const wage = roundMoney(staffWage(level) * EUR);
+    const wage = roundMoney(staffWage(level, key) * EUR);
     return `<tr>
       <td>${esc(STAFF[key].name)}</td>
       <td><button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level - 1}" ${level <= 1 ? 'disabled' : ''}>−</button>
         <strong class="staff-level">${level}</strong>
         <button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level + 1}" ${level >= MAX_STAFF ? 'disabled' : ''}>+</button></td>
-      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(roundMoney(staffWage(level + 1) * EUR) - wage)}</div>` : ''}</td>
+      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(roundMoney(staffWage(level + 1, key) * EUR) - wage)}</div>` : ''}</td>
       <td class="muted small">${esc(STAFF[key].effect)}</td>
     </tr>`;
   }).join('');

@@ -863,7 +863,7 @@ export function upgradeFacility(state, key) {
 export function setStaffLevel(state, key, level) {
   const club = userClub(state);
   if (!STAFF[key] || level < 1 || level > MAX_STAFF) return { ok: false, reason: '잘못된 수준입니다.' };
-  const diff = roundMoney((staffWage(level) - staffWage(club.staff[key])) * EUR);
+  const diff = roundMoney((staffWage(level, key) - staffWage(club.staff[key], key)) * EUR);
   if (diff > 0 && weeklyWageBill(state, club) + diff > club.finance.wageBudget) return { ok: false, reason: '주급 예산을 넘습니다.' };
   club.staff[key] = level;
   return { ok: true };

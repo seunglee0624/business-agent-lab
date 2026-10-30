@@ -42,9 +42,10 @@ export const growthFactor = (club) => 0.71 + 0.05 * club.facilities.training + 0
 export const injuryChanceFactor = (club) => 1.2 - 0.06 * club.facilities.sportsScience - 0.008 * club.staff.medical;
 export const injuryDaysFactor = (club) => 1.15 - 0.05 * club.facilities.medical - 0.005 * club.staff.medical;
 export const recoveryFactor = (club) => 0.85 + 0.05 * club.facilities.recovery;
-// 유스 입단: 아카데미 → 현재 능력, 유스 코치 → 잠재력
-export const youthAbilityOffset = (club) => -34 + club.facilities.academy * 2.4;
-export const youthPotentialBoost = (club) => (club.staff.youthCoach - 11) * 0.8 + (club.reputation - 65) * 0.2;
+// 유스 입단: 아카데미 → 현재 능력, 유스 코치 → 잠재력. 구단 수준·평판과는 상관없다
+// (구단 전력을 따라가면 강해진 구단이 더 강한 유스를 받아 리그 능력이 해마다 계단식으로 오른다)
+export const youthIntakeAbility = (club) => 24 + club.facilities.academy * 3;
+export const youthPotentialBoost = (club) => (club.staff.youthCoach - 10) * 0.8;
 
 export function capacity(club) {
   const building = club.construction.some((c) => c.key === 'stadium');

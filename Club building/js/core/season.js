@@ -13,7 +13,7 @@ import { addMessage, standings, topScorers, clubStrength } from './state.js';
 import { initFinance, payPrizeMoney, closeLedger, setBudgets } from './finance.js';
 import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
-import { FACILITY_KEYS } from '../data/economy.js';
+import { FACILITY_KEYS, staffWage, MAX_STAFF, EUR } from '../data/economy.js';
 import { fanSeasonEnd } from './fans.js';
 import { resetSeasonTickets } from './tickets.js';
 import { merchSeasonEnd } from './merch.js';
@@ -258,7 +258,7 @@ function signForPosition(state, rng, club, pos, date, log, useYouth) {
   } else {
     const age = Math.max(19, Math.min(31, Math.round(rng.normal(24, 3))));
     p = generatePlayer(rng, {
-      id: `p${state.ids.player++}`, pos, target: club.level - 4 + rng.normal(0, 3), age,
+      id: `p${state.ids.player++}`, pos, target: LEAGUES[club.leagueId].tierLevel[club.tier] - 4 + rng.normal(0, 3), age, // 리그 기준값 기준: 구단 수준을 따르면 해마다 능력이 계단식으로 오른다
       country: club.country, seasonStart: seasonStart(state.season + 1),
     });
     state.players[p.id] = p;
@@ -370,13 +370,26 @@ export function startSeason(state, rng) {
   }
 }
 
-// AI 구단은 돈이 넉넉하면 가끔 시설 하나를 올린다
+// AI 구단은 돈이 넉넉하면 가끔 시설 하나를 올린다. 유스(아카데미·유스 코치)는 싸서 돈 있는 구단부터 먼저 올린다
 function aiFacilityUpgrade(state, rng, club) {
+  aiYouthInvest(state, club);
   if (!rng.chance(0.25)) return;
   const options = FACILITY_KEYS.filter((k) => upgradeInfo(club, k) && !isBuilding(club, k));
   if (!options.length) return;
   const key = options.sort((a, b) => club.facilities[a] - club.facilities[b])[0];
   if (club.finance.balance >= upgradeInfo(club, key).cost * 2) requestUpgrade(state, club, key);
+}
+
+// 리그 단계별 AI 유스 투자 상한 (모든 부자 구단이 최고치로 가면 리그 전체 유스가 강해진다)
+export const AI_YOUTH_MAX = { 1: { academy: 5, coach: 16 }, 2: { academy: 4, coach: 12 }, 3: { academy: 3, coach: 9 } };
+function aiYouthInvest(state, club) {
+  const max = AI_YOUTH_MAX[LEAGUES[club.leagueId].tier];
+  const academy = upgradeInfo(club, 'academy');
+  if (academy && club.facilities.academy < max.academy && !isBuilding(club, 'academy') && club.finance.balance >= academy.cost * 4) requestUpgrade(state, club, 'academy');
+  // 유스 코치: 1년 치 주급 인상분의 20배가 잔고에 있으면 한 단계 올린다
+  const level = club.staff.youthCoach;
+  const raise = (staffWage(level + 1, 'youthCoach') - staffWage(level, 'youthCoach')) * EUR * 52;
+  if (level < Math.min(MAX_STAFF, max.coach) && club.finance.balance >= raise * 20) club.staff.youthCoach = level + 1;
 }
 
 export function seasonEndMessages(state, summary) {

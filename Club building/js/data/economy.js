@@ -39,10 +39,12 @@ export const FACILITY_KEYS = Object.keys(FACILITIES);
 export const MAX_FACILITY = 5;
 
 // 업그레이드 비용(유로)과 공사 기간(개월). level은 지금 레벨
-export const upgradeCost = (key, level) => (key === 'stadium' ? 4 : 1) * 1.5e6 * 2.5 ** (level - 1);
+// 유스 아카데미·유스 코치는 다른 시설·스태프의 절반 값 (작은 구단도 유스에 투자할 수 있게)
+export const YOUTH_COST = 0.5;
+export const upgradeCost = (key, level) => (key === 'stadium' ? 4 : key === 'academy' ? YOUTH_COST : 1) * 1.5e6 * 2.5 ** (level - 1);
 export const upgradeMonths = (key, level) => (key === 'stadium' ? 6 + 2 * level : 2 + level);
 // 시설 유지비 (한 달, 유로)
-export const facilityUpkeep = (level) => 4000 * 2.2 ** (level - 1);
+export const facilityUpkeep = (level, key) => 4000 * 2.2 ** (level - 1) * (key === 'academy' ? YOUTH_COST : 1);
 
 export const STAFF = {
   coach: { name: '코치', effect: '선수 성장 속도' },
@@ -54,7 +56,7 @@ export const STAFF = {
 export const STAFF_KEYS = Object.keys(STAFF);
 export const MAX_STAFF = 20;
 // 스태프 한 명(분야)의 주급 (유로)
-export const staffWage = (level) => 400 * 1.28 ** level;
+export const staffWage = (level, key) => 400 * 1.28 ** level * (key === 'youthCoach' ? YOUTH_COST : 1);
 
 // 계약의 출전 시간 약속과 기대 출전 비율
 export const PROMISES = {

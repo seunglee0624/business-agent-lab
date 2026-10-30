@@ -49,10 +49,10 @@ const loanShare = (p, club) => (!p.loan ? 1 : p.loan.to === club.id ? p.loan.wag
 export const playerWageBill = (state, club) => [...club.squad, ...(club.loanedOut ?? [])]
   .reduce((s, id) => { const p = state.players[id]; return s + roundMoney((p.contract?.wage ?? 0) * loanShare(p, club)); }, 0);
 // 스태프 + 감독 주급
-export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + roundMoney(staffWage(club.staff[k]) * EUR), 0) + (club.headCoach?.wage ?? 0);
+export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + roundMoney(staffWage(club.staff[k], k) * EUR), 0) + (club.headCoach?.wage ?? 0);
 // 주급 예산에 들어가는 주간 지출 (선수 + 스태프)
 export const weeklyWageBill = (state, club) => playerWageBill(state, club) + staffWageBill(club);
-export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + roundMoney(facilityUpkeep(club.facilities[k]) * EUR), 0);
+export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + roundMoney(facilityUpkeep(club.facilities[k], k) * EUR), 0);
 
 // 한 시즌 예상 수입 (예산 산정용)
 export function seasonRevenueEstimate(club) {
