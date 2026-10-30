@@ -5,7 +5,7 @@ import { POSITIONS, POSITION_WEIGHTS, ATTRIBUTES } from '../data/positions.js';
 import { overall } from '../core/player.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { PROMISES } from '../data/economy.js';
-import { seasonTransfers, START_YEAR, coachComment, userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests } from '../core/game.js';
+import { seasonTransfers, START_YEAR, coachComment, userClub, searchPlayers, playerInfo, registeredCount, MAX_SQUAD, transferRequests, suggestedCounter } from '../core/game.js';
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
@@ -92,7 +92,7 @@ function incomingCard(state) {
           <td class="offer-actions">
             <button class="btn small primary" data-action="respondOffer" data-id="${o.id}" data-answer="accept">수락</button>
             <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="reject">거절</button>
-            <input id="counter-${o.id}" type="number" min="0" step="0.1" value="${Math.round(o.fee * 1.15 / 1e7) / 10}" title="역제안 금액 (억 원)"><span class="small">억</span>
+            <input id="counter-${o.id}" type="number" min="0" step="0.1" value="${Math.round(suggestedCounter(o) / 1e7) / 10}" title="역제안 금액 (억 원)"><span class="small">억</span>
             <button class="btn small" data-action="respondOffer" data-id="${o.id}" data-answer="counter">역제안</button>
           </td></tr>`;
       }).join('')}</tbody></table>

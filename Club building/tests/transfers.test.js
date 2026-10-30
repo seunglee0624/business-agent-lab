@@ -3,7 +3,7 @@ import { totalCount, MAX_TOTAL } from '../js/core/registration.js';
 import assert from 'node:assert/strict';
 import {
   createNewGame, chooseLeague, userClub, playerInfo, searchPlayers, bidForPlayer, offerTerms,
-  advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed,
+  advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed, suggestedCounter,
 } from '../js/core/game.js';
 import { ageOn } from '../js/core/player.js';
 import { overall } from '../js/core/player.js';
@@ -263,4 +263,8 @@ test('AI 제안: 답하지 않으면 7일 뒤 자동으로 거절된다', () => 
   }
   assert.ok(!state.transfers.incoming.some((o) => o.id === offer.id));
   assert.equal(p.clubId, me.id);
+});
+
+test('역제안 추천: 받은 이적료의 115%', () => {
+  assert.equal(suggestedCounter({ fee: 10e8 }), 11.5e8);
 });

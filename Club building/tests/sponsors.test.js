@@ -5,6 +5,7 @@ import { sponsorDaily, sponsorMonthly, sponsorSeasonEnd, baseValue } from '../js
 import { finishTour } from '../js/core/tour.js';
 import { Rng } from '../js/core/rng.js';
 import { sponsorsView, fansView } from '../js/ui/views.js';
+import { won } from '../js/ui/format.js';
 
 function fresh(seed = 'sponsor') {
   const state = g.createNewGame(seed);
@@ -164,4 +165,19 @@ test('해외 팬: 투어로 느는 해외 팬은 처음 해외 팬 기준이라,
   const first = tourGain(state, club, 'asia');
   g.fansOf(club).overseas *= 5;
   assert.equal(tourGain(state, club, 'asia'), first);
+});
+
+test('영업 창의 기준 금액은 core의 baseValue와 같다', () => {
+  const state = fresh();
+  const club = g.userClub(state);
+  const html = sponsorsView(state, { pitchSlot: 'chest' });
+  const shown = [...html.matchAll(/약 ([^<]+)\/년/g)].map((m) => m[1]);
+  assert.equal(shown.length, g.INDUSTRY_KEYS.length);
+  // 화면은 백만 원 단위로 반올림해 보여 준다
+  g.INDUSTRY_KEYS.forEach((ind, i) => assert.equal(shown[i], won(Math.round(baseValue(club, 'chest', ind) / 1e6) * 1e6)));
+});
+
+test('요구 금액 추천: 처음엔 제안의 115%, 한 번 요구한 뒤엔 제안과 지난 요구의 중간', () => {
+  assert.equal(g.suggestedAsk({ amount: 10e8 }), 11.5e8);
+  assert.equal(g.suggestedAsk({ amount: 10e8, lastAsk: 14e8 }), 12e8);
 });

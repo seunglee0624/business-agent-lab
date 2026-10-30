@@ -50,7 +50,9 @@ const loanShare = (p, club) => (!p.loan ? 1 : p.loan.to === club.id ? p.loan.wag
 export const playerWageBill = (state, club) => [...club.squad, ...(club.loanedOut ?? [])]
   .reduce((s, id) => { const p = state.players[id]; return s + roundMoney((p.contract?.wage ?? 0) * loanShare(p, club)); }, 0);
 // 스태프 + 감독 주급
-export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + roundMoney(staffWage(club.staff[k], k) * EUR), 0) + (club.headCoach?.wage ?? 0);
+// 스태프 한 명의 주급 (수준별)
+export const staffWeeklyWage = (level, key) => roundMoney(staffWage(level, key) * EUR);
+export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + staffWeeklyWage(club.staff[k], k), 0) + (club.headCoach?.wage ?? 0);
 // 주급 예산에 들어가는 주간 지출 (선수 + 스태프)
 export const weeklyWageBill = (state, club) => playerWageBill(state, club) + staffWageBill(club);
 export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + roundMoney(facilityUpkeep(club.facilities[k], k) * EUR), 0);
@@ -222,8 +224,14 @@ export function budgetRange(state, club) {
   const balance = Math.max(0, f.balance);
   const max = Math.max(f.wageBudget, base + balance / weeks);
   const min = Math.min(max, f.wageBudget, Math.ceil(bill / unit) * unit);
-  return { weeks, min, max, pool: f.transferBudget + f.wageBudget * weeks, base, balance, bill };
+  // 바 한 칸과 오른쪽 끝 값 (끝까지 밀면 주급 예산이 이 값이 된다)
+  const step = max >= 1e8 ? 1e6 : 1e4;
+  const top = Math.max(f.wageBudget, Math.floor(max / step) * step);
+  return { weeks, min, max, step, top, pool: f.transferBudget + f.wageBudget * weeks, base, balance, bill };
 }
+
+// 남은 주급 여유 (주): 주급 예산 − 지금 주급
+export const wageRoom = (wageBudget, bill) => Math.max(0, wageBudget - bill);
 
 // 주급 예산을 wage로 정했을 때의 이적 예산 (화면 미리보기와 같은 계산): 이적 예산 + (주급 예산 − 시즌 시작 값) × 남은 주 ≤ 잔고
 export const transferAfter = ({ weeks, pool, base, balance }, wage) => Math.max(0, Math.min(pool - wage * weeks, balance - (wage - base) * weeks));
@@ -231,12 +239,12 @@ export const transferAfter = ({ weeks, pool, base, balance }, wage) => Math.max(
 export function adjustBudgets(state, club, wageBudget) {
   const r = budgetRange(state, club);
   const f = club.finance;
-  const unit = r.max >= 1e8 ? 1e6 : 1e4;
+  const unit = r.step;
   // 반올림 단위 안의 차이는 허용하고 범위 끝으로 맞춘다
   if (!(wageBudget >= r.min - unit && wageBudget <= r.max + 1)) return { ok: false, reason: '조정할 수 없는 금액입니다.' };
   // 바를 오른쪽 끝(반올림 단위 안)까지 밀면 이적 예산과 남는 잔고를 모두 주급으로 돌린다
   if (wageBudget >= r.max - unit) {
-    f.wageBudget = Math.max(f.wageBudget, Math.floor(r.max / unit) * unit);
+    f.wageBudget = r.top;
     f.transferBudget = 0;
     f.wageCredit = 0;
     return { ok: true };

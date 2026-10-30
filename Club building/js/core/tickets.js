@@ -93,16 +93,25 @@ export function seasonForecast(club, price) {
   return { sold: [Math.round(n * (1 - w)), Math.round(n * (1 + w))], income: [roundMoney(n * price * (1 - w)), roundMoney(n * price * (1 + w))] };
 }
 
+// 정할 수 있는 가격: 기본 가격의 50%~200% (step 단위로 맞춘 값)
+export function priceRange(club, grade) {
+  const ref = grade === 'season' ? referenceSeasonTicket(club) : referencePrice(club, grade);
+  const step = ref >= 1e6 ? 1e4 : 1e3;
+  return { ref, step, min: Math.round(ref * 0.5 / step) * step, max: Math.round(ref * 2 / step) * step };
+}
+
 // 가격 바꾸기 (시즌권은 첫 홈 경기 전까지만)
 export function setTicketPrice(club, grade, price) {
   const t = ticketsOf(club);
   if (!(price > 0)) return { ok: false, reason: '가격을 확인하세요.' };
+  if (grade !== 'season' && !GRADES[grade]) return { ok: false, reason: '없는 등급입니다.' };
+  const r = priceRange(club, grade);
+  if (price < r.min || price > r.max) return { ok: false, reason: '기본 가격의 50%~200% 안에서 정하세요.' };
   if (grade === 'season') {
     if (t.seasonSold !== null) return { ok: false, reason: '시즌권은 이미 판매가 확정되었습니다. 다음 시즌 전에 바꿀 수 있습니다.' };
     t.seasonPrice = roundMoney(price);
     return { ok: true };
   }
-  if (!GRADES[grade]) return { ok: false, reason: '없는 등급입니다.' };
   t.prices[grade] = roundMoney(price);
   return { ok: true };
 }

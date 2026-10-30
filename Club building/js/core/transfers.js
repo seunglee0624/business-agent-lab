@@ -231,6 +231,9 @@ export function dailyOffers(state, rng, club) {
   return offer;
 }
 
+// 받은 제안에 역제안할 때 입력칸에 미리 채울 금액
+export const suggestedCounter = (offer) => roundMoney(offer.fee * 1.15);
+
 // answer: 'accept' | 'reject' | { counter }. 돌려주는 값: { ok, reason, fee? }
 export function respondToOffer(state, rng, club, offerId, answer) {
   const t = state.transfers;

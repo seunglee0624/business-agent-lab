@@ -170,6 +170,9 @@ function sign(state, club, offer, amount) {
   return contract;
 }
 
+// 금액을 요구할 때 입력칸에 미리 채울 금액: 처음엔 제안의 115%, 그 뒤엔 제안과 지난 요구의 중간
+export const suggestedAsk = (offer) => roundMoney(offer.lastAsk ? (offer.amount + offer.lastAsk) / 2 : offer.amount * 1.15);
+
 // 제안 수락 또는 금액 요구
 export function answerSponsor(state, club, offerId, { accept = false, ask = null } = {}) {
   const s = sponsorsOf(state, club);

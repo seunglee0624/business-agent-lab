@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
 import { weeklyWageBill } from '../js/core/finance.js';
+import { won } from '../js/ui/format.js';
+import { STAFF_KEYS, MAX_STAFF } from '../js/data/economy.js';
 
 test('재정 조정: 주급 예산을 올리면 이적 예산이 남은 주 수만큼 줄고, 지금 주급 아래로는 못 내린다', () => {
   const state = g.createNewGame('budget');
@@ -175,4 +177,32 @@ test('재정 조정: 이적 예산이 0이어도 남는 잔고로 주급 예산�
   assert.ok(g.adjustBudgets(state, base).ok);
   assert.ok(Math.abs(f.transferBudget - 100e8) <= r.weeks * 1e6);
   assert.equal(wageReserve(state, club), 0);
+});
+
+test('바 오른쪽 끝 값은 끝까지 밀었을 때 실제로 정해지는 주급 예산이고, 여유는 주급 예산 − 지금 주급', async () => {
+  const { financeView } = await import('../js/ui/views.js');
+  const state = g.createNewGame('budget-top');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const top = Number(financeView(state).match(/data-change="wageBudget"[^>]*max="(\d+)"/)[1]);
+  assert.ok(g.adjustBudgets(state, top).ok);
+  assert.equal(club.finance.wageBudget, top);
+  const html = financeView(state);
+  assert.ok(html.includes(`id="budgetRoom">${won(club.finance.wageBudget - weeklyWageBill(state, club))}<`));
+  assert.equal(g.wageRoom(5e6, 3e6), 2e6);
+  assert.equal(g.wageRoom(3e6, 5e6), 0);
+});
+
+test('스태프 "올리면 +금액"은 실제로 올렸을 때 늘어나는 주급과 같다', async () => {
+  const { clubView } = await import('../js/ui/views.js');
+  const state = g.createNewGame('staff-wage');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  club.finance.wageBudget += 1e9;
+  const shown = clubView(state, {}).match(/올리면 \+([^<]+)</)[1];
+  // 화면의 첫 "올리면"은 아직 최고 수준이 아닌 첫 스태프 줄
+  const key = STAFF_KEYS.find((k) => club.staff[k] < MAX_STAFF);
+  const before = weeklyWageBill(state, club);
+  assert.ok(g.setStaffLevel(state, key, club.staff[key] + 1).ok);
+  assert.equal(shown, won(weeklyWageBill(state, club) - before));
 });

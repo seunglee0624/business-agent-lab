@@ -10,12 +10,12 @@ import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unregisteredPlayers, totalCount, MAX_TOTAL } from '../core/game.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
-import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
+import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
+import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
-import { weeklyWageBill, ledgerTotal, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
-import { marketValue, roundMoney } from '../core/money.js';
+import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage } from '../core/finance.js';
+import { marketValue } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
 import { COACH_STYLES } from '../core/coaches.js';
@@ -679,13 +679,13 @@ export function clubView(state, ui) {
 
   const staffRows = STAFF_KEYS.map((key) => {
     const level = club.staff[key];
-    const wage = roundMoney(staffWage(level, key) * EUR);
+    const wage = staffWeeklyWage(level, key);
     return `<tr>
       <td>${esc(STAFF[key].name)}</td>
       <td><button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level - 1}" ${level <= 1 ? 'disabled' : ''}>−</button>
         <strong class="staff-level">${level}</strong>
         <button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level + 1}" ${level >= MAX_STAFF ? 'disabled' : ''}>+</button></td>
-      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(roundMoney(staffWage(level + 1, key) * EUR) - wage)}</div>` : ''}</td>
+      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(staffWeeklyWage(level + 1, key) - wage)}</div>` : ''}</td>
       <td class="muted small">${esc(STAFF[key].effect)}</td>
     </tr>`;
   }).join('');
@@ -868,14 +868,14 @@ function rentalCard(state, club) {
 const range = (a) => `${won(a[0])} ~ ${won(a[1])}`;
 const crowdRange = (a) => `${a[0].toLocaleString()} ~ ${a[1].toLocaleString()}명`;
 
-// 가격 바 하나: 기본 가격의 50%~200%
-function priceSlider(grade, name, price, ref, fc, disabled = false) {
-  const step = ref >= 1e6 ? 1e4 : 1e3;
+// 가격 바 하나: 범위는 core의 priceRange
+function priceSlider(club, grade, name, price, fc, disabled = false) {
+  const { ref, step, min, max } = priceRange(club, grade);
   return `
       <div class="price-row">
         <div class="budget-labels"><span><strong>${name}</strong> <span id="price-${grade}">${won(price)}</span> <span class="muted small">기본 ${won(ref)}</span></span>
           <span class="small muted" id="fc-${grade}">${fc}</span></div>
-        <input type="range" data-change="ticketPrice" data-grade="${grade}" min="${Math.round(ref * 0.5 / step) * step}" max="${Math.round(ref * 2 / step) * step}" step="${step}" value="${price}" ${disabled ? 'disabled' : ''}>
+        <input type="range" data-change="ticketPrice" data-grade="${grade}" min="${min}" max="${max}" step="${step}" value="${price}" ${disabled ? 'disabled' : ''}>
       </div>`;
 }
 
@@ -892,8 +892,8 @@ function ticketCard(state, club) {
   return `
       <div class="card">
         <h3>티켓</h3>
-        ${priceSlider('season', '시즌권', t.seasonPrice, referenceSeasonTicket(club), locked ? `판매 확정 ${t.seasonSold.toLocaleString()}석` : forecastText(club, 'season', t.seasonPrice), locked)}
-        ${GRADE_KEYS.map((g) => priceSlider(g, GRADES[g].name, t.prices[g], referencePrice(club, g), forecastText(club, g, t.prices[g]))).join('')}
+        ${priceSlider(club, 'season', '시즌권', t.seasonPrice, locked ? `판매 확정 ${t.seasonSold.toLocaleString()}석` : forecastText(club, 'season', t.seasonPrice), locked)}
+        ${GRADE_KEYS.map((g) => priceSlider(club, g, GRADES[g].name, t.prices[g], forecastText(club, g, t.prices[g]))).join('')}
         <p class="small ${level > 1.1 ? 'error' : level < 0.9 ? 'good' : 'muted'}">평균 가격: 기본의 ${Math.round(level * 100)}%${level > 1.1 ? ' · 가족층·지역층이 비싸다고 느낍니다' : level < 0.9 ? ' · 가족층·지역층이 반깁니다' : ''}</p>
         <p class="muted small">시즌권은 첫 홈 경기 날 판매가 확정되고, 그 좌석은 홈 리그 경기마다 먼저 채워집니다. 빅매치는 평판이 5 이상 높은 상대나 리그 상위 4팀, 라이벌전은 라이벌과의 경기입니다. 예상 범위는 마케팅 담당 수준이 높을수록 좁아집니다(구단 탭 스태프).</p>
       </div>`;
@@ -1003,7 +1003,7 @@ const industryFans = (ind) => {
 
 // 스폰서 탭: 계약, 받은 제안, 프리시즌 투어
 // 요구 금액 칸 기본값: 처음엔 제안의 1.15배, 거절당한 뒤엔 다시 제안한 금액과 지난번 요구 사이 (억 원)
-const askDefault = (o) => Math.round((o.lastAsk ? (o.amount + o.lastAsk) / 2 : o.amount * 1.15) / 1e7) / 10;
+const askDefault = (o) => Math.round(suggestedAsk(o) / 1e7) / 10; // 억 원, 소수 첫째 자리
 
 export function sponsorsView(state, ui = {}) {
   const club = userClub(state);
@@ -1056,7 +1056,7 @@ function pitchDetail(state, club, slot) {
   return modal({ title: `${SLOTS[slot].name} 영업`, body, close: 'data-action="openPitch" data-slot=""' });
 }
 
-const baseIndustryValue = (club, slot, ind) => Math.round((commercialBase(club) * 0.7 * SLOTS[slot].weight * INDUSTRIES[ind].mult) / 1e6) * 1e6;
+const baseIndustryValue = (club, slot, ind) => Math.round(baseValue(club, slot, ind) / 1e6) * 1e6;
 
 function tourCard(state, club) {
   const t = club.tour?.season === state.season ? club.tour : null;
@@ -1097,12 +1097,11 @@ function tourDetail(club, region) {
 // 재정 조정 바: 왼쪽은 이적 예산, 오른쪽은 주급 예산
 export function budgetSlider(state, f) {
   const r = budgetRange(state);
-  const step = r.max >= 1e8 ? 1e6 : 1e4;
   return `
         <div class="budget-slider">
           <h4>재정 조정</h4>
-          <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주 · 여유 <strong id="budgetRoom">${won(Math.max(0, f.wageBudget - r.bill))}</strong>/주</span></div>
-          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" data-base="${r.base}" data-balance="${r.balance}" data-bill="${r.bill}" min="${r.min}" max="${Math.max(f.wageBudget, Math.floor(r.max / step) * step)}" step="${step}" value="${f.wageBudget}">
+          <div class="budget-labels"><span>이적 예산 <strong id="budgetTransfer">${won(f.transferBudget)}</strong></span><span>주급 예산 <strong id="budgetWage">${won(f.wageBudget)}</strong>/주 · 여유 <strong id="budgetRoom">${won(wageRoom(f.wageBudget, r.bill))}</strong>/주</span></div>
+          <input type="range" data-change="wageBudget" data-pool="${r.pool}" data-weeks="${r.weeks}" data-base="${r.base}" data-balance="${r.balance}" data-bill="${r.bill}" min="${r.min}" max="${r.top}" step="${r.step}" value="${f.wageBudget}">
           <p class="muted small">주급 1주 치는 남은 시즌 ${r.weeks}주만큼의 돈과 같습니다. 왼쪽으로 밀면 줄인 주급만큼 이적 예산이 늘고, 잔고를 넘는 몫은 남은 시즌 수입에서 당겨 씁니다(다 쓰면 잔고가 잠시 마이너스가 될 수 있음). 오른쪽으로 밀면 이적 예산을 먼저 옮기고, 이적 예산이 0이 되면 남는 잔고로 주급 예산을 더 올립니다. 시즌 시작 값(${won(r.base)})을 넘는 주급은 그만큼 잔고에서 떼어 두어 시설·행사에 쓸 수 없습니다. 주급 예산은 지금 주급 아래로 내릴 수 없습니다.</p>
         </div>`;
 }
@@ -1120,7 +1119,7 @@ export function financeView(state) {
           <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
           <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
           <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
-          <tr><td>남은 주급 여유 (주)</td><td class="num">${won(Math.max(0, f.wageBudget - bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
+          <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
         </table>
         ${budgetSlider(state, f)}
         <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>

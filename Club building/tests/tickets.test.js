@@ -74,3 +74,19 @@ test('예전 저장 파일에는 마케팅 담당이 채워지고, 팬 탭에 �
   const html = fansView(state);
   for (const s of ['시즌권', '빅매치', '라이벌전', '가격 기록', 'data-change="ticketPrice"']) assert.ok(html.includes(s), s);
 });
+
+test('가격 범위: 기본 가격의 50%~200% 밖은 core가 거절하고, 화면 바도 같은 범위를 쓴다', () => {
+  const state = fresh();
+  const club = g.userClub(state);
+  const ref = g.referencePrice(club, 'normal');
+  assert.equal(g.setTicketPrice(state, 'normal', ref * 10).ok, false);
+  assert.equal(g.setTicketPrice(state, 'normal', ref * 0.2).ok, false);
+  assert.ok(g.setTicketPrice(state, 'normal', ref * 1.5).ok);
+  const season = g.referenceSeasonTicket(club);
+  assert.equal(g.setTicketPrice(state, 'season', season * 3).ok, false);
+  const { min, max } = g.priceRange(club, 'normal');
+  assert.equal(g.setTicketPrice(state, 'normal', min).ok, true);
+  assert.equal(g.setTicketPrice(state, 'normal', max).ok, true);
+  const html = fansView(state, {});
+  assert.ok(html.includes(`data-grade="normal" min="${min}" max="${max}"`));
+});

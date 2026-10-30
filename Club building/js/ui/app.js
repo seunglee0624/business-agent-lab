@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, transferAfter, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
+  adjustBudgets, transferAfter, wageRoom, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -602,7 +602,7 @@ export class App {
     this.root.querySelector('#budgetWage').textContent = won(wage);
     const r = { pool: Number(el.dataset.pool), weeks: Number(el.dataset.weeks), base: Number(el.dataset.base), balance: Number(el.dataset.balance) };
     this.root.querySelector('#budgetTransfer').textContent = won(transferAfter(r, wage));
-    this.root.querySelector('#budgetRoom').textContent = won(Math.max(0, wage - Number(el.dataset.bill)));
+    this.root.querySelector('#budgetRoom').textContent = won(wageRoom(wage, Number(el.dataset.bill)));
   }
 
   onChange(ev) {

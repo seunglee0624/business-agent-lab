@@ -29,16 +29,16 @@ import { monthlyDevelopment, youthIntake, isHomegrownYouth } from './development
 import { newCompetitions, processSeasonEnd, startSeason, seasonEndMessages, registeredCount, MAX_SQUAD } from './season.js';
 import { fanMatchResult, fanMonthly, fansOf, PROTEST_LINE } from './fans.js';
 import { recordHomeGate, priceLevel } from './tickets.js';
-import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets, transferAfter, refreshWageCredit } from './finance.js';
-export { transferAfter };
+import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets, transferAfter, refreshWageCredit, staffWeeklyWage, wageRoom } from './finance.js';
+export { transferAfter, wageRoom };
 import { signNew, offerRenewal } from './contracts.js';
 import * as contracts from './contracts.js';
 import { monthlyMorale } from './morale.js';
 import {
   completeConstruction, requestUpgrade, injuryChanceFactor, injuryDaysFactor, recoveryFactor,
 } from './facilities.js';
-import { FACILITIES, STAFF, MAX_STAFF, staffWage, EUR } from '../data/economy.js';
-import { roundMoney, won } from './money.js';
+import { FACILITIES, STAFF, MAX_STAFF } from '../data/economy.js';
+import { won } from './money.js';
 import { addNotice, unreadCount, markViewRead, markAllRead, openMessage,
   withRng, addMessage, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable,
   unavailableSet, activeClubs, clubStrength,
@@ -706,10 +706,11 @@ export function sendDownToYouth(state, playerId) {
 
 export { registeredCount, MAX_SQUAD };
 export { fansOf, fanReactions, expectedPosition, SEGMENTS, PROTEST_LINE } from './fans.js';
-export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel } from './tickets.js';
+export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, priceRange } from './tickets.js';
 
 export { merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from './merch.js';
-export { sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS } from './sponsors.js';
+export { sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk } from './sponsors.js';
+export { suggestedCounter } from './transfers.js';
 export { TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars } from './tour.js';
 export const pitchSponsor = (state, slot, industry) => withRng(state, (rng) => sponsors.pitchSponsor(state, rng, userClub(state), slot, industry));
 export const answerSponsor = (state, offerId, opts) => sponsors.answerSponsor(state, userClub(state), offerId, opts);
@@ -899,7 +900,7 @@ export function upgradeFacility(state, key) {
 export function setStaffLevel(state, key, level) {
   const club = userClub(state);
   if (!STAFF[key] || level < 1 || level > MAX_STAFF) return { ok: false, reason: '잘못된 수준입니다.' };
-  const diff = roundMoney((staffWage(level, key) - staffWage(club.staff[key], key)) * EUR);
+  const diff = staffWeeklyWage(level, key) - staffWeeklyWage(club.staff[key], key);
   if (diff > 0 && weeklyWageBill(state, club) + diff > club.finance.wageBudget) return { ok: false, reason: '주급 예산을 넘습니다.' };
   club.staff[key] = level;
   return { ok: true };
