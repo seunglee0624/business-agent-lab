@@ -224,8 +224,9 @@ export function budgetRange(state, club) {
   const balance = Math.max(0, f.balance);
   const max = Math.max(f.wageBudget, base + balance / weeks);
   const min = Math.min(max, f.wageBudget, Math.ceil(bill / unit) * unit);
-  // 바 한 칸과 오른쪽 끝 값 (끝까지 밀면 주급 예산이 이 값이 된다)
-  const step = max >= 1e8 ? 1e6 : 1e4;
+  // 바 한 칸과 오른쪽 끝 값 (끝까지 밀면 주급 예산이 이 값이 된다).
+  // 브라우저 바는 최소값에서 한 칸씩 가므로 칸은 최소값 쪽 금액 단위로 정한다(1억 아래는 1만 원 단위라 100만 원 칸이면 끝에 못 닿음)
+  const step = min >= 1e8 ? 1e6 : 1e4;
   const top = Math.max(f.wageBudget, Math.floor(max / step) * step);
   return { weeks, min, max, step, top, pool: f.transferBudget + f.wageBudget * weeks, base, balance, bill };
 }

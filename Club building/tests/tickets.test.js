@@ -90,3 +90,12 @@ test('가격 범위: 기본 가격의 50%~200% 밖은 core가 거절하고, 화�
   const html = fansView(state, {});
   assert.ok(html.includes(`data-grade="normal" min="${min}" max="${max}"`));
 });
+
+test('티켓 바 한 칸 단위 그대로 저장된다 (5만 5천 원이 6만 원으로 바뀌지 않는다)', () => {
+  const state = fresh();
+  const club = g.userClub(state);
+  const { step, min } = g.priceRange(club, 'normal');
+  const price = min + step * 35; // 기본 4만 원이면 5만 5천 원
+  assert.ok(g.setTicketPrice(state, 'normal', price).ok);
+  assert.equal(g.ticketsOf(club).prices.normal, price);
+});

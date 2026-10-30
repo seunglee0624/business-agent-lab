@@ -109,10 +109,11 @@ export function setTicketPrice(club, grade, price) {
   if (price < r.min || price > r.max) return { ok: false, reason: '기본 가격의 50%~200% 안에서 정하세요.' };
   if (grade === 'season') {
     if (t.seasonSold !== null) return { ok: false, reason: '시즌권은 이미 판매가 확정되었습니다. 다음 시즌 전에 바꿀 수 있습니다.' };
-    t.seasonPrice = roundMoney(price);
+    t.seasonPrice = Math.round(price / r.step) * r.step;
     return { ok: true };
   }
-  t.prices[grade] = roundMoney(price);
+  // 바 한 칸 단위로 저장 (roundMoney는 1만 원 단위라 5만 5천 원이 6만 원이 됨)
+  t.prices[grade] = Math.round(price / r.step) * r.step;
   return { ok: true };
 }
 

@@ -206,3 +206,14 @@ test('스태프 "올리면 +금액"은 실제로 올렸을 때 늘어나는 주�
   assert.ok(g.setStaffLevel(state, key, club.staff[key] + 1).ok);
   assert.equal(shown, won(weeklyWageBill(state, club) - before));
 });
+
+test('바 오른쪽 끝은 브라우저 바가 실제로 닿는 값이다 (최소값에서 한 칸씩 가서 끝에 정확히 닿음)', () => {
+  // ENG3: 최대는 1억을 넘고 지금 주급은 1억 아래인 리그
+  const state = g.createNewGame('e1');
+  g.chooseLeague(state, 'ENG3', '테스트');
+  const r = g.budgetRange(state);
+  assert.equal((r.top - r.min) % r.step, 0);
+  const reach = r.min + Math.floor((r.top - r.min) / r.step) * r.step;
+  assert.ok(g.adjustBudgets(state, reach).ok);
+  assert.equal(g.userClub(state).finance.transferBudget, 0);
+});

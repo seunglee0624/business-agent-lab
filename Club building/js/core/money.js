@@ -53,6 +53,13 @@ export function won(amount) {
     }
     return `${sign}${eok}억${man ? ` ${n(man)}만` : ''} 원`;
   }
+  // 100만 원 아래는 천 원 단위까지 보여 준다 (티켓·굿즈 가격: 5만 5,000원)
+  if (a >= 1e4 && a < 1e6) {
+    const r = Math.round(a / 1e3) * 1e3;
+    const man = Math.floor(r / 1e4);
+    const rest = r % 1e4;
+    return rest ? `${sign}${n(man)}만 ${n(rest)}원` : `${sign}${n(man)}만 원`;
+  }
   if (a >= 1e4) return `${sign}${n(Math.round(a / 1e4))}만 원`;
   return `${sign}${n(a)}원`;
 }

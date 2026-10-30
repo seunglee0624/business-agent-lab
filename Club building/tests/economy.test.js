@@ -28,6 +28,10 @@ test('금액 표시: 억·만 단위', () => {
   assert.equal(won(320_000_000), '3억 2,000만 원');
   assert.equal(won(45_000_000), '4,500만 원');
   assert.equal(won(-200_000_000), '-2억 원');
+  // 100만 원 아래는 천 원 단위까지 (티켓·굿즈 가격)
+  assert.equal(won(55_000), '5만 5,000원');
+  assert.equal(won(60_000), '6만 원');
+  assert.equal(won(9_000), '9,000원');
   assert.equal(roundMoney(123_456_789), 123_000_000);
 });
 
