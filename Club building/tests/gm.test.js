@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
+import { settingsView } from '../js/ui/views.js';
 import { createNewGame, chooseLeague, userClub, STATE_VERSION, advance, league, simulateToSeasonEnd, startNextSeason,
   managerCandidates, hireManager, fireManager, transferRequests, answerRequest } from '../js/core/game.js';
 import { weeklyWageBill } from '../js/core/finance.js';
@@ -172,4 +173,26 @@ test('진행 멈춤: 스폰서 제안·투어 선택처럼 단장이 답할 일�
   g.chooseLeague(s2, 'ENG1', '테스트');
   g.pitchSponsor(s2, 'partner3', 'local');
   assert.notEqual(advance(s2, { skipOffers: true }).stop, 'decision');
+});
+
+test('진행 멈춤: 이적시장 마감 1주 전·첫 홈 경기 1주 전에 멈추고, 설정에서 끄면 멈추지 않는다', () => {
+  const run = (off = []) => {
+    const state = g.createNewGame('decide-cal');
+    g.chooseLeague(state, 'ENG1', '테스트');
+    for (const k of off) state.settings.decisions[k] = false;
+    const stops = [];
+    while (state.date < '2026-09-01') {
+      const res = advance(state, {});
+      if (res.stop === 'decision') stops.push(...res.titles);
+      if (res.stop === 'seasonEnd') break;
+    }
+    return stops;
+  };
+  const all = run();
+  assert.ok(all.some((t) => t.startsWith('이적시장 마감 1주 전')));
+  assert.ok(all.some((t) => t.startsWith('첫 리그 홈 경기')));
+  assert.ok(all.some((t) => t.startsWith('여름 이적시장')));
+  const some = run(['windowClose', 'firstHome', 'windowOpen']);
+  assert.ok(!some.some((t) => t.startsWith('이적시장 마감') || t.startsWith('첫 리그 홈 경기') || t.startsWith('여름 이적시장')));
+  assert.match(settingsView(g.createNewGame('x')), /toggleDecision/);
 });

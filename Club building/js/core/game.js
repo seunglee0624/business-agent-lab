@@ -47,7 +47,23 @@ export const STATE_VERSION = 5;
 export const START_YEAR = 2026;
 export const YOUTH_INTAKE_DAY = '03-15';
 
+// 진행을 멈추는 결정 (설정에서 켜고 끈다)
+export const DECISION_STOPS = {
+  transferOffer: '내 선수에게 온 이적 제안',
+  managerRequest: '감독의 영입 요청',
+  windowOpen: '이적시장 열리기 1주 전 (여름은 시즌 시작일)',
+  windowClose: '이적시장 마감 1주 전',
+  firstHome: '첫 리그 홈 경기 1주 전 (시즌권 가격·유니폼 디자인)',
+  expiring: '계약 만료 예정 선수 재계약 (1월·4월)',
+  youthIntake: '유스 입단 (3월 15일)',
+  tour: '프리시즌 투어 선택',
+  sponsorOffer: '스폰서 제안 도착',
+  rentalOffer: '경기장 대관 제안',
+  merchStock: '굿즈 품절 임박',
+};
+
 export const DEFAULT_SETTINGS = {
+  decisions: Object.fromEntries(Object.keys(DECISION_STOPS).map((k) => [k, true])),
   viewMode: 'result', // result | highlights | full (단장은 기본으로 결과만, 원하면 중계)
   pauses: {
     halftime: true,
@@ -171,7 +187,7 @@ function dailyTick(state, rng, date) {
   }
   if (user && isMonday(date)) {
     const made = requests.makeRequests(state, rng, user);
-    if (made.length) needDecision(state, 'transfers', '감독의 영입 요청');
+    if (made.length) needDecision(state, 'managerRequest', 'transfers', '감독의 영입 요청');
     if (made.length) addMessage(state, { view: 'transfers', title: '감독의 영입 요청', body: `${user.headCoach.name} 감독이 ${made.length}명의 영입을 요청했습니다. 이적 화면에서 승인하거나 거절하세요.`, important: true });
     weeklyStaffWork(state, user);
     weeklySummary(state, user);
@@ -195,6 +211,7 @@ function dailyTick(state, rng, date) {
     }
   }
   if (date.endsWith('-01')) monthlyTick(state, rng, date);
+  if (user) calendarDecisions(state, user, date);
   if (user) userMerchDay(state, user, date);
   if (user) userCommercialDay(state, rng, user, date);
   transfers.dailyAiTransfers(state, rng, userId);
@@ -209,6 +226,7 @@ function dailyTick(state, rng, date) {
     for (const club of activeClubs(state)) {
       const { players, golden } = youthIntake(state, rng, club);
       if (club.id === userId) {
+        needDecision(state, 'youthIntake', 'squad', '유스 입단');
         const best = players.slice().sort((a, b) => b.potential - a.potential)[0];
         addMessage(state, {
           view: 'squad', title: golden ? '유스 입단: 황금 세대!' : '유스 입단',
@@ -222,7 +240,8 @@ function dailyTick(state, rng, date) {
 }
 
 // 단장이 답해야 할 일이 생기면 그날 진행을 멈춘다 (화면은 view로 이동)
-function needDecision(state, view, title) {
+function needDecision(state, key, view, title) {
+  if (state.settings?.decisions?.[key] === false) return;
   state.decision ??= { view, titles: [] };
   state.decision.titles.push(title);
 }
@@ -270,19 +289,20 @@ function weeklyStaffWork(state, club) {
 // 스폰서 영업 결과, 투어 안내와 마무리
 function userCommercialDay(state, rng, club, date) {
   for (const a of sponsors.sponsorDaily(state, rng, club)) {
-    needDecision(state, 'sponsors', `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`);
+    needDecision(state, 'sponsorOffer', 'sponsors', `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`);
     addMessage(state, {
       view: 'sponsors', important: true, title: `스폰서 제안: ${sponsors.SLOTS[a.slot].name}`,
       body: `${sponsors.INDUSTRIES[a.industry].name} 업종 영업 결과 ${a.offers.map((o) => o.company).join(', ')}에서 제안이 왔습니다. ${a.offers[0].expires}까지 답하세요.`,
     });
   }
-  if (date.slice(5) === '07-01' && tour.canChooseTour(state, club)) {
-    needDecision(state, 'sponsors', '프리시즌 투어 선택');
+  // 시즌은 7월 1일에 시작하므로 그다음 날 알린다
+  if (date.slice(5) === '07-02' && tour.canChooseTour(state, club)) {
+    needDecision(state, 'tour', 'sponsors', '프리시즌 투어 선택');
     addMessage(state, { view: 'sponsors', title: '프리시즌 투어', body: '7월 15일까지 프리시즌 투어 지역을 정하세요. 정하지 않으면 투어를 가지 않습니다.' });
   }
   if (date.endsWith('-01')) {
     const made = stadium.rentalMonthly(state, rng, club, userHomeDates(state, club));
-    if (made.length) needDecision(state, 'sponsors', '경기장 대관 제안');
+    if (made.length) needDecision(state, 'rentalOffer', 'sponsors', '경기장 대관 제안');
     if (made.length) addMessage(state, { view: 'sponsors', title: '경기장 대관 제안', body: `${made.map((o) => `${stadium.RENTALS[o.kind].name}(${formatShortDate(o.date)}, ${won(o.fee)})`).join(', ')} 대관 제안이 왔습니다. ${formatShortDate(made[0].expires)}까지 답하세요.` });
   }
   for (const r of stadium.stadiumDaily(state, club)) {
@@ -303,6 +323,28 @@ function userCommercialDay(state, rng, club, date) {
   }
 }
 
+// 날짜로 정해진 결정: 이적시장 열림·마감 1주 전, 첫 리그 홈 경기 1주 전
+function calendarDecisions(state, club, date) {
+  const md = date.slice(5);
+  if (md === '07-02') {
+    needDecision(state, 'windowOpen', 'transfers', '여름 이적시장 (8월 31일까지)');
+  }
+  if (md === '12-25') {
+    needDecision(state, 'windowOpen', 'transfers', '겨울 이적시장 1주 뒤 열림 (1월)');
+    addMessage(state, { view: 'transfers', title: '겨울 이적시장 예고', body: '1월 1일부터 31일까지 겨울 이적시장이 열립니다. 영입·판매할 선수를 미리 정해 두세요.' });
+  }
+  if (md === '08-24' || md === '01-24') {
+    needDecision(state, 'windowClose', 'transfers', `이적시장 마감 1주 전 (${md === '08-24' ? '8월 31일' : '1월 31일'})`);
+    addMessage(state, { view: 'transfers', title: '이적시장 마감 1주 전', body: `이적시장이 ${md === '08-24' ? '8월 31일' : '1월 31일'}에 닫힙니다. 남은 영입·판매를 마무리하세요.` });
+  }
+  const first = Object.values(state.competitions[club.leagueId]?.fixtures ?? [])
+    .filter((f) => f.home === club.id).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+  if (first && !first.result && addDays(date, 7) === first.date) {
+    needDecision(state, 'firstHome', 'fans', '첫 리그 홈 경기 1주 전: 시즌권 가격·유니폼 디자인');
+    addMessage(state, { view: 'fans', title: '첫 홈 경기 1주 전', body: `${formatShortDate(first.date)} 첫 리그 홈 경기에서 시즌권 판매가 확정됩니다. 그 전에 시즌권 가격과 홈·원정 유니폼 디자인을 정하세요. 정하지 않은 유니폼은 지난 디자인으로 자동 생산됩니다.` });
+  }
+}
+
 // 앞으로 남은 우리 홈 경기 날짜
 function userHomeDates(state, club) {
   return new Set(Object.values(state.competitions).flatMap((c) => c.fixtures)
@@ -317,7 +359,7 @@ function userMerchDay(state, club, date) {
     if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
   }
   for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch)) {
-    needDecision(state, 'fans', `${w.name} 품절 임박`);
+    needDecision(state, 'merchStock', 'fans', `${w.name} 품절 임박`);
     addMessage(state, { view: 'fans', important: true, title: `${w.name} 품절 임박`, body: `${w.name} 재고가 약 ${w.days}일 치 남았습니다. 지금 주문해도 ${w.lead}일 뒤에 도착합니다.` });
   }
 }
@@ -339,6 +381,7 @@ function expiryReminder(state) {
   const end = `${state.season + 1}-06-30`;
   const expiring = club.squad.map((id) => state.players[id]).filter((p) => p.contract && p.contract.until <= end);
   if (!expiring.length) return;
+  needDecision(state, 'expiring', 'squad', '계약 만료 예정 선수 재계약');
   addMessage(state, {
     view: 'squad', title: '계약 만료 예정',
     body: `이번 시즌이 끝나면 계약이 끝나는 선수: ${expiring.map((p) => p.name).join(', ')}. 재계약하지 않으면 6월 30일에 팀을 떠납니다.`,
@@ -386,7 +429,7 @@ export function advance(state, { skipOffers = false, watchMatches = false } = {}
       const offer = moveTo(state, target, !skipOffers);
       const decision = state.decision;
       state.decision = null;
-      if (offer && !skipOffers) return { stop: 'transferOffer', offer };
+      if (offer && !skipOffers && state.settings?.decisions?.transferOffer !== false) return { stop: 'transferOffer', offer };
       if (decision && !skipOffers) return { stop: 'decision', ...decision };
     }
     if (date === state.date) {
@@ -648,6 +691,7 @@ export function setTicketPrice(state, grade, price) {
 
 // 예전 저장 파일 보정: 새로 생긴 값 채우기
 export function upgradeState(state) {
+  state.settings.decisions = { ...DEFAULT_SETTINGS.decisions, ...(state.settings.decisions ?? {}) };
   // 유스 탭은 선수단 탭에 합쳐졌다
   for (const m of state.inbox ?? []) if (m.view === 'youth') m.view = 'squad';
   for (const club of Object.values(state.clubs)) {
