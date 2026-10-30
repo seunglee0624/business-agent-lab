@@ -64,7 +64,7 @@ export function newGameView(state, ui) {
   const preview = ui.preview;
   const leagueList = preview ? `
       <h2>리그 선택</h2>
-      <p class="muted">고른 리그에서 가장 약한 구단의 단장이 됩니다. 1부는 어렵고 3부는 쉽습니다. 시드: <code>${esc(preview.seed)}</code></p>
+      <p class="muted">고른 리그에서 가장 약한 구단의 단장이 됩니다. 1부일수록 돈은 많고 경쟁은 치열합니다. 아래 리그일수록 시작부터 함께합니다. 시드: <code>${esc(preview.seed)}</code></p>
       ${leaguePickTable(preview)}` : '';
   return `
     <div class="newgame">
