@@ -92,7 +92,7 @@ export function sponsorsOf(state, club) {
 export function canPitch(state, club, slot) {
   const s = sponsorsOf(state, club);
   if (!SLOTS[slot]) return false;
-  if (s.pitches.some((p) => p.slot === slot) || s.offers.some((o) => o.slot === slot)) return false;
+  if (s.pitches.some((p) => p.slot === slot) || s.offers.some((o) => o.slot === slot) || s.pending?.[slot]) return false;
   const c = s.contracts[slot];
   return !c || c.until <= addDays(state.date, 365);
 }

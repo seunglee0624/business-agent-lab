@@ -35,7 +35,7 @@ export function tourStars(state, club, region) {
 
 export function tourGain(state, club, region) {
   const stars = tourStars(state, club, region).length;
-  return Math.round(fansOf(club).overseas * TOURS[region].gain * (1 + Math.min(2, stars) * STAR_BONUS));
+  return Math.round(fansOf(club).overseasBase * TOURS[region].gain * (1 + Math.min(2, stars) * STAR_BONUS));
 }
 
 export function chooseTour(state, club, region) {

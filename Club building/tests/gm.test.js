@@ -231,3 +231,28 @@ test('감독: 포지션 진단으로 부족한 자리를 알려 주고, 추천 �
   assert.ok(closed.ok && !closed.open, closed.reason);
   assert.ok(closed.made.every((r) => r.until === '2027-01-31'));
 });
+
+test('계약 해지: 남은 주급의 절반을 위약금으로 내고 자유계약 선수가 되며, 1군 자리가 빈다', () => {
+  const state = g.createNewGame('release');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const p = state.players[club.squad[club.squad.length - 1]];
+  const cost = g.releaseCost(state, p);
+  assert.ok(cost > 0);
+  const before = club.finance.balance;
+  const reg = g.registeredCount(state, club, state.date);
+  assert.ok(g.releasePlayer(state, p.id).ok);
+  assert.equal(club.finance.balance, before - cost);
+  assert.equal(p.clubId, null);
+  assert.equal(g.registeredCount(state, club, state.date), reg - 1);
+});
+
+test('감독 추천: 주급 여유를 넘는 요구 주급의 선수는 추천하지 않는다', () => {
+  const state = g.createNewGame('ask-wage');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  club.finance.wageBudget = weeklyWageBill(state, club);
+  const res = g.askCoach(state);
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /주급 여유/);
+});

@@ -4,7 +4,7 @@ import { PROMISES } from '../data/economy.js';
 import { seasonOf, addDays } from './calendar.js';
 import { overall, ageOn } from './player.js';
 import { wageFor, roundMoney, monthsBetween } from './money.js';
-import { weeklyWageBill } from './finance.js';
+import { weeklyWageBill, seasonRevenueEstimate } from './finance.js';
 
 export const RENEWAL_MONTHS = 12; // 계약이 이만큼 남으면 재계약 협상을 할 수 있다
 export const MAX_TALKS_PER_MONTH = 3;
@@ -44,10 +44,20 @@ export function assignInitialContracts(rng, club, players, date) {
   });
 }
 
+// AI 구단 주급 절제: 주급이 예상 수입의 AI_WAGE_TARGET를 넘으면 새 계약·재계약 주급을 깎는다 (선수 능력이 오르며 주급이 수입보다 빨리 느는 것을 막는다)
+export const AI_WAGE_TARGET = 0.55;
+export function aiWageMult(state, club) {
+  if (club.id === state.user?.clubId) return 1;
+  const target = (seasonRevenueEstimate(club) * AI_WAGE_TARGET) / 52;
+  const bill = weeklyWageBill(state, club);
+  return bill > 0 ? Math.max(0.7, Math.min(1.1, target / bill)) : 1;
+}
+
 // 시즌 중 새로 들어온 선수 한 명 (보강, 유스 승격)
 export function signNew(rng, state, club, p, { youth = false } = {}) {
   const promise = youth ? 'backup' : promiseForRank(squadRank(state, club, p));
-  p.contract = newContract(p, { date: state.date, years: youth ? 3 : contractYears(rng, ageOn(p, state.date)), promise, wageMult: youth ? 0.6 : rng.float(0.9, 1.1) });
+  const mult = (youth ? 0.6 : rng.float(0.9, 1.1)) * aiWageMult(state, club);
+  p.contract = newContract(p, { date: state.date, years: youth ? 3 : contractYears(rng, ageOn(p, state.date)), promise, wageMult: mult });
 }
 
 // ---- 재계약 ----
@@ -113,7 +123,7 @@ export function expiringContracts(state, rng, endDate, userId) {
       const age = ageOn(p, endDate);
       // 이적이 생기기 전(3-2)까지 AI 구단은 크게 처지는 선수만 내보낸다
       if (club.id !== userId && age < 33 && overall(p) >= club.level - 14) {
-        p.contract = newContract(p, { date: endDate, years: Math.min(3, contractYears(rng, age)), promise: p.contract.promise, wageMult: rng.float(0.9, 1.1) });
+        p.contract = newContract(p, { date: endDate, years: Math.min(3, contractYears(rng, age)), promise: p.contract.promise, wageMult: rng.float(0.9, 1.1) * aiWageMult(state, club) });
       } else {
         leaving.push({ club, player: p });
       }
@@ -121,3 +131,30 @@ export function expiringContracts(state, rng, endDate, userId) {
   }
   return leaving;
 }
+
+// 계약 해지(방출): 남은 계약 주급의 절반을 위약금으로 주고 자유계약 선수로 내보낸다
+export const RELEASE_SHARE = 0.5;
+export function releaseCost(state, p) {
+  if (!p.contract) return 0;
+  const weeks = Math.max(0, (new Date(`${p.contract.until}T00:00:00Z`) - new Date(`${state.date}T00:00:00Z`)) / (7 * 86400000));
+  return roundMoney(weeks * p.contract.wage * RELEASE_SHARE);
+}
+
+export function releasePlayer(state, club, p) {
+  if (!club.squad.includes(p.id) && !club.youth.includes(p.id)) return { ok: false, reason: '우리 구단 선수가 아닙니다.' };
+  if (p.loan) return { ok: false, reason: '임대 중인 선수는 방출할 수 없습니다.' };
+  const cost = releaseCost(state, p);
+  club.finance.balance -= cost;
+  club.finance.season.expense.wages += cost;
+  club.squad = club.squad.filter((id) => id !== p.id);
+  club.youth = club.youth.filter((id) => id !== p.id);
+  if (club.tactics.lineup) club.tactics.lineup = null;
+  p.lastClubId = club.id;
+  p.clubId = null;
+  p.contract = null;
+  p.transferRequest = false;
+  p.transferListed = false;
+  p.freeSince = state.date;
+  return { ok: true, cost };
+}
+

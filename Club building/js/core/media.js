@@ -25,7 +25,8 @@ export function mediaOf(club) {
   return club.media;
 }
 
-export const campaignCost = (club, kind) => roundMoney(CAMPAIGNS[kind].cost * EUR * Math.exp((club.reputation - 55) * 0.04));
+// 비용은 해외 팬 기준값과 같은 비율로 평판에 따라 오른다 (작은 구단에 너무 비싸지 않게)
+export const campaignCost = (club, kind) => roundMoney(CAMPAIGNS[kind].cost * EUR * Math.exp((club.reputation - 55) * 0.08));
 
 // 1년 안에 같은 캠페인을 했으면 효과가 줄어든다
 export function repeatFactor(state, club, kind) {
@@ -55,7 +56,7 @@ export function startCampaign(state, rng, club, kind) {
   for (const p of players) p.condition = Math.max(50, p.condition - def.fatigue);
   const c = {
     kind, start: state.date, end: addDays(state.date, def.days), cost, strength,
-    gain: Math.round(fansOf(club).overseas * def.overseas * strength), added: 0,
+    gain: Math.round(fansOf(club).overseasBase * def.overseas * strength), added: 0,
     players: players.map((p) => p.name),
   };
   mediaOf(club).running.push(c);

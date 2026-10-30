@@ -30,6 +30,7 @@ import { fanMatchResult, fanMonthly, fansOf, PROTEST_LINE } from './fans.js';
 import { recordHomeGate, priceLevel } from './tickets.js';
 import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets } from './finance.js';
 import { signNew, offerRenewal } from './contracts.js';
+import * as contracts from './contracts.js';
 import { monthlyMorale } from './morale.js';
 import {
   completeConstruction, requestUpgrade, injuryChanceFactor, injuryDaysFactor, recoveryFactor,
@@ -835,6 +836,13 @@ export function searchPlayers(state, filters) {
 
 // ---- 계약·시설·스태프 (내 구단) ----
 
+export function releasePlayer(state, playerId) {
+  const p = state.players[playerId];
+  const res = contracts.releasePlayer(state, userClub(state), p);
+  if (res.ok) addMessage(state, { view: 'squad', title: `${p.name} 방출`, body: `${withParticle(p.name, '와')} 계약을 해지했습니다. 위약금 ${won(res.cost)}.` });
+  return res;
+}
+export { releaseCost } from './contracts.js';
 export function renewContract(state, playerId, offer) {
   const club = userClub(state);
   const p = state.players[playerId];

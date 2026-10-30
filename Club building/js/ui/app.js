@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -460,6 +460,16 @@ export class App {
         const answer = d.answer === 'counter' ? { counter: Number(this.root.querySelector(`#counter-${id}`).value) * 1e8 } : d.answer;
         const res = respondToOffer(s, id, answer);
         this.ui.transferMsg = { ok: res.ok, text: res.ok ? (d.answer === 'reject' ? '제안을 거절했습니다.' : `이적료 ${won(res.fee)}에 선수를 보냈습니다.`) : res.reason };
+        this.persist();
+        this.render();
+        break;
+      }
+      case 'releasePlayer': {
+        const p = s.players[d.id];
+        if (!this.ask?.confirmed) return this.confirm({ title: `${p.name} 계약 해지`, text: `${withParticle(p.name, '와')} 계약을 해지할까요? 위약금 ${withParticle(won(releaseCost(s, p)), '이')} 바로 나갑니다.`, yes: '해지' }, () => this.onClick(ev));
+        const res = releasePlayer(s, d.id);
+        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `${p.name} 계약을 해지했습니다. 위약금 ${won(res.cost)}.` : res.reason };
+        if (res.ok) this.ui.playerId = null;
         this.persist();
         this.render();
         break;

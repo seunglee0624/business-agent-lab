@@ -146,3 +146,22 @@ test('투어: 다녀오면 지역별 실적이 남고, 지역을 누르면 지�
   assert.match(html, /2026-27/);
   assert.match(sponsorsView(state, {}), /data-action="openTour" data-region="asia"/);
 });
+
+test('스폰서: 다음 계약을 이미 맺은 자리에는 다시 영업할 수 없다', () => {
+  const state = fresh('sponsor-pending');
+  const club = g.userClub(state);
+  const s = g.sponsorsOf(state, club);
+  const slot = g.SLOT_KEYS.find((k) => s.contracts[k]?.until === '2027-06-30');
+  assert.ok(g.canPitch(state, club, slot));
+  s.pending = { [slot]: { company: 'x', industry: 'food', amount: 1e8, until: '2029-06-30', bonus: null, from: '2027-07-01' } };
+  assert.equal(g.canPitch(state, club, slot), false);
+});
+
+test('해외 팬: 투어로 느는 해외 팬은 처음 해외 팬 기준이라, 해외 팬이 많아져도 투어 증가량이 커지지 않는다', async () => {
+  const { tourGain } = await import('../js/core/tour.js');
+  const state = fresh('overseas-linear');
+  const club = g.userClub(state);
+  const first = tourGain(state, club, 'asia');
+  g.fansOf(club).overseas *= 5;
+  assert.equal(tourGain(state, club, 'asia'), first);
+});

@@ -169,6 +169,7 @@ function retirements(state, rng, date) {
 }
 
 export const YOUTH_CAP = 14;
+export const AI_SQUAD = 25; // AI 구단 전체 인원 (유스 출신 포함)
 export const MAX_SQUAD = 25; // 1군 등록 인원 (홈그로운 유스 제외)
 
 // 5. 21세가 넘었는데 1군에 못 올라간 유스, 그리고 정원(14명)을 넘는 유스는 잠재력 낮은 순으로 방출한다
@@ -200,13 +201,20 @@ export function fillSquads(state, rng, clubs, date) {
   const report = new Map();
   const userId = state.user?.clubId;
   for (const club of clubs) {
+    // AI 구단은 유스 출신까지 합쳐 AI_SQUAD명을 넘으면 가장 약한 선수부터 내보낸다 (등록 제외 유스가 쌓여 주급이 불어나지 않게)
+    while (club.id !== userId && club.squad.length > AI_SQUAD) {
+      const worst = club.squad.map((id) => state.players[id]).filter((p) => !p.loan).sort((a, b) => overall(a) - overall(b))[0];
+      if (!worst) break;
+      release(state, club, worst);
+      worst.freeSince = date;
+    }
     const log = { promoted: [], signed: [] };
     const counts = Object.fromEntries(POSITIONS.map((p) => [p, 0]));
     for (const id of club.squad) counts[state.players[id].position]++;
     const user = club.id === userId;
     const wants = (pos) => (user
       ? (pos === 'GK' ? counts.GK < USER_MIN_GK : club.squad.length < USER_MIN_SQUAD && counts[pos] < SQUAD_TEMPLATE[pos])
-      : counts[pos] < SQUAD_TEMPLATE[pos] && registeredCount(state, club, date) < 25);
+      : counts[pos] < SQUAD_TEMPLATE[pos] && club.squad.length < AI_SQUAD && registeredCount(state, club, date) < 25);
     // 내 구단은 한 바퀴에 자리마다 한 명씩, 18명이 될 때까지 템플릿 부족분을 돌아가며 채운다
     for (let round = 0; round < (user ? 5 : 1); round++) {
       for (const pos of POSITIONS) {
@@ -218,7 +226,7 @@ export function fillSquads(state, rng, clubs, date) {
       }
     }
     // 이적으로 자리 구성이 템플릿과 달라졌으면, 남는 등록 자리를 가장 약한 자리부터 채운다
-    while (!user && registeredCount(state, club, date) < 25) {
+    while (!user && club.squad.length < AI_SQUAD && registeredCount(state, club, date) < 25) {
       const pos = POSITIONS.slice().sort((a, b) => counts[a] / SQUAD_TEMPLATE[a] - counts[b] / SQUAD_TEMPLATE[b])[0];
       signForPosition(state, rng, club, pos, date, log, true);
       counts[pos]++;
