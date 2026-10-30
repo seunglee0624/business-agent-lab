@@ -19,7 +19,7 @@ export const SLOTS = {
 };
 export const SLOT_KEYS = Object.keys(SLOTS);
 export const INDUSTRIES = {
-  betting: { name: '베팅', mult: 1.4, fans: { family: -1.2, local: -0.8 }, companies: ['럭키라인', '골드벳', '윈스타', '하이롤러', '킥오프벳'] },
+  betting: { name: '베팅', mult: 1.4, fans: { family: -0.6, local: -0.4 }, companies: ['럭키라인', '골드벳', '윈스타', '하이롤러', '킥오프벳'] },
   finance: { name: '금융·항공', mult: 1.15, fans: {}, companies: ['노스뱅크', '스카이웨이 항공', '퍼스트캐피털', '오로라 에어', '센트럴 보험'] },
   tech: { name: '자동차·전자', mult: 1, fans: { trendy: 0.5 }, companies: ['볼트모터스', '네오일렉트릭', '파이온 전자', '레이스카', '스파크텍'] },
   sport: { name: '스포츠 브랜드', mult: 1, fans: { trendy: 0.4, loyal: 0.4 }, companies: ['스트라이드', '에이펙스 스포츠', '킥라인', '프라임핏', '유나이트웨어'] },

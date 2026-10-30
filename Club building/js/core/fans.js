@@ -14,6 +14,7 @@ export const START_SATISFACTION = 60;
 export const PROTEST_LINE = 30;
 export const STAR_OVR = 75;
 const MAX_EFFECT = 0.1;
+const DRIFT = 0.1;
 const HISTORY_MONTHS = 12;
 
 // 구단 id로 정해지는 작은 흔들림 (-1~1), 같은 구단은 늘 같은 값
@@ -96,10 +97,10 @@ export function fanMatchResult(state, club, { goalsFor, goalsAgainst, opponent }
   const won = goalsFor > goalsAgainst;
   const lost = goalsFor < goalsAgainst;
   fans.streak = won ? Math.max(1, fans.streak + 1) : lost ? Math.min(-1, fans.streak - 1) : 0;
+  // 기대 대비: 강팀에게 지면 조금, 약팀에게 지면 많이 내려간다
   const stronger = opponent.reputation - club.reputation;
-  let base = won ? 1.5 : lost ? -1.5 : 0;
-  if (won && stronger > 3) base += 1;
-  if (lost && stronger < -3) base -= 1;
+  const tier = stronger > 3 ? 'strong' : stronger < -3 ? 'weak' : 'even';
+  const base = { strong: { won: 2.5, draw: 0.5, lost: -0.3 }, even: { won: 1.5, draw: 0, lost: -0.8 }, weak: { won: 0.8, draw: -0.5, lost: -1.5 } }[tier][won ? 'won' : lost ? 'lost' : 'draw'];
   let d = all(base);
   if (fans.streak >= 3) d = add(d, { loyal: 1 });
   if (fans.streak <= -3) d = add(d, { loyal: -1 });
@@ -150,6 +151,8 @@ export function fanMonthly(state, club, date, priceLevel = 1, extra = {}) {
     d = add(d, { family: Math.max(-4, Math.min(3, -over * 12)), local: Math.max(-3, Math.min(2, -over * 7)) });
   }
   applyMood(fans, d);
+  // 자연 회복: 시작값과의 차이 10%만큼 돌아간다
+  fans.satisfaction = Math.round((fans.satisfaction + (START_SATISFACTION - fans.satisfaction) * DRIFT) * 10) / 10;
   fans.month = { stars: 0, soldStarters: 0 };
   fans.protestMonths = fans.satisfaction < PROTEST_LINE ? fans.protestMonths + 1 : 0;
   fans.history.push({ date, satisfaction: fans.satisfaction });

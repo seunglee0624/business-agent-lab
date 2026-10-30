@@ -22,14 +22,14 @@ test('팬층: 네 팬층 비율 합은 100, 평판 높은 구단일수록 유행
   assert.equal(g.fansOf(clubs[0]).satisfaction, 60);
 });
 
-test('만족도: 이기면 오르고 지면 내리며, 만족도가 관중 비율을 바꾼다', () => {
+test('만족도: 이기면 오르고 지면 내리며(강팀에게 진 경기는 조금씩), 만족도가 관중 비율을 바꾼다', () => {
   const state = fresh();
   const club = g.userClub(state);
   const opp = Object.values(state.clubs).find((c) => c.leagueId === club.leagueId && c.id !== club.id);
   const base = attendanceRate(club, null, 20);
   fanMatchResult(state, club, { goalsFor: 3, goalsAgainst: 0, opponent: opp });
   assert.ok(g.fansOf(club).satisfaction > 60);
-  for (let i = 0; i < 30; i++) fanMatchResult(state, club, { goalsFor: 0, goalsAgainst: 2, opponent: opp });
+  for (let i = 0; i < 100; i++) fanMatchResult(state, club, { goalsFor: 0, goalsAgainst: 2, opponent: opp });
   assert.ok(g.fansOf(club).satisfaction < 30);
   assert.ok(fanFactor(club) < 1);
   assert.ok(attendanceRate(club, null, 20) < base);
@@ -57,4 +57,21 @@ test('팬 탭과 한 시즌 진행: 만족도 기록이 쌓이고 화면에 팬�
   assert.ok(f.satisfaction >= 0 && f.satisfaction <= 100);
   const html = fansView(state);
   for (const name of ['충성층', '유행층', '가족층', '지역층', '팬 만족도']) assert.ok(html.includes(name));
+});
+
+test('만족도: 약팀에게 지면 강팀에게 질 때보다 많이 내려가고, 매달 시작값 쪽으로 10% 돌아간다', () => {
+  const state = fresh('fan-tier');
+  const club = g.userClub(state);
+  const peers = Object.values(state.clubs).filter((c) => c.leagueId === club.leagueId && c.id !== club.id);
+  const strong = peers.sort((a, b) => b.reputation - a.reputation)[0];
+  const f = g.fansOf(club);
+  fanMatchResult(state, club, { goalsFor: 0, goalsAgainst: 1, opponent: strong });
+  const afterStrong = 60 - f.satisfaction;
+  f.satisfaction = 60; f.streak = 0;
+  const weak = { reputation: club.reputation - 10 };
+  fanMatchResult(state, club, { goalsFor: 0, goalsAgainst: 1, opponent: weak });
+  assert.ok(60 - f.satisfaction > afterStrong * 3);
+  f.satisfaction = 20;
+  fanMonthly(state, club, '2026-08-01');
+  assert.ok(f.satisfaction > 23);
 });
