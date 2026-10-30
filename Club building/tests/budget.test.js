@@ -27,13 +27,13 @@ test('재정 화면에 재정 조정 바가 보인다', async () => {
   assert.match(html, /재정 조정/);
 });
 
-test('새 시즌 이적 예산: 남은 예산에 지난 시즌 수익의 절반을 더하고, 잔고를 넘지 않는다', async () => {
+test('새 시즌 이적 예산: 남은 예산에 지난 시즌 수익의 절반을 더하고, 잔고의 20% 아래로 내려가지 않으며, 잔고를 넘지 않는다', async () => {
   const { setBudgets, emptyLedger } = await import('../js/core/finance.js');
   const state = g.createNewGame('budget-carry');
   g.chooseLeague(state, 'ENG1', '테스트');
   const f = g.userClub(state).finance;
   f.transferBudget = 50e8;
-  f.balance = 500e8;
+  f.balance = 300e8;
   const last = emptyLedger();
   last.income.tv = 100e8;
   last.income.transfers = 40e8; // 이적 수입은 이미 예산에 들어갔으므로 빼고 계산
@@ -47,6 +47,12 @@ test('새 시즌 이적 예산: 남은 예산에 지난 시즌 수익의 절반�
   f.balance = 30e8;
   setBudgets(state, g.userClub(state));
   assert.equal(f.transferBudget, 30e8);
+  // 적자 시즌 뒤에도 잔고의 20%는 남는다
+  f.transferBudget = 0;
+  f.balance = 100e8;
+  f.history[0].income.tv = 0;
+  setBudgets(state, g.userClub(state));
+  assert.equal(f.transferBudget, 20e8);
 });
 
 test('재정 조정: 이적 탭에서도 버튼으로 재정 조정 창을 열 수 있다', async () => {

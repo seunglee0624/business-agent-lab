@@ -8,7 +8,7 @@ import { fanFactor, protestPenalty } from './fans.js';
 
 export const WAGE_BUDGET_RATIO = 0.7;
 export const MERCH_SHARE = 0.3; // 우리 구단은 상업 수입 중 이 몫을 굿즈 판매로 번다
-export const TRANSFER_BUDGET_RATIO = 0.35;
+export const TRANSFER_BUDGET_RATIO = 0.45;
 const HISTORY_SEASONS = 5;
 
 export const emptyLedger = () => ({
@@ -85,12 +85,14 @@ export function expense(club, key, amount) {
 }
 
 export const PROFIT_TO_BUDGET = 0.5;
+export const WAGE_HEADROOM = 1.1; // 재계약·영입으로 주급이 오를 여유
+export const TRANSFER_FLOOR = 0.2; // 적자 시즌 뒤에도 잔고의 20%는 이적 예산으로
 
-// 시즌 시작: 주급 예산은 수입 기준으로 새로 정하고, 이적 예산은 남은 예산에 지난 시즌 수익(이적 거래 제외)의 절반을 더한다. 첫 시즌은 잔고의 35%
+// 시즌 시작: 주급 예산은 수입 기준으로 새로 정하고, 이적 예산은 남은 예산에 지난 시즌 수익(이적 거래 제외)의 절반을 더한다. 첫 시즌은 잔고의 45%. 주급 예산은 지금 주급의 1.1배 이상, 이적 예산은 잔고의 20% 이상
 export function setBudgets(state, club) {
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
-  f.wageBudget = roundMoney(Math.max(bill * 1.02, (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52));
+  f.wageBudget = roundMoney(Math.max(bill * WAGE_HEADROOM, (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52));
   const last = f.history[0];
   if (!last) {
     f.transferBudget = roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO));
@@ -99,7 +101,7 @@ export function setBudgets(state, club) {
   const carried = f.transferBudget;
   const profit = (ledgerTotal(last.income) - last.income.transfers) - (ledgerTotal(last.expense) - last.expense.transfers);
   const added = roundMoney(profit * PROFIT_TO_BUDGET);
-  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), carried + added)));
+  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), Math.max(carried + added, f.balance * TRANSFER_FLOOR))));
   return { carried, added, total: f.transferBudget };
 }
 
