@@ -3,6 +3,7 @@
 import { EUR, TV_PER_CLUB, TV_EQUAL_SHARE, TICKET_PRICE, TICKET_COUNTRY, FACILITY_KEYS, facilityUpkeep, staffWage, STAFF_KEYS } from '../data/economy.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { roundMoney } from './money.js';
+import { USER_BOOST, BOOSTED_INCOME } from './boost.js';
 import { capacity } from './facilities.js';
 import { fanFactor, protestPenalty } from './fans.js';
 
@@ -77,7 +78,8 @@ export function updateParachutes(state, moves) {
 export function seasonRevenueEstimate(club) {
   const rule = LEAGUES[club.leagueId];
   const homeGames = rule.teams - 1;
-  return tvPerSeason(club) + parachutePerSeason(club) + commercialPerSeason(club) + gatePerMatch(club, null, rule.teams).income * homeGames;
+  const own = (commercialPerSeason(club) + gatePerMatch(club, null, rule.teams).income * homeGames) * (club.userBoost ? USER_BOOST.income : 1);
+  return tvPerSeason(club) + parachutePerSeason(club) + own;
 }
 
 // ---- 장부 ----
@@ -93,7 +95,9 @@ export function initFinance(rng, state, club) {
   setBudgets(state, club);
 }
 
+// 단장이 맡은 구단(club.userBoost)은 직접 버는 수입이 10% 더 들어온다 (core/boost.js)
 export function income(club, key, amount) {
+  if (club.userBoost && BOOSTED_INCOME.has(key)) amount = roundMoney(amount * USER_BOOST.income);
   club.finance.balance += amount;
   club.finance.season.income[key] += amount;
 }

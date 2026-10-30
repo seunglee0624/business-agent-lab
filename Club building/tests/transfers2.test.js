@@ -187,7 +187,8 @@ test('주급 요구: 능력과 우리 선수단 주급 수준을 함께 본다 (
   const { transferDemand } = await import('../js/core/contracts.js');
   const state = g.createNewGame('wage-struct');
   g.chooseLeague(state, 'ENG1', '테스트');
-  const club = g.userClub(state);
+  // 구단 키우기 보정이 없는 AI 구단으로 주급 구조만 본다
+  const club = Object.values(state.clubs).filter((c) => c.status === 'active' && c.leagueId === 'ENG1' && c.id !== state.user.clubId).sort((a, b) => a.reputation - b.reputation)[0];
   const p = Object.values(state.players).find((x) => x.clubId && x.clubId !== club.id && x.contract);
   const before = transferDemand(state, club, p).wage;
   for (const id of club.squad) state.players[id].contract.wage *= 0.5;

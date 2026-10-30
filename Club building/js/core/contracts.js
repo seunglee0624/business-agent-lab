@@ -4,6 +4,7 @@ import { PROMISES } from '../data/economy.js';
 import { seasonOf, addDays } from './calendar.js';
 import { overall, ageOn } from './player.js';
 import { wageFor, roundMoney, monthsBetween } from './money.js';
+import { boostFor } from './boost.js';
 import { weeklyWageBill, seasonRevenueEstimate, expense } from './finance.js';
 
 export const RENEWAL_MONTHS = 12; // 계약이 이만큼 남으면 재계약 협상을 할 수 있다
@@ -69,8 +70,9 @@ export function canRenew(state, p) {
 // 선수가 먼저 말하는 요구 조건
 export function renewalDemand(state, club, p) {
   const age = ageOn(p, state.date);
-  const base = fairWage(state, club, p) * (age <= 24 && p.potential - overall(p) >= 6 ? 1.2 : 1.1);
-  const wage = roundMoney(Math.max(base, age < 30 ? p.contract.wage * 1.05 : 0));
+  const m = boostFor(state, club).wage;
+  const base = fairWage(state, club, p) * (age <= 24 && p.potential - overall(p) >= 6 ? 1.2 : 1.1) * m;
+  const wage = roundMoney(Math.max(base, age < 30 ? p.contract.wage * 1.05 * m : 0));
   const years = age <= 23 ? 5 : age <= 27 ? 4 : age <= 30 ? 3 : age <= 32 ? 2 : 1;
   return { wage, years, promise: promiseForRank(squadRank(state, club, p)) };
 }
@@ -100,7 +102,7 @@ export const fairWage = (state, club, p) => wageFor(overall(p)) * Math.sqrt(club
 // 이적해 올 선수의 요구 조건: 능력·우리 주급 수준 기준 주급보다 7% 더, 다만 지금 주급보다 5% 넘게 깎이는 건 싫어한다
 export const TRANSFER_WAGE_RAISE = 1.07;
 export function transferDemand(state, club, p) {
-  const wage = roundMoney(Math.max(fairWage(state, club, p) * TRANSFER_WAGE_RAISE, (p.contract?.wage ?? 0) * 0.95));
+  const wage = roundMoney(Math.max(fairWage(state, club, p) * TRANSFER_WAGE_RAISE * boostFor(state, club).wage, (p.contract?.wage ?? 0) * 0.95));
   return { wage, promise: promiseForRank(squadRank(state, club, p)) };
 }
 

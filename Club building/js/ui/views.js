@@ -12,6 +12,7 @@ import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
+import { USER_BOOST } from '../core/boost.js';
 import { weeklyWageBill, ledgerTotal, attendanceRate, commercialPerSeason as commercialBase } from '../core/finance.js';
 import { marketValue, roundMoney } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
@@ -581,6 +582,9 @@ export function settingsView(state) {
   return `
     <div class="grid two">
       <div class="card">
+        <h3>구단 키우기 보정</h3>
+        <p class="small">단장이 맡은 구단에만 늘 적용됩니다: 직접 버는 수입(입장·스폰서·굿즈·대관) +${Math.round((USER_BOOST.income - 1) * 100)}% · 선수 주급 요구 −${Math.round((1 - USER_BOOST.wage) * 100)}% · 기대 이상 성적이면 평판 추가 상승 · 유스 잠재력 +${USER_BOOST.youth}</p>
+        <p class="muted small">다른 구단과 경기 결과에는 영향이 없습니다.</p>
         <h3>경기 보기</h3>
         <div class="form-col">
           <label>기본 보기 방식 <select data-change="setViewMode">${options(VIEW_MODES, s.viewMode)}</select></label>

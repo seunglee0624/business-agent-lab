@@ -126,6 +126,7 @@ export function chooseLeague(state, leagueId, name) {
 function chooseClub(state, clubId, name) {
   const club = state.clubs[clubId];
   state.user = { name, clubId, history: [] };
+  state.clubs[clubId].userBoost = true;
   state.phase = 'season';
   addMessage(state, {
     title: `${club.name} 단장 부임`,
@@ -723,6 +724,7 @@ export function setTicketPrice(state, grade, price) {
 // 예전 저장 파일 보정: 새로 생긴 값 채우기
 export function upgradeState(state) {
   state.settings.decisions = { ...DEFAULT_SETTINGS.decisions, ...(state.settings.decisions ?? {}) };
+  if (state.user?.clubId) state.clubs[state.user.clubId].userBoost = true;
   if (state.user?.clubId && state.clubs[state.user.clubId].sponsors) sponsors.sponsorCatchUp(state, userClub(state));
   // 이적 예산은 잔고 안에 묶인 돈이다 (예전에는 재정 조정으로 잔고를 넘을 수 있었다)
   for (const c of Object.values(state.clubs)) if (c.finance) c.finance.transferBudget = Math.max(0, Math.min(c.finance.transferBudget, c.finance.balance));

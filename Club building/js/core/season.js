@@ -14,7 +14,8 @@ import { initFinance, payPrizeMoney, closeLedger, setBudgets, updateParachutes, 
 import { signNew, expiringContracts } from './contracts.js';
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS, staffWage, MAX_STAFF, EUR } from '../data/economy.js';
-import { fanSeasonEnd } from './fans.js';
+import { fanSeasonEnd, expectedPosition } from './fans.js';
+import { userReputationGain } from './boost.js';
 import { resetSeasonTickets } from './tickets.js';
 import { merchSeasonEnd } from './merch.js';
 import { sponsorSeasonEnd, SLOTS } from './sponsors.js';
@@ -315,6 +316,8 @@ export function processSeasonEnd(state, rng) {
   }
   if (userId) state.user.history.push({ season: state.season, clubId: userId, clubName: state.clubs[userId].name, leagueId: userLeague, position: userPos });
 
+  // 난이도: 내 구단은 기대 이상 성적이면 평판이 더 오른다 (구단 수준 재계산 뒤에 더한다)
+  const repGain = userId ? userReputationGain(state, state.clubs[userId], expectedPosition(state, state.clubs[userId]), userPos) : 0;
   const moves = promoteAndRelegate(state, rng);
   updateParachutes(state, moves);
   const mine = userId && state.clubs[userId];
@@ -343,6 +346,7 @@ export function processSeasonEnd(state, rng) {
   const fill = fillSquads(state, rng, active, endDate);
   releaseYouth(state, endDate);
   rerateClubs(state);
+  if (repGain) state.clubs[userId].reputation = Math.min(99, state.clubs[userId].reputation + repGain);
   resetSeasonYellows(state.discipline);
   rotateCompetitions(state);
   for (const club of Object.values(state.clubs)) if (club.finance) closeLedger(club, state.season);

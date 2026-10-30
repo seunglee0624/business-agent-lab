@@ -3,6 +3,7 @@
 import { ATTRIBUTE_KEYS, POSITION_WEIGHTS } from '../data/positions.js';
 import { overall, ageOn } from './player.js';
 import { generatePlayer, SQUAD_TEMPLATE } from './worldgen.js';
+import { boostFor } from './boost.js';
 import { growthFactor, youthIntakeAbility, youthPotentialBoost } from './facilities.js';
 import { intensityOf, focusBoost } from './training.js';
 
@@ -77,7 +78,7 @@ export function youthIntake(state, rng, club) {
     const pos = rng.weighted(POSITION_POOL, ([, count]) => count)[0];
     const age = rng.int(15, 16);
     const target = Math.max(28, youthIntakeAbility(club) + rng.normal(0, 4));
-    const boost = youthPotentialBoost(club) + (golden ? 8 : 0) + rng.normal(0, 3);
+    const boost = youthPotentialBoost(club) + boostFor(state, club).youth + (golden ? 8 : 0) + rng.normal(0, 3);
     const p = generatePlayer(rng, {
       id: `p${state.ids.player++}`, pos, target, age, country: club.country,
       seasonStart: `${state.season}-07-01`, potentialBoost: boost,

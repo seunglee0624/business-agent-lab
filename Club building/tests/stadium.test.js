@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { roundMoney } from '../js/core/money.js';
 import * as g from '../js/core/game.js';
 import { stadiumDaily, rentalMonthly, takeEvent, eventStrength } from '../js/core/stadium.js';
 import { mediaDaily } from '../js/core/media.js';
@@ -57,7 +58,7 @@ test('대관: 제안을 수락하면 그날 대관료가 들어오고 잔디가 
   const income = club.finance.season.income.rental;
   const done = stadiumDaily(state, club);
   assert.equal(done.length, 1);
-  assert.equal(club.finance.season.income.rental, income + offer.fee);
+  assert.equal(club.finance.season.income.rental, income + roundMoney(offer.fee * 1.1), '구단 키우기 보정 +10%');
   const pitch = club.stadium.pitch;
   assert.ok(pitch < 100);
   assert.ok(g.pitchFactor(club) < 1);
