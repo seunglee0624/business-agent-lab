@@ -68,15 +68,21 @@ test('재계약: 요구보다 적게 주면 거절, 맞춰 주면 서명, 한 �
   }
 });
 
-test('시설 업그레이드: 잔고와 상관없이 공사비를 내고 시작하며, 공사가 끝나면 레벨이 오른다', () => {
+test('시설 업그레이드: 이적 예산을 뺀 돈으로 공사비를 내고 시작하며, 공사가 끝나면 레벨이 오른다', () => {
   const s = structuredClone(state);
   const club = g.userClub(s);
   const key = Object.keys(club.facilities).find((k) => k !== 'stadium' && club.facilities[k] < 5);
   const before = club.facilities[key];
   club.finance.balance = 0;
+  club.finance.transferBudget = 0;
+  assert.equal(g.upgradeFacility(s, key).ok, false, '쓸 수 있는 돈이 없으면 못 짓는다');
+  club.finance.balance = 1e12;
+  club.finance.transferBudget = 1e12 - 1;
+  assert.match(g.upgradeFacility(s, key).reason, /이적 예산/);
+  club.finance.transferBudget = 0;
   const res = g.upgradeFacility(s, key);
   assert.ok(res.ok, res.reason);
-  assert.equal(club.finance.balance, -res.cost);
+  assert.equal(club.finance.balance, 1e12 - res.cost);
   const growth = growthFactor(club);
   s.date = addDays(club.construction[0].done, -1);
   completeConstruction(s, club, true);

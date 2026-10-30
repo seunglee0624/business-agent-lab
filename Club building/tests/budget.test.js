@@ -63,3 +63,23 @@ test('재정 조정: 이적 탭에서도 버튼으로 재정 조정 창을 열 �
   const html = transfersView(state, { budgetOpen: true });
   assert.match(html, /data-change="wageBudget"/);
 });
+
+test('이적 예산은 잔고 안에 묶인다: 시설·행사는 그 돈을 못 쓰고, 주급 같은 고정 지출로 잔고가 줄면 이적 예산도 줄어든다', async () => {
+  const { expense, spendable } = await import('../js/core/finance.js');
+  const state = g.createNewGame('budget-lock');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const f = club.finance;
+  f.balance = 100e8;
+  f.transferBudget = 99e8;
+  assert.equal(spendable(club), 1e8);
+  const res = g.startCampaign(state, 'documentary');
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /이적 예산/);
+  f.transferBudget = 50e8;
+  assert.ok(g.startCampaign(state, 'documentary').ok);
+  assert.equal(f.transferBudget, 50e8, '고를 수 있는 지출은 이적 예산을 건드리지 않는다');
+  expense(club, 'wages', f.balance - 30e8);
+  assert.equal(f.balance, 30e8);
+  assert.equal(f.transferBudget, 30e8);
+});

@@ -132,7 +132,7 @@ test('개인 조건이 맞으면 이적이 끝난다: 소속, 계약, 잔고, �
   assert.ok(me.squad.includes(p.id) && !seller.squad.includes(p.id));
   assert.deepEqual([p.contract.wage, p.contract.promise, p.contract.until], [1e10, 'starter', '2029-06-30']);
   assert.equal(me.finance.balance, myBal - fee);
-  assert.equal(me.finance.transferBudget, myBudget - fee);
+  assert.equal(me.finance.transferBudget, Math.min(myBudget - fee, me.finance.balance)); // 이적 예산은 잔고를 넘지 않는다
   assert.equal(me.finance.season.expense.transfers, fee);
   assert.equal(seller.finance.balance, sellBal + fee);
   assert.equal(seller.finance.season.income.transfers, fee);

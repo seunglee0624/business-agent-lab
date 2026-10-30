@@ -1,7 +1,7 @@
 // 굿즈: 홈·원정 유니폼(디자인·가격·수량), 머플러·아동용품, 우승·승격 때만 내는 한정판
 
 import { EUR } from '../data/economy.js';
-import { commercialPerSeason, income, expense, MERCH_SHARE } from './finance.js';
+import { commercialPerSeason, income, expense, spendCheck, MERCH_SHARE } from './finance.js';
 import { fansOf, SEGMENT_KEYS } from './fans.js';
 import { overall } from './player.js';
 import { addDays, daysBetween } from './calendar.js';
@@ -137,7 +137,8 @@ export function orderMerch(state, club, item, { quantity, price, design }) {
     arrive = addDays(state.date, def.leadDays);
   }
   const cost = roundMoney(unit * quantity);
-  if (club.finance.balance < cost) return { ok: false, reason: '잔고가 부족합니다.' };
+  const short = spendCheck(club, cost);
+  if (short) return { ok: false, reason: short };
   expense(club, 'merch', cost);
   it.price = roundMoney(price);
   if (arrive === state.date) it.stock += quantity;

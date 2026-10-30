@@ -5,6 +5,7 @@ import {
   upgradeCost, upgradeMonths,
 } from '../data/economy.js';
 import { LEAGUES } from '../data/countries/index.js';
+import { expense, spendCheck } from './finance.js';
 import { addMonths } from './calendar.js';
 import { roundMoney } from './money.js';
 import { addMessage } from './state.js';
@@ -65,8 +66,9 @@ export function requestUpgrade(state, club, key) {
   const info = upgradeInfo(club, key);
   if (!info) return { ok: false, reason: '이미 최고 레벨입니다.' };
   if (isBuilding(club, key)) return { ok: false, reason: '이미 공사 중입니다.' };
-  club.finance.balance -= info.cost;
-  club.finance.season.expense.construction += info.cost;
+  const short = spendCheck(club, info.cost);
+  if (short) return { ok: false, reason: short };
+  expense(club, 'construction', info.cost);
   club.construction.push({ key, toLevel: info.level + 1, start: state.date, done: addMonths(state.date, info.months) });
   return { ok: true, ...info };
 }

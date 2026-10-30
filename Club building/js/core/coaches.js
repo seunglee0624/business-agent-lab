@@ -3,6 +3,7 @@
 import { NATIONS, formatName } from '../data/nations.js';
 import { COUNTRIES } from '../data/countries/index.js';
 import { staffWage, EUR } from '../data/economy.js';
+import { expense } from './finance.js';
 import { roundMoney } from './money.js';
 import { contractEnd } from './contracts.js';
 import { daysBetween } from './calendar.js';
@@ -114,8 +115,7 @@ export function fireCoach(state, club) {
   const coach = club.headCoach;
   if (!coach) return { ok: false, reason: '감독이 없습니다.' };
   const compensation = firingCost(state, club);
-  club.finance.balance -= compensation;
-  club.finance.season.expense.staff += compensation;
+  expense(club, 'staff', compensation);
   club.headCoach = null;
   (state.coachPool ??= []).push({ ...coach, until: null });
   return { ok: true, compensation, coach };

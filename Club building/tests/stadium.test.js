@@ -72,6 +72,8 @@ test('대관: 잔디 보호 시스템은 경기장 3레벨부터 짓고, 다 지
   club.facilities.stadium = 2;
   assert.equal(g.buildPitchSystem(state).ok, false);
   club.facilities.stadium = 3;
+  club.finance.balance = 1e12;
+  club.finance.transferBudget = 0;
   const res = g.buildPitchSystem(state);
   assert.ok(res.ok);
   assert.equal(g.buildPitchSystem(state).ok, false, '두 번 지을 수 없다');

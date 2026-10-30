@@ -79,9 +79,19 @@ export function income(club, key, amount) {
   club.finance.season.income[key] += amount;
 }
 
+// 이적 예산은 잔고 안에 묶어 둔 돈이다. 주급처럼 막을 수 없는 지출로 잔고가 그 아래로 내려가면 이적 예산도 같이 줄어든다
 export function expense(club, key, amount) {
-  club.finance.balance -= amount;
-  club.finance.season.expense[key] += amount;
+  const f = club.finance;
+  f.balance -= amount;
+  f.season.expense[key] += amount;
+  f.transferBudget = Math.max(0, Math.min(f.transferBudget, f.balance));
+}
+
+// 시설·행사처럼 고를 수 있는 지출에 쓸 수 있는 돈: 잔고에서 이적 예산을 뺀 만큼
+export const spendable = (club) => Math.max(0, club.finance.balance - club.finance.transferBudget);
+export function spendCheck(club, cost) {
+  if (cost <= spendable(club)) return null;
+  return club.finance.balance >= cost ? '이적 예산으로 묶인 돈은 쓸 수 없습니다. 재정 조정에서 이적 예산을 줄이세요.' : '잔고가 부족합니다.';
 }
 
 export const PROFIT_TO_BUDGET = 0.5;
@@ -133,8 +143,8 @@ export function payPrizeMoney(state, club, position, teams) {
 // 이적료: 사는 구단은 이적 예산에서 빼고, 파는 구단은 판 돈을 예산에 더한다 (적자면 빚을 먼저 갚고 남는 만큼)
 export function recordTransfer(buyer, seller, fee) {
   if (!fee) return 0;
-  expense(buyer, 'transfers', fee);
   buyer.finance.transferBudget = Math.max(0, buyer.finance.transferBudget - fee);
+  expense(buyer, 'transfers', fee);
   income(seller, 'transfers', fee);
   const added = Math.min(fee, Math.max(0, seller.finance.balance));
   seller.finance.transferBudget += added;

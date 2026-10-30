@@ -4,7 +4,7 @@ import { PROMISES } from '../data/economy.js';
 import { seasonOf, addDays } from './calendar.js';
 import { overall, ageOn } from './player.js';
 import { wageFor, roundMoney, monthsBetween } from './money.js';
-import { weeklyWageBill, seasonRevenueEstimate } from './finance.js';
+import { weeklyWageBill, seasonRevenueEstimate, expense } from './finance.js';
 
 export const RENEWAL_MONTHS = 12; // 계약이 이만큼 남으면 재계약 협상을 할 수 있다
 export const MAX_TALKS_PER_MONTH = 3;
@@ -162,8 +162,7 @@ export function releasePlayer(state, club, p) {
   if (!club.squad.includes(p.id) && !club.youth.includes(p.id)) return { ok: false, reason: '우리 구단 선수가 아닙니다.' };
   if (p.loan) return { ok: false, reason: '임대 중인 선수는 방출할 수 없습니다.' };
   const cost = releaseCost(state, p);
-  club.finance.balance -= cost;
-  club.finance.season.expense.wages += cost;
+  expense(club, 'wages', cost);
   club.squad = club.squad.filter((id) => id !== p.id);
   club.youth = club.youth.filter((id) => id !== p.id);
   if (club.tactics.lineup) club.tactics.lineup = null;
