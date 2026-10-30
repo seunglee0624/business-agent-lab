@@ -10,6 +10,7 @@ import { withParticle } from './korean.js';
 import { contractEnd, transferDemand, requiredWage, signNew } from './contracts.js';
 import { weeklyWageBill, recordTransfer } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
+import { totalCount, MAX_TOTAL, fitRegistration } from './registration.js';
 import { SQUAD_TEMPLATE } from './worldgen.js';
 import { isHomegrownYouth } from './development.js';
 
@@ -151,7 +152,7 @@ export function offerTerms(state, club, p, offer) {
     deal = state.transfers.deals[p.id] ??= { stage: 'terms', tries: 0, fee: 0, until: '9999-12-31' };
     if (deal.stage === 'collapsed') return { ok: false, reason: '협상이 결렬되었습니다.' };
   }
-  if (registeredCount(state, club, state.date) >= MAX_SQUAD) return { ok: false, reason: `1군 등록 인원(${MAX_SQUAD}명)이 꽉 찼습니다. 먼저 선수를 내보내세요.` };
+  if (totalCount(state, club, state.date) >= MAX_TOTAL) return { ok: false, reason: `선수단이 ${MAX_TOTAL}명으로 꽉 찼습니다. 먼저 선수를 내보내세요.` };
   const wage = roundMoney(offer.wage);
   if (weeklyWageBill(state, club) + wage > club.finance.wageBudget) return { ok: false, reason: '주급 예산을 넘습니다.' };
   const demand = transferDemand(state, club, p);
@@ -165,7 +166,11 @@ export function offerTerms(state, club, p, offer) {
   }
   const fee = deal.fee;
   completeTransfer(state, p, seller, club, fee, { wage, until: contractEnd(state.date, offer.years), promise: offer.promise, signed: state.date });
-  return { ok: true, fee };
+  // 등록 25명이 꽉 찼으면 미등록으로 들어온다 (이적시장 안이면 포지션·능력으로 다시 고른다)
+  p.newcomer = true;
+  const unregistered = fitRegistration(state, club, { keep: !windowEnd(state.date) });
+  delete p.newcomer;
+  return { ok: true, fee, unregistered };
 }
 
 // 선수를 옮기고 돈을 정산한다. from이 null이면 자유계약 선수
@@ -181,6 +186,7 @@ export function completeTransfer(state, p, from, to, fee, contract) {
   (p.transfers ??= []).push({ date: state.date, from: from?.id ?? null, to: to.id, fee });
   p.clubId = to.id;
   p.contract = contract;
+  delete p.unregistered;
   p.transferRequest = false;
   p.unhappyMonths = 0;
   p.morale = Math.max(p.morale, 65);

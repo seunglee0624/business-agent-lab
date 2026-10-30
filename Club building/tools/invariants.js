@@ -35,6 +35,7 @@ export function check(state) {
       }
     }
     if (c.id === userId && registeredCount(state, c, state.date) > MAX_SQUAD) v('내 구단 1군 등록 인원 초과', `${registeredCount(state, c, state.date)}명`);
+    if (c.id !== userId && c.squad.some((id) => state.players[id]?.unregistered)) v('AI 구단에 미등록 선수', c.name);
     if (c.squad.length < 11) v('1군이 11명보다 적음', `${c.name} ${c.squad.length}명`);
     for (const id of c.loanedOut ?? []) {
       const p = state.players[id];

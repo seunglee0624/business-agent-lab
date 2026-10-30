@@ -5,6 +5,7 @@ import { generateWorld, newIds } from './worldgen.js';
 import { LEAGUES } from '../data/countries/index.js';
 import { seasonStart, addDays, addMonths, formatDate, formatShortDate, daysBetween } from './calendar.js';
 import { resolveLineup } from './tactics.js';
+import * as registration from './registration.js';
 import * as transfers from './transfers.js';
 import * as tickets from './tickets.js';
 import * as merch from './merch.js';
@@ -625,6 +626,13 @@ function endSeason(state) {
 function runSeasonTransition(state) {
   moveTo(state, `${state.season + 1}-06-30`);
   returnLoans(state);
+  // 임대 갔던 선수가 돌아와 25명을 넘으면 포지션·능력을 보고 미등록 선수를 고른다
+  if (state.user?.clubId) {
+    const out = registration.fitRegistration(state, userClub(state));
+    const total = registration.totalCount(state, userClub(state), state.date);
+    const over = total > registration.MAX_TOTAL ? ` 선수단도 ${total}명으로 ${registration.MAX_TOTAL}명을 넘어, 정리하기 전까지 새 선수를 데려올 수 없습니다.` : '';
+    if (out.length) addMessage(state, { view: 'squad', important: true, title: '1군 등록 인원 초과', body: `임대 복귀로 등록 인원(${MAX_SQUAD}명)을 넘어 ${out.map((x) => x.name).join(', ')} 선수를 미등록으로 두었습니다(경기 출전 불가). 여름 이적시장 동안 선수단 탭에서 등록 명단을 바꾸거나 선수를 정리하세요.${over}` });
+  }
   const summary = withRng(state, (rng) => processSeasonEnd(state, rng));
   seasonEndMessages(state, summary);
   // 계약이 끝나는 감독은 2년 연장한다
@@ -665,7 +673,8 @@ export function canCallUp(state, playerId) {
   const club = userClub(state);
   const p = state.players[playerId];
   if (!club.youth.includes(playerId)) return false;
-  return isHomegrownYouth(p, state.date) || registeredCount(state, club, state.date) < MAX_SQUAD;
+  // 등록 인원이 꽉 차도 선수단 30명 안이면 올릴 수 있다 (미등록으로)
+  return isHomegrownYouth(p, state.date) || registration.totalCount(state, club, state.date) < registration.MAX_TOTAL;
 }
 
 export function callUpYouth(state, playerId) {
@@ -674,6 +683,10 @@ export function callUpYouth(state, playerId) {
   club.youth = club.youth.filter((id) => id !== playerId);
   club.squad.push(playerId);
   withRng(state, (rng) => signNew(rng, state, club, state.players[playerId], { youth: true }));
+  const p = state.players[playerId];
+  p.newcomer = true;
+  registration.fitRegistration(state, club, { keep: !transfers.windowEnd(state.date) });
+  delete p.newcomer;
   return true;
 }
 
@@ -766,10 +779,20 @@ export function offerTerms(state, playerId, offer) {
   const res = transfers.offerTerms(state, userClub(state), p, offer);
   if (res.ok) {
     const where = from ? `${state.clubs[from].name}에서` : '자유계약으로';
-    addMessage(state, { view: 'transfers', title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}` });
+    addMessage(state, { view: 'transfers', title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}${unregisteredNote(res.unregistered)}` });
   }
   return res;
 }
+
+// 등록 인원이 넘쳐 미등록이 된 선수 안내
+const unregisteredNote = (list) => (list?.length ? ` 등록 인원(${MAX_SQUAD}명)이 꽉 차 ${list.map((x) => x.name).join(', ')} 선수는 미등록입니다(경기 출전 불가). 이적시장 기간에 선수단 탭에서 바꿀 수 있습니다.` : '');
+
+// 1군 등록·해제 (이적시장 기간에만)
+export function setRegistered(state, playerId, registered) {
+  return registration.setRegistered(state, userClub(state), state.players[playerId], registered, !!transfers.windowEnd(state.date));
+}
+export const unregisteredPlayers = (state) => registration.unregisteredPlayers(state, userClub(state));
+export { MAX_TOTAL, totalCount } from './registration.js';
 
 export function respondToOffer(state, offerId, answer) {
   const offer = state.transfers.incoming.find((o) => o.id === offerId);
@@ -796,7 +819,7 @@ export function offerLoan(state, playerId, offer) {
   const p = state.players[playerId];
   const from = p.clubId;
   const res = loans.offerLoan(state, userClub(state), p, offer);
-  if (res.ok) addMessage(state, { view: 'transfers', title: `${p.name} 임대 영입`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[from].name}에서 임대로 왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.` });
+  if (res.ok) addMessage(state, { view: 'transfers', title: `${p.name} 임대 영입`, body: `${withParticle(p.name, '가')} 시즌 끝까지 ${state.clubs[from].name}에서 임대로 왔습니다. 완전 이적 옵션 ${won(res.optionFee)}.${unregisteredNote(res.unregistered)}` });
   return res;
 }
 

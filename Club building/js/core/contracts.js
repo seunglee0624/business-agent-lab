@@ -174,6 +174,7 @@ export function releasePlayer(state, club, p) {
   if (club.tactics.lineup) club.tactics.lineup = null;
   p.lastClubId = club.id;
   p.clubId = null;
+  delete p.unregistered;
   p.contract = null;
   p.transferRequest = false;
   p.transferListed = false;

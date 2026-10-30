@@ -76,7 +76,8 @@ export function unavailableSet(state, compId, club = null) {
   const ids = club ? club.squad : Object.keys(state.players);
   const set = new Set();
   for (const id of ids) {
-    if (banned[id]?.ban > 0 || state.players[id].injury) set.add(id);
+    // 미등록 선수(core/registration.js)는 부상·징계 선수처럼 경기 명단에 들 수 없다
+    if (banned[id]?.ban > 0 || state.players[id].injury || state.players[id].unregistered) set.add(id);
   }
   return set;
 }

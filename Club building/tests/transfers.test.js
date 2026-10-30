@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { totalCount, MAX_TOTAL } from '../js/core/registration.js';
 import assert from 'node:assert/strict';
 import {
   createNewGame, chooseLeague, userClub, playerInfo, searchPlayers, bidForPlayer, offerTerms,
@@ -157,11 +158,16 @@ test('개인 조건: 우리 구단 평판이 크게 낮으면 선수가 거절�
   assert.notEqual(p.clubId, me.id);
 });
 
-test('개인 조건: 1군 등록 인원이 꽉 차 있으면 영입할 수 없다', () => {
+test('개인 조건: 등록 25명이 꽉 차도 영입은 되고 새 선수는 미등록이 될 수 있으며, 선수단 30명이면 영입할 수 없다', () => {
   const { state, me, p } = agreed();
-  me.squad.push('filler');
-  state.players.filler = { ...state.players[me.squad[0]], id: 'filler', birthDate: '1995-01-01' };
-  assert.match(offerTerms(state, p.id, generous).reason, /등록/);
+  const filler = (n) => {
+    for (let i = 0; i < n; i++) {
+      me.squad.push(`filler${i}`);
+      state.players[`filler${i}`] = { ...state.players[me.squad[0]], id: `filler${i}`, birthDate: '1995-01-01', youthSince: undefined };
+    }
+  };
+  filler(MAX_TOTAL - totalCount(state, me, state.date));
+  assert.match(offerTerms(state, p.id, generous).reason, /30명/);
 });
 
 test('자유계약 선수: 이적시장이 닫혀 있어도 이적료 없이 개인 조건만으로 영입한다', () => {
@@ -176,7 +182,7 @@ test('자유계약 선수: 이적시장이 닫혀 있어도 이적료 없이 개
   state.date = '2026-10-01';
   const balance = me.finance.balance;
   assert.ok(searchPlayers(state, { freeOnly: true }).some((r) => r.id === p.id && r.value === 0));
-  assert.deepEqual(offerTerms(state, p.id, generous), { ok: true, fee: 0 });
+  assert.deepEqual(offerTerms(state, p.id, generous), { ok: true, fee: 0, unregistered: [] });
   assert.equal(p.clubId, me.id);
   assert.equal(p.freeSince, undefined);
   assert.equal(me.finance.balance, balance);

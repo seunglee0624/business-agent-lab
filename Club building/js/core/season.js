@@ -12,6 +12,8 @@ import { withParticle } from './korean.js';
 import { addMessage, standings, topScorers, clubStrength } from './state.js';
 import { initFinance, payPrizeMoney, closeLedger, setBudgets, updateParachutes, parachutePerSeason } from './finance.js';
 import { signNew, expiringContracts } from './contracts.js';
+import { registeredCount, MAX_SQUAD } from './registration.js';
+export { registeredCount, MAX_SQUAD };
 import { upgradeInfo, requestUpgrade, isBuilding } from './facilities.js';
 import { FACILITY_KEYS, staffWage, MAX_STAFF, EUR } from '../data/economy.js';
 import { fanSeasonEnd, expectedPosition } from './fans.js';
@@ -143,6 +145,7 @@ function release(state, club, p) {
   club.youth = club.youth.filter((id) => id !== p.id);
   p.lastClubId = club.id;
   p.clubId = null;
+  delete p.unregistered;
   p.contract = null;
   p.transferRequest = false;
   if (club.tactics.lineup) club.tactics.lineup = null;
@@ -171,7 +174,6 @@ function retirements(state, rng, date) {
 
 export const YOUTH_CAP = 14;
 export const AI_SQUAD = 25; // AI 구단 전체 인원 (유스 출신 포함)
-export const MAX_SQUAD = 25; // 1군 등록 인원 (홈그로운 유스 제외)
 
 // 5. 21세가 넘었는데 1군에 못 올라간 유스, 그리고 정원(14명)을 넘는 유스는 잠재력 낮은 순으로 방출한다
 // (1군 경기 기록이 없으므로 지운다). 선수단 채우기가 끝난 뒤에 부른다.
@@ -270,9 +272,6 @@ function signForPosition(state, rng, club, pos, date, log, useYouth) {
   log.signed.push(p);
 }
 
-export function registeredCount(state, club, date) {
-  return club.squad.filter((id) => !isHomegrownYouth(state.players[id], date)).length;
-}
 
 // 7. 구단 수준과 강팀/중위권/약팀 구분을 새 리그 기준으로 다시 매긴다
 function rerateClubs(state) {

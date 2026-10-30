@@ -9,6 +9,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
+import { unregisteredPlayers, totalCount, MAX_TOTAL } from '../core/game.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeasonTicket, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES, staffWage, EUR } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
@@ -251,7 +252,7 @@ export function squadView(state, ui) {
   return `${tabs}
     <div class="squad">
       <div class="card">
-        <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명)</h3><div>${sortBtn('lineup', '선발순')} ${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
+        <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명${unregisteredPlayers(state).length ? ` · 미등록 ${unregisteredPlayers(state).length}명` : ''} · 전체 ${totalCount(state, club, state.date)}/${MAX_TOTAL}명)</h3><div>${sortBtn('lineup', '선발순')} ${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
           <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>사기</th><th>주급</th><th>계약</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
           <tbody>
@@ -270,7 +271,7 @@ export function squadView(state, ui) {
                 <td class="small">${p.contract ? won(p.contract.wage) : '-'}</td>
                 <td class="small ${p.contract && canRenew(state, p) ? 'error' : ''}">${p.contract ? `${p.contract.until.slice(0, 4)}.6` : '-'}</td>
                 <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
-                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${p.transferListed ? '<span class="tag">이적 목록</span>' : ''}${p.loan ? '<span class="tag">임대</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
+                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${p.transferListed ? '<span class="tag">이적 목록</span>' : ''}${p.loan ? '<span class="tag">임대</span>' : ''}${p.unregistered ? '<span class="tag red" title="등록 인원(25명) 밖이라 경기에 나갈 수 없습니다">미등록</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -345,6 +346,9 @@ function contractBox(state, p, ui) {
     ${p.loan?.to === club.id ? `<p><span class="tag">임대</span> ${esc(state.clubs[p.loan.from].name)}에서 시즌 끝까지 · 주급 ${p.loan.wageShare * 100}% 부담 <button class="btn small" data-action="buyLoaned" data-id="${p.id}">완전 영입 (${won(p.loan.optionFee)})</button></p>` : ''}
     ${club.squad.includes(p.id) && !p.loan ? `<p><button class="btn small" data-action="loanOut" data-id="${p.id}">임대 보내기</button> <span class="muted small">이적시장 중에만. 수준이 맞는 구단에서 시즌 끝까지 뛰고 돌아옵니다.</span></p>` : ''}
     ${club.squad.includes(p.id) && !p.loan ? `<p><button class="btn small" data-action="toggleListed" data-id="${p.id}">${p.transferListed ? '이적 목록에서 내리기' : '이적 목록에 올리기'}</button> <span class="muted small">목록에 올리면 이적시장 동안 다른 구단 제안이 더 자주 옵니다.</span></p>` : ''}
+    ${club.squad.includes(p.id) && !isHomegrownYouth(p, state.date) ? `<p>${p.unregistered
+      ? `<button class="btn small" data-action="setRegistered" data-id="${p.id}" data-registered="1">1군 등록</button> <span class="muted small">미등록 선수는 경기에 나갈 수 없습니다. 등록 명단은 이적시장 기간에만 바꿀 수 있습니다.</span>`
+      : `<button class="btn small" data-action="setRegistered" data-id="${p.id}" data-registered="0">등록 해제</button> <span class="muted small">등록 인원 ${MAX_SQUAD}명 안에서 경기 명단을 고릅니다. 이적시장 기간에만 바꿀 수 있습니다.</span>`}</p>` : ''}
     ${club.squad.includes(p.id) && !p.loan ? `<p><button class="btn small danger" data-action="releasePlayer" data-id="${p.id}">계약 해지 (위약금 ${won(releaseCost(state, p))})</button> <span class="muted small">남은 주급의 절반을 주고 바로 내보냅니다. 1군 자리가 하나 빕니다.</span></p>` : ''}
     ${talk}`;
 }

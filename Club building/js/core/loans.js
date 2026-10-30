@@ -4,6 +4,7 @@ import { overall, ageOn } from './player.js';
 import { marketValue, roundMoney } from './money.js';
 import { weeklyWageBill, recordTransfer } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
+import { totalCount, MAX_TOTAL, fitRegistration } from './registration.js';
 import { windowEnd, trimSquad } from './transfers.js';
 import { withParticle } from './korean.js';
 
@@ -17,6 +18,7 @@ function move(state, p, from, to, loan) {
   if (from.tactics.lineup?.some((e) => e?.playerId === p.id)) from.tactics.lineup = null;
   to.squad.push(p.id);
   p.clubId = to.id;
+  delete p.unregistered;
   p.transferListed = false;
   if (loan) (p.transfers ??= []).push({ date: state.date, from: from.id, to: to.id, fee: 0, loan: true });
   if (loan) {
@@ -55,13 +57,16 @@ export function offerLoan(state, club, p, { wageShare }) {
   if (!owner || owner.id === club.id || p.loan || owner.youth.includes(p.id)) return { ok: false, reason: '임대로 데려올 수 없는 선수입니다.' };
   const required = REQUIRED_SHARE[p.contract?.promise];
   if (!required) return { ok: false, reason: `${withParticle(owner.name, '는')} 주전 선수를 임대 보내지 않습니다.` };
-  if (registeredCount(state, club, state.date) >= MAX_SQUAD) return { ok: false, reason: `1군 등록 인원(${MAX_SQUAD}명)이 꽉 찼습니다.` };
+  if (totalCount(state, club, state.date) >= MAX_TOTAL) return { ok: false, reason: `선수단이 ${MAX_TOTAL}명으로 꽉 찼습니다.` };
   const share = Math.min(1, Math.max(0, wageShare));
   if (share < required) return { ok: false, reason: `${withParticle(owner.name, '는')} 주급의 ${required * 100}% 이상을 내야 보내 준다고 합니다.` };
   if (weeklyWageBill(state, club) + p.contract.wage * share > club.finance.wageBudget) return { ok: false, reason: '주급 예산을 넘습니다.' };
   const optionFee = loanOptionFee(state, p);
   move(state, p, owner, club, { from: owner.id, to: club.id, until: seasonEnd(state), wageShare: share, optionFee });
-  return { ok: true, optionFee };
+  p.newcomer = true;
+  const unregistered = fitRegistration(state, club, { keep: false });
+  delete p.newcomer;
+  return { ok: true, optionFee, unregistered };
 }
 
 // 임대로 데려올 때 정해지는 완전 이적 옵션 금액
