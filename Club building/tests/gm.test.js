@@ -196,3 +196,14 @@ test('진행 멈춤: 이적시장 마감 1주 전·첫 홈 경기 1주 전에 �
   assert.ok(!some.some((t) => t.startsWith('이적시장 마감') || t.startsWith('첫 리그 홈 경기') || t.startsWith('여름 이적시장')));
   assert.match(settingsView(g.createNewGame('x')), /toggleDecision/);
 });
+
+test('주간 요약: 잔고와 지난주 대비 변화, 수입·지출 항목, 팬 만족도가 나온다', () => {
+  const state = g.createNewGame('weekly-money');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  for (let i = 0; i < 9; i++) advance(state, { skipOffers: true });
+  const weekly = state.inbox.filter((m) => m.title.startsWith('주간 요약'));
+  assert.ok(weekly.length >= 2);
+  const body = weekly[0].body;
+  assert.match(body, /재정: 잔고 .+ \([+-]/);
+  assert.match(body, /팬: 만족도 \d+ \([+-]/);
+});
