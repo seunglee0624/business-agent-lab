@@ -6,7 +6,7 @@ import { POSITIONS } from '../data/positions.js';
 import { windowEnd, askingPrice, openDeal } from './transfers.js';
 import { daysBetween, formatShortDate } from './calendar.js';
 import { transferDemand } from './contracts.js';
-import { weeklyWageBill } from './finance.js';
+import { weeklyWageBill, budgetRange } from './finance.js';
 
 const MIN_REQUESTS = 2;
 const MAX_REQUESTS = 4;
@@ -44,8 +44,10 @@ function buildRequests(state, club, n, end, onlyNeeds = false) {
   const style = club.headCoach.style;
   const all = Object.values(state.players);
   const taken = new Set(activeRequests(state).map((r) => r.playerId));
-  // 주급 여유 안에서 요구 주급을 맞출 수 있는 선수만 고른다
+  // 이적료 + 주급 여유를 넘는 주급(남은 주 수만큼 이적 예산에서 옮겨야 할 돈)이 이적 예산 안이면 고른다
   const wageRoom = club.finance.wageBudget - weeklyWageBill(state, club);
+  const { weeks } = budgetRange(state, club);
+  const affordable = (p) => askingPrice(state, p) + Math.max(0, transferDemand(state, club, p).wage - wageRoom) * weeks <= club.finance.transferBudget;
   const made = [];
   for (const need of weakPositions(state, club)) {
     if (made.length >= n) break;
@@ -53,7 +55,7 @@ function buildRequests(state, club, n, end, onlyNeeds = false) {
     const { pos, best } = need;
     const pool = all.filter((p) => p.clubId && p.clubId !== club.id && p.position === pos && !p.loan && !p.retired && !taken.has(p.id)
       && !state.clubs[p.clubId].youth.includes(p.id) && overall(p) > best && overall(p) <= club.level + 8
-      && askingPrice(state, p) <= club.finance.transferBudget && transferDemand(state, club, p).wage <= wageRoom);
+      && affordable(p));
     if (!pool.length) continue;
     const p = pool.sort((a, b) => styleScore(style, b, ageOn(b, state.date)) - styleScore(style, a, ageOn(a, state.date)))[0];
     const req = { id: (t.nextRequestId = (t.nextRequestId ?? 0) + 1), playerId: p.id, until: end, reason: reasonFor(need) };
@@ -96,7 +98,7 @@ export function askCoach(state, club) {
   if (last && daysBetween(last, state.date) < ASK_COOLDOWN_DAYS) return { ok: false, reason: `감독이 지난 ${formatShortDate(last)}에 이미 추천했습니다. 일주일 뒤에 다시 요청하세요.` };
   state.transfers.lastAsk = state.date;
   const made = buildRequests(state, club, 3, end);
-  if (!made.length) return { ok: false, reason: '이적 예산과 주급 여유 안에서 지금 선수보다 나은 후보를 찾지 못했습니다. 재정 조정으로 주급 예산을 늘리거나 선수를 정리해 보세요.' };
+  if (!made.length) return { ok: false, reason: '이적 예산과 주급 예산을 합쳐도 감당할 수 있는, 지금 선수보다 나은 후보를 찾지 못했습니다.' };
   return { ok: true, made, open: !!windowEnd(state.date) };
 }
 

@@ -181,3 +181,17 @@ test('시즌 이적 기록: 그 시즌의 이적과 임대를 날짜순으로 �
   assert.ok(eng.every((t) => [t.from, t.to].some((id) => id && state.clubs[id].leagueId === 'ENG1')));
   assert.equal(seasonTransfers(state, 2025).length, 0);
 });
+
+test('주급 요구: 능력과 우리 선수단 주급 수준을 함께 본다 (주급이 낮은 구단에는 덜 요구하되, 지금 주급보다 5% 넘게 깎이진 않는다)', async () => {
+  const g = await import('../js/core/game.js');
+  const { transferDemand } = await import('../js/core/contracts.js');
+  const state = g.createNewGame('wage-struct');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const p = Object.values(state.players).find((x) => x.clubId && x.clubId !== club.id && x.contract);
+  const before = transferDemand(state, club, p).wage;
+  for (const id of club.squad) state.players[id].contract.wage *= 0.5;
+  const after = transferDemand(state, club, p).wage;
+  assert.ok(after < before);
+  assert.ok(after >= p.contract.wage * 0.95 - 1e4);
+});

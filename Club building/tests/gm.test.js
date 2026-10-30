@@ -247,12 +247,17 @@ test('계약 해지: 남은 주급의 절반을 위약금으로 내고 자유계
   assert.equal(g.registeredCount(state, club, state.date), reg - 1);
 });
 
-test('감독 추천: 주급 여유를 넘는 요구 주급의 선수는 추천하지 않는다', () => {
+test('감독 추천: 이적료와 주급 여유를 넘는 주급(이적 예산에서 옮길 돈)을 합쳐 이적 예산 안인 선수만 추천한다', () => {
   const state = g.createNewGame('ask-wage');
   g.chooseLeague(state, 'ENG1', '테스트');
   const club = g.userClub(state);
   club.finance.wageBudget = weeklyWageBill(state, club);
+  // 주급 여유가 없어도 이적 예산이 넉넉하면 추천한다
+  assert.ok(g.askCoach(state).ok);
+  state.transfers.lastAsk = null;
+  state.transfers.requests = [];
+  club.finance.transferBudget = 0;
   const res = g.askCoach(state);
   assert.equal(res.ok, false);
-  assert.match(res.reason, /주급 여유/);
+  assert.match(res.reason, /주급 예산/);
 });

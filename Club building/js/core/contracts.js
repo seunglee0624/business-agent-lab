@@ -69,7 +69,7 @@ export function canRenew(state, p) {
 // 선수가 먼저 말하는 요구 조건
 export function renewalDemand(state, club, p) {
   const age = ageOn(p, state.date);
-  const base = wageFor(overall(p)) * (age <= 24 && p.potential - overall(p) >= 6 ? 1.2 : 1.1);
+  const base = fairWage(state, club, p) * (age <= 24 && p.potential - overall(p) >= 6 ? 1.2 : 1.1);
   const wage = roundMoney(Math.max(base, age < 30 ? p.contract.wage * 1.05 : 0));
   const years = age <= 23 ? 5 : age <= 27 ? 4 : age <= 30 ? 3 : age <= 32 ? 2 : 1;
   return { wage, years, promise: promiseForRank(squadRank(state, club, p)) };
@@ -81,10 +81,26 @@ export function requiredWage(demand, promise) {
   return demand.wage * (diff < 0 ? 1 + 0.15 * -diff : 1 - 0.08 * diff);
 }
 
-// 이적해 올 선수의 요구 조건: 지금 주급과 능력 기준값 중 큰 쪽보다 7% 더 원한다
+// 구단 주급 수준: 선수단이 능력 기준 주급의 몇 배를 받는지 (작은 구단일수록 1보다 작다)
+export function clubWageLevel(state, club) {
+  let paid = 0;
+  let fair = 0;
+  for (const id of club.squad) {
+    const q = state.players[id];
+    if (!q?.contract) continue;
+    paid += q.contract.wage;
+    fair += wageFor(overall(q));
+  }
+  return fair > 0 ? Math.max(0.5, Math.min(1.5, paid / fair)) : 1;
+}
+
+// 선수 능력과 우리 선수단 주급 수준을 반씩 섞은 기준 주급
+export const fairWage = (state, club, p) => wageFor(overall(p)) * Math.sqrt(clubWageLevel(state, club));
+
+// 이적해 올 선수의 요구 조건: 능력·우리 주급 수준 기준 주급보다 7% 더, 다만 지금 주급보다 5% 넘게 깎이는 건 싫어한다
 export const TRANSFER_WAGE_RAISE = 1.07;
 export function transferDemand(state, club, p) {
-  const wage = roundMoney(Math.max(wageFor(overall(p)), p.contract?.wage ?? 0) * TRANSFER_WAGE_RAISE);
+  const wage = roundMoney(Math.max(fairWage(state, club, p) * TRANSFER_WAGE_RAISE, (p.contract?.wage ?? 0) * 0.95));
   return { wage, promise: promiseForRank(squadRank(state, club, p)) };
 }
 
@@ -122,7 +138,9 @@ export function expiringContracts(state, rng, endDate, userId) {
       if (!p.contract || p.contract.until > endDate) continue;
       const age = ageOn(p, endDate);
       // 이적이 생기기 전(3-2)까지 AI 구단은 크게 처지는 선수만 내보낸다
-      if (club.id !== userId && age < 33 && overall(p) >= club.level - 14) {
+      // AI: 30세 이상인데 선수단 능력 순위 22위 밖(1군에 들기 어려움)이면 재계약하지 않고 유스에게 자리를 준다
+      const rank = club.squad.map((x) => overall(state.players[x])).filter((o) => o > overall(p)).length;
+      if (club.id !== userId && age < 33 && overall(p) >= club.level - 14 && !(age >= 30 && rank >= 22)) {
         p.contract = newContract(p, { date: endDate, years: Math.min(3, contractYears(rng, age)), promise: p.contract.promise, wageMult: rng.float(0.9, 1.1) * aiWageMult(state, club) });
       } else {
         leaving.push({ club, player: p });
