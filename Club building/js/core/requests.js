@@ -27,6 +27,8 @@ export function positionNeeds(state, club) {
   });
 }
 
+const FREE_BONUS = 3;
+
 // 보강 순서: 인원 부족 → 능력 약함 → 나머지, 같은 단계면 최고 능력이 낮은 자리부터
 function weakPositions(state, club) {
   const order = { short: 0, weak: 1, ok: 2 };
@@ -47,17 +49,20 @@ function buildRequests(state, club, n, end, onlyNeeds = false) {
   // 이적료 + 주급 여유를 넘는 주급(남은 주 수만큼 이적 예산에서 옮겨야 할 돈)이 이적 예산 안이면 고른다
   const wageRoom = club.finance.wageBudget - weeklyWageBill(state, club);
   const { weeks } = budgetRange(state, club);
-  const affordable = (p) => askingPrice(state, p) + Math.max(0, transferDemand(state, club, p).wage - wageRoom) * weeks <= club.finance.transferBudget;
+  const affordable = (p) => (p.clubId ? askingPrice(state, p) : 0) + Math.max(0, transferDemand(state, club, p).wage - wageRoom) * weeks <= club.finance.transferBudget;
   const made = [];
   for (const need of weakPositions(state, club)) {
     if (made.length >= n) break;
     if (onlyNeeds && need.status === 'ok') break;
     const { pos, best } = need;
-    const pool = all.filter((p) => p.clubId && p.clubId !== club.id && p.position === pos && !p.loan && !p.retired && !taken.has(p.id)
-      && !state.clubs[p.clubId].youth.includes(p.id) && overall(p) > best && overall(p) <= club.level + 8
+    // 자유계약 선수도 후보다 (이적료 없음, 시장이 닫혀 있어도 영입 가능)
+    const pool = all.filter((p) => p.clubId !== club.id && p.position === pos && !p.loan && !p.retired && !taken.has(p.id)
+      && !(p.clubId && state.clubs[p.clubId].youth.includes(p.id)) && overall(p) > best && overall(p) <= club.level + 8
       && affordable(p));
     if (!pool.length) continue;
-    const p = pool.sort((a, b) => styleScore(style, b, ageOn(b, state.date)) - styleScore(style, a, ageOn(a, state.date)))[0];
+    // 비슷하면 자유계약 선수를 먼저 (성향 점수에 3점 가산)
+    const score = (p) => styleScore(style, p, ageOn(p, state.date)) + (p.clubId ? 0 : FREE_BONUS);
+    const p = pool.sort((a, b) => score(b) - score(a))[0];
     const req = { id: (t.nextRequestId = (t.nextRequestId ?? 0) + 1), playerId: p.id, until: end, reason: reasonFor(need) };
     (t.requests ??= []).push(req);
     made.push(req);
@@ -110,6 +115,6 @@ export function answerRequest(state, requestId, answer) {
   const req = activeRequests(state).find((r) => r.id === requestId);
   if (!req) return { ok: false, reason: '이미 끝난 요청입니다.' };
   t.requests = t.requests.filter((r) => r !== req);
-  if (answer === 'approve') openDeal(state, state.players[req.playerId]);
+  if (answer === 'approve') openDeal(state, state.players[req.playerId], req.until);
   return { ok: true };
 }

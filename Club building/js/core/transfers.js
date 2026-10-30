@@ -96,8 +96,14 @@ const dealOf = (state, p) => {
   return (state.transfers.deals[p.id] = deal ?? { stage: 'fee', tries: 0, fee: 0, until: end });
 };
 
-// 협상 목록에 올린다 (감독 요청 승인)
-export const openDeal = (state, p) => dealOf(state, p);
+// 협상 목록에 올린다 (감독 요청 승인). 자유계약 선수는 바로 개인 조건 협상
+// 자유계약 협상은 요청이 유효했던 날(다음 시장 마감)까지 목록에 남는다
+export function openDeal(state, p, until) {
+  if (p.clubId) return dealOf(state, p);
+  const deal = state.transfers.deals[p.id];
+  if (deal && deal.stage !== 'collapsed' && deal.until >= state.date) return deal;
+  return (state.transfers.deals[p.id] = { stage: 'terms', tries: 0, fee: 0, until });
+}
 
 // 이적료 제안. 돌려주는 값: { ok: true, stage: 'terms', fee } | { ok: false, reason, counter? }
 export function bidForPlayer(state, club, p, fee) {

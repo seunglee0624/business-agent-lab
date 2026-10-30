@@ -71,11 +71,11 @@ function requestsCard(state) {
         const p = state.players[r.playerId];
         return `<tr><td class="link-cell" data-action="selectTarget" data-id="${p.id}">${posLabel(p.position)} ${esc(p.name)}<div class="muted small">${esc(clubName(state, p.clubId))} · ${age(p, state.date)}세 · 능력 ${overall(p)}</div>
             <div class="chips small">${keyAttributes(p)}</div></td>
-          <td class="small">${esc(r.reason)}</td><td class="num">${won(marketValue(p, state.date))}</td>
+          <td class="small">${esc(r.reason)}</td><td class="num">${p.clubId ? won(marketValue(p, state.date)) : '이적료 없음'}</td>
           <td class="offer-actions"><button class="btn primary small" data-action="answerRequest" data-id="${r.id}" data-answer="approve">승인</button>
             <button class="btn small" data-action="answerRequest" data-id="${r.id}" data-answer="reject">거절</button></td></tr>`;
       }).join('')}</tbody></table>
-      <p class="muted small">선수를 누르면 자세한 정보를 볼 수 있습니다. 승인하면 아래 "진행 중인 협상"에 올라가고, 이적료와 개인 조건은 단장이 직접 협상합니다.</p>
+      <p class="muted small">선수를 누르면 자세한 정보를 볼 수 있습니다. 승인하면 아래 "진행 중인 협상"에 올라가고, 이적료와 개인 조건은 단장이 직접 협상합니다. 자유계약 선수는 이적료 없이 바로 개인 조건 협상으로 가며, 이적시장이 닫혀 있어도 계약할 수 있습니다.</p>
     </div>`;
 }
 

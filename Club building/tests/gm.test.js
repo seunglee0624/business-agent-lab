@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { overall } from '../js/core/player.js';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
 import { managerView } from '../js/ui/manager.js';
@@ -260,4 +261,24 @@ test('감독 추천: 이적료와 주급 여유를 넘는 주급(이적 예산�
   const res = g.askCoach(state);
   assert.equal(res.ok, false);
   assert.match(res.reason, /주급 예산/);
+});
+
+test('감독 추천: 이적 예산이 없어도 주급 여유가 있으면 자유계약 선수를 추천하고, 승인하면 바로 개인 조건 협상으로 간다', () => {
+  const state = g.createNewGame('ask-free');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  club.finance.transferBudget = 0;
+  club.finance.wageBudget = weeklyWageBill(state, club) * 2;
+  // 자유계약 선수 한 명을 왼쪽 수비 보강 후보로 만든다
+  const lbs = club.squad.filter((id) => state.players[id].position === 'LB');
+  club.squad = club.squad.filter((id) => !lbs.includes(id));
+  const free = Object.values(state.players).find((p) => p.clubId && p.clubId !== club.id && p.position === 'LB' && overall(p) <= club.level + 8 && !state.clubs[p.clubId].youth.includes(p.id));
+  state.clubs[free.clubId].squad = state.clubs[free.clubId].squad.filter((id) => id !== free.id);
+  Object.assign(free, { clubId: null, contract: null });
+  const res = g.askCoach(state);
+  assert.ok(res.ok, res.reason);
+  const req = res.made.find((r) => !state.players[r.playerId].clubId);
+  assert.ok(req, '자유계약 선수가 추천에 든다');
+  assert.ok(g.answerRequest(state, req.id, 'approve').ok);
+  assert.equal(state.transfers.deals[req.playerId].stage, 'terms');
 });
