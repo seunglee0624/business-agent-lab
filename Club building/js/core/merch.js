@@ -4,7 +4,7 @@ import { EUR } from '../data/economy.js';
 import { commercialPerSeason, income, expense, MERCH_SHARE } from './finance.js';
 import { fansOf, SEGMENT_KEYS } from './fans.js';
 import { overall } from './player.js';
-import { addDays } from './calendar.js';
+import { addDays, daysBetween } from './calendar.js';
 import { roundMoney } from './money.js';
 
 export { MERCH_SHARE };
@@ -171,6 +171,32 @@ export const stockDays = (state, club, item) => {
   return demand > 0 ? merchOf(club).items[item].stock / (demand / 300) : Infinity;
 };
 
+// 시즌 끝(6/30)까지 하루씩 예상 판매를 쌓아 품절 날짜와 남은 시즌 예상 판매를 낸다 (homeDates: 남은 홈 경기 날짜)
+export function projectStock(state, club, item, homeDates, homeGames, lead = 0) {
+  const it = merchOf(club).items[item];
+  const demand = seasonDemand(state, club, item);
+  const end = `${state.season + 1}-06-30`;
+  let stock = it.stock;
+  let total = 0;
+  let afterArrival = 0;
+  let outDate = null;
+  const arrive = addDays(state.date, lead);
+  for (let d = addDays(state.date, 1); d <= end; d = addDays(d, 1)) {
+    const sold = (demand * (1 - HOME_SHARE)) / 365 + (homeDates.has(d) ? (demand * HOME_SHARE) / homeGames : 0);
+    total += sold;
+    if (d >= arrive) afterArrival += sold;
+    stock -= sold;
+    if (stock <= 0 && !outDate) outDate = d;
+  }
+  // 도착할 때 남아 있을 재고를 빼고 시즌 끝까지 더 팔릴 양
+  const atArrival = Math.max(0, it.stock - (total - afterArrival));
+  return {
+    outDate, days: outDate ? daysBetween(state.date, outDate) : null,
+    total: Math.round(total), shortfall: Math.max(0, Math.round(total - it.stock)),
+    suggest: Math.max(0, Math.round(afterArrival - atArrival)), arrive,
+  };
+}
+
 // 지금 주문하면 며칠 뒤 오는지 (더 주문할 수 없으면 null)
 function leadTime(m, item) {
   const def = ITEMS[item];
@@ -181,7 +207,7 @@ function leadTime(m, item) {
 }
 
 // 날마다: 도착한 물량을 받고, 조금씩 판다. 홈 경기 날은 더 많이 판다. 지금 주문해도 늦을 것 같은 품목을 돌려준다
-export function merchDaily(state, club, homeGames, homeMatch) {
+export function merchDaily(state, club, homeGames, homeMatch, homeDates = new Set()) {
   const m = merchOf(club);
   const warnings = [];
   for (const item of ITEM_KEYS) {
@@ -196,7 +222,8 @@ export function merchDaily(state, club, homeGames, homeMatch) {
       const days = stockDays(state, club, item);
       if (days < lead) {
         it.warned = true;
-        warnings.push({ item, name: ITEMS[item].name, days: Math.max(1, Math.round(days)), lead });
+        const p = projectStock(state, club, item, homeDates, homeGames, lead);
+        warnings.push({ item, name: ITEMS[item].name, stock: Math.round(it.stock), lead, ...p, days: Math.max(1, p.days ?? Math.round(days)) });
       }
     }
     if (!it.stock) continue;

@@ -83,3 +83,20 @@ test('품절 임박: 남은 재고가 도착 기간보다 빨리 떨어질 것 �
   merchDaily(state, club, 19, false);
   assert.equal(it.warned, true); // 도착 후 다시 재고가 적어 새로 경고
 });
+
+test('굿즈: 품절 경고는 남은 홈 경기 날짜로 품절 날짜와 시즌 끝까지 예상 판매·주문할 양을 알려 준다', async () => {
+  const { projectStock } = await import('../js/core/merch.js');
+  const state = g.createNewGame('merch-proj');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const it = g.merchOf(club).items.scarf;
+  it.stock = 200;
+  const homeDates = new Set(state.competitions[club.leagueId].fixtures.filter((f) => f.home === club.id).map((f) => f.date));
+  const p = projectStock(state, club, 'scarf', homeDates, 19, 14);
+  assert.ok(p.outDate && p.outDate > state.date);
+  assert.ok(p.total > 200);
+  assert.equal(p.shortfall, p.total - 200);
+  assert.ok(p.suggest > 0 && p.suggest <= p.total);
+  it.stock = 1e6;
+  assert.equal(projectStock(state, club, 'scarf', homeDates, 19, 14).outDate, null);
+});

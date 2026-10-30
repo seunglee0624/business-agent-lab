@@ -379,9 +379,10 @@ function userMerchDay(state, club, date) {
     const auto = merch.autoKits(state, club);
     if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
   }
-  for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch)) {
+  const homeDates = new Set(state.competitions[club.leagueId].fixtures.filter((f) => f.home === club.id && !f.result).map((f) => f.date));
+  for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch, homeDates)) {
     needDecision(state, 'merchStock', 'fans', `${w.name} 품절 임박`);
-    addMessage(state, { view: 'fans', important: true, title: `${w.name} 품절 임박`, body: `${w.name} 재고가 약 ${w.days}일 치 남았습니다. 지금 주문해도 ${w.lead}일 뒤에 도착합니다.` });
+    addMessage(state, { view: 'fans', important: true, title: `${w.name} 품절 임박`, body: `${w.name} 재고(${w.stock.toLocaleString()}개)는 ${w.outDate ? `${formatShortDate(w.outDate)}쯤(약 ${w.days}일 뒤) 품절될 것으로 보입니다` : '시즌 끝까지 버틸 것으로 보입니다'}. 시즌 끝(6/30)까지 예상 판매는 약 ${w.total.toLocaleString()}개로 ${w.shortfall.toLocaleString()}개쯤 모자랍니다. 지금 주문하면 ${formatShortDate(w.arrive)}(${w.lead}일 뒤)에 도착하니, 그때부터 시즌 끝까지 팔 물량은 약 ${w.suggest.toLocaleString()}개입니다.` });
   }
 }
 
