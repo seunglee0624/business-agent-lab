@@ -141,7 +141,11 @@ export function expiringContracts(state, rng, endDate, userId) {
       // AI: 30세 이상인데 선수단 능력 순위 22위 밖(1군에 들기 어려움)이면 재계약하지 않고 유스에게 자리를 준다
       const rank = club.squad.map((x) => overall(state.players[x])).filter((o) => o > overall(p)).length;
       if (club.id !== userId && age < 33 && overall(p) >= club.level - 14 && !(age >= 30 && rank >= 22)) {
-        p.contract = newContract(p, { date: endDate, years: Math.min(3, contractYears(rng, age)), promise: p.contract.promise, wageMult: rng.float(0.9, 1.1) * aiWageMult(state, club) });
+        const next = newContract(p, { date: endDate, years: Math.min(3, contractYears(rng, age)), promise: p.contract.promise, wageMult: rng.float(0.9, 1.1) * aiWageMult(state, club) });
+        // 주급 예산을 넘으면 주전(능력 상위 11명)만 붙잡고 나머지는 보낸다
+        const over = weeklyWageBill(state, club) - p.contract.wage + next.wage > club.finance.wageBudget;
+        if (over && rank >= 11) leaving.push({ club, player: p });
+        else p.contract = next;
       } else {
         leaving.push({ club, player: p });
       }

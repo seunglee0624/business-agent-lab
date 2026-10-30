@@ -246,20 +246,24 @@ function recordWorld() {
     if (c.status !== 'active' || c.id === state.user.clubId || !c.finance.history[0]) continue;
     const h = c.finance.history[0];
     const tier = LEAGUES[c.leagueId].tier;
-    const t = (byTier[tier] ??= { n: 0, ratio: 0, deficit: 0, balance: 0, income: 0, top11: [], rep: [], level: [] });
+    const t = (byTier[tier] ??= { n: 0, ratio: 0, deficit: 0, balance: 0, income: 0, top11: [], rep: [], level: [], neg: 0, falling: 0, opRatio: 0 });
     const top = c.squad.map((id) => overall(state.players[id])).sort((a, b) => b - a).slice(0, 11);
     t.top11.push(top.reduce((a, b) => a + b, 0) / top.length);
     t.rep.push(c.reputation);
     t.level.push(c.level);
     const inc = ledgerTotal(h.income) - h.income.transfers;
     t.n++;
+    t.neg += c.finance.balance < 0 ? 1 : 0;
+    // 3시즌 연속 잔고가 줄었다
+    const b = c.finance.history.slice(0, 4).map((x) => x.balance);
+    t.falling += b.length === 4 && b[0] < b[1] && b[1] < b[2] && b[2] < b[3] ? 1 : 0;
     t.ratio += h.expense.wages / Math.max(1, inc);
     t.deficit += ledgerTotal(h.income) < ledgerTotal(h.expense) ? 1 : 0;
     t.balance += c.finance.balance;
     t.income += inc;
   }
   for (const [tier, t] of Object.entries(byTier)) {
-    world.push({ 시즌: state.season - 1, 단계: `${tier}부`, 평균수입: eok(t.income / t.n), 주급비율: (t.ratio / t.n).toFixed(2), 적자구단: `${Math.round((t.deficit / t.n) * 100)}%`, 평균잔고: eok(t.balance / t.n), 주전능력: range(t.top11), 평판: range(t.rep), 구단수준: range(t.level) });
+    world.push({ 시즌: state.season - 1, 단계: `${tier}부`, 평균수입: eok(t.income / t.n), 주급비율: (t.ratio / t.n).toFixed(2), 잔고마이너스: `${Math.round((t.neg / t.n) * 100)}%`, 연속감소3: `${Math.round((t.falling / t.n) * 100)}%`, 적자구단: `${Math.round((t.deficit / t.n) * 100)}%`, 평균잔고: eok(t.balance / t.n), 주전능력: range(t.top11), 평판: range(t.rep), 구단수준: range(t.level) });
   }
 }
 

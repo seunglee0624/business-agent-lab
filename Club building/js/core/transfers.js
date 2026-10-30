@@ -288,10 +288,15 @@ function neediestPosition(state, club) {
   return Object.keys(best).sort((a, b) => best[a] - best[b])[0];
 }
 
+const AI_SIGN_HEADROOM = 1.1;
+
 function aiSign(state, rng, club, userId) {
   const pos = neediestPosition(state, club);
+  // 주급 예산(+10% 여유) 안에서 데려올 수 있는 선수만. 여유가 없으면 이적 시장이 크게 줄어든다
+  const bill = weeklyWageBill(state, club);
   const fits = (p) => p.position === pos && !p.retired && !p.injury && !p.loan && ageOn(p, state.date) <= 31
-    && overall(p) >= club.level - 3 && overall(p) <= club.level + 6;
+    && overall(p) >= club.level - 3 && overall(p) <= club.level + 6
+    && bill + transferDemand(state, club, p).wage <= club.finance.wageBudget * AI_SIGN_HEADROOM;
   const all = Object.values(state.players);
   const free = all.filter((p) => !p.clubId && fits(p));
   if (free.length) {

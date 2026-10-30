@@ -102,7 +102,10 @@ export const TRANSFER_FLOOR = 0.2; // 적자 시즌 뒤에도 잔고의 20%는 �
 export function setBudgets(state, club) {
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
-  f.wageBudget = roundMoney(Math.max(bill * WAGE_HEADROOM, (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52));
+  const user = club.id === state.user?.clubId;
+  const byRevenue = (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52;
+  // AI 구단은 주급이 수입의 70%를 넘었으면 지금 주급에서 묶는다 (1.1배 여유를 매년 주면 주급이 끝없이 오른다)
+  f.wageBudget = Math.max(Math.ceil(bill), roundMoney(Math.max(user ? bill * WAGE_HEADROOM : bill, byRevenue)));
   const last = f.history[0];
   if (!last) {
     f.transferBudget = roundMoney(Math.max(0, f.balance * TRANSFER_BUDGET_RATIO));
@@ -111,7 +114,10 @@ export function setBudgets(state, club) {
   const carried = f.transferBudget;
   const profit = (ledgerTotal(last.income) - last.income.transfers) - (ledgerTotal(last.expense) - last.expense.transfers);
   const added = roundMoney(profit * PROFIT_TO_BUDGET);
-  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), Math.max(carried + added, f.balance * TRANSFER_FLOOR))));
+  // 잔고의 20% 하한은 내 구단, 그리고 지난 시즌 흑자인 AI 구단만 (적자 AI가 큰 잔고로 매년 선수를 사지 않게)
+  const deficit = ledgerTotal(last.income) < ledgerTotal(last.expense);
+  const floor = user || !deficit ? f.balance * TRANSFER_FLOOR : 0;
+  f.transferBudget = roundMoney(Math.max(0, Math.min(Math.max(0, f.balance), Math.max(carried + added, floor))));
   return { carried, added, total: f.transferBudget };
 }
 

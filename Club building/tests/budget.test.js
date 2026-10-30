@@ -94,3 +94,18 @@ test('재정 조정: 주급 예산을 줄여도 이적 예산은 잔고를 넘�
   assert.ok(f.transferBudget <= f.balance);
   assert.ok(Math.abs(f.transferBudget - f.balance) <= r.weeks * 1e6);
 });
+
+test('AI 구단 예산: 주급이 수입의 70%를 넘으면 주급 예산을 지금 주급에서 묶고, 적자 시즌 뒤에는 잔고 20% 하한이 없다', async () => {
+  const { setBudgets, weeklyWageBill, emptyLedger } = await import('../js/core/finance.js');
+  const state = g.createNewGame('budget-ai');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const ai = Object.values(state.clubs).find((c) => c.status === 'active' && c.id !== state.user.clubId && c.leagueId === 'ENG1');
+  for (const id of ai.squad) state.players[id].contract.wage *= 3;
+  const last = emptyLedger();
+  last.expense.wages = 10e8;
+  ai.finance.history.unshift({ season: 2025, ...last, balance: ai.finance.balance });
+  ai.finance.transferBudget = 0;
+  setBudgets(state, ai);
+  assert.ok(Math.abs(ai.finance.wageBudget - weeklyWageBill(state, ai)) <= 1e6, '1.1배 여유 없이 지금 주급');
+  assert.equal(ai.finance.transferBudget, 0, '적자 뒤에는 하한 없음');
+});
