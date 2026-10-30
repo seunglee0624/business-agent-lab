@@ -87,6 +87,7 @@ p { margin: 6px 0; }
 .btn.small { padding: 4px 9px; font-size: 12px; }
 .btn.file { display: inline-block; }
 input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 14px; }
+input[type="range"] { padding: 0; border: 0; background: transparent; } /* 입력칸 여백·테두리가 바에 붙으면 손잡이가 끝까지 안 가 보인다 */
 select { max-width: 100%; }
 label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
 label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
