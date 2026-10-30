@@ -75,3 +75,17 @@ test('만족도: 약팀에게 지면 강팀에게 질 때보다 많이 내려가
   fanMonthly(state, club, '2026-08-01');
   assert.ok(f.satisfaction > 23);
 });
+
+test('새 시즌: 만족도가 시작값(60) 쪽으로 33% 돌아간다', async () => {
+  const { fanSeasonEnd, fansOf, SEASON_RESET } = await import('../js/core/fans.js');
+  const state = g.createNewGame('fan-reset');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  assert.equal(SEASON_RESET.ratio, 0.33);
+  fansOf(club).satisfaction = 20;
+  fanSeasonEnd(state, club, 10);
+  assert.equal(fansOf(club).satisfaction, 33.2);
+  fansOf(club).satisfaction = 90;
+  fanSeasonEnd(state, club, 10);
+  assert.equal(fansOf(club).satisfaction, 80.1);
+});

@@ -15,6 +15,8 @@ export const PROTEST_LINE = 30;
 export const STAR_OVR = 75;
 const MAX_EFFECT = 0.1;
 const DRIFT = 0.1;
+// 새 시즌에는 팬들이 다시 기대를 건다: 만족도가 시작값 쪽으로 이만큼 돌아간다
+export const SEASON_RESET = { ratio: 0.33 };
 const HISTORY_MONTHS = 12;
 
 // 구단 id로 정해지는 작은 흔들림 (-1~1), 같은 구단은 늘 같은 값
@@ -170,6 +172,7 @@ export function fanSeasonEnd(state, club, position) {
   if (position && position <= Math.ceil(teams / 4)) { raw.loyal += 1; raw.trendy += 1; }
   if (position && position > teams - 3) raw.trendy -= 2;
   fans.shares = normalize(raw);
+  fans.satisfaction = Math.round((fans.satisfaction + (START_SATISFACTION - fans.satisfaction) * SEASON_RESET.ratio) * 10) / 10;
   fans.season = { stars: 0, youthMinutes: 0, minutes: 0 };
 }
 

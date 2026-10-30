@@ -5,6 +5,8 @@
 import * as g from '../js/core/game.js';
 import { LEAGUES } from '../js/data/countries/index.js';
 import { ledgerTotal, weeklyWageBill } from '../js/core/finance.js';
+import { SEASON_RESET } from '../js/core/fans.js';
+if (process.env.FAN_RESET) SEASON_RESET.ratio = Number(process.env.FAN_RESET); // 측정용: 시즌 시작 만족도 보정 비율
 import { askingPrice, windowEnd } from '../js/core/transfers.js';
 import { transferDemand, renewalDemand, canRenew } from '../js/core/contracts.js';
 import { upgradeInfo, isBuilding } from '../js/core/facilities.js';

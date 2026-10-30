@@ -123,7 +123,7 @@ export function layout(state, ui, content) {
           ${!inMatch && !ended ? `
             <button class="btn" data-action="toSeasonEnd" ${ui.busy ? 'disabled' : ''} title="내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다">시즌 끝까지</button>
             <button class="btn primary" data-action="continue" ${ui.busy ? 'disabled' : ''}>${state.liveMatch ? '경기 재개' : '다음 주'} ▶</button>` : ''}
-          ${ended && !inMatch ? '<span class="muted">시즌이 끝났습니다</span>' : ''}
+          ${ended && !inMatch ? `<span class="muted">시즌이 끝났습니다</span> <button class="btn primary" data-action="nextSeason" ${ui.busy ? 'disabled' : ''}>다음 시즌 시작 ▶</button>` : ''}
         </div>
       </header>
       <section class="content" id="content">${ui.decision ? `<p class="decision-banner">${formatShortDate(state.date)} 진행을 멈췄습니다. 결정할 일: ${ui.decision.map(esc).join(', ')}</p>` : ''}${content}</section>
