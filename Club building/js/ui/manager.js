@@ -1,6 +1,6 @@
 // 감독 화면: 지금 감독, 해고, 후보와 고용
 
-import { userClub, managerCandidates, firingCost } from '../core/game.js';
+import { userClub, managerCandidates, firingCost, positionNeeds, transferRequests } from '../core/game.js';
 import { COACH_STYLES } from '../core/coaches.js';
 import { NATIONS } from '../data/nations.js';
 import { formatDate } from '../core/calendar.js';
@@ -28,6 +28,7 @@ export function managerView(state, ui) {
       : '<p class="error">감독 자리가 비어 있습니다. 아래 후보 중에서 고르세요. 그동안 코치가 임시로 팀을 맡습니다.</p>'}
     </div>
     ${teamTacticsCard(state)}
+    ${needsCard(state)}
     <div class="card">
       <h3>감독 후보</h3>
       <p class="muted small">능력이 높을수록 선수 성장과 경기 운영이 좋아지고 주급이 비쌉니다. 구단 평판보다 너무 뛰어난 감독은 오지 않습니다.</p>
@@ -36,5 +37,27 @@ export function managerView(state, ui) {
           <td class="num">${won(c.wage)}</td>
           <td>${c.willing ? `<button class="btn primary small" data-action="hireManager" data-id="${c.id}" ${coach ? 'disabled title="먼저 지금 감독을 해고해야 합니다"' : ''}>2년 계약</button>` : '<span class="muted small">오지 않음</span>'}</td></tr>`).join('')}
       </tbody></table>
+    </div>`;
+}
+
+// 포지션 진단과 추천 선수 요구
+const NEED_LABEL = { short: ['error', '인원 부족'], weak: ['error', '보강 필요'], ok: ['good', '괜찮음'] };
+function needsCard(state) {
+  const club = userClub(state);
+  const needs = positionNeeds(state);
+  const lacking = needs.filter((n) => n.status !== 'ok');
+  const rows = needs.map((n) => {
+    const [cls, label] = NEED_LABEL[n.status];
+    return `<tr><td>${esc(n.name)}</td><td class="num ${n.count < n.want ? 'error' : ''}">${n.count}/${n.want}</td><td class="num">${n.best || '-'}</td><td class="num">${n.injured || ''}</td><td class="${cls}">${label}</td></tr>`;
+  }).join('');
+  const reqs = transferRequests(state).length;
+  return `
+    <div class="card">
+      <h3>선수단 진단</h3>
+      <p>${club.headCoach ? `${esc(club.headCoach.name)} 감독` : '임시 코치'}: ${lacking.length ? `${lacking.map((n) => esc(n.name)).join(', ')} 자리를 보강하고 싶습니다.` : '지금 선수단으로 충분합니다.'}</p>
+      <table class="table compact"><thead><tr><th>포지션</th><th class="num">인원/권장</th><th class="num">최고 능력</th><th class="num">부상</th><th>상태</th></tr></thead><tbody>${rows}</tbody></table>
+      <p><button class="btn primary small" data-action="askCoach" ${club.headCoach ? '' : 'disabled'}>추천 선수 요구</button>
+        ${reqs ? `<span class="small">지금 감독의 영입 요청 ${reqs}명 · <button class="link" data-action="nav" data-view="transfers">이적 탭에서 승인</button></span>` : ''}</p>
+      <p class="muted small">이적시장이 열려 있을 때 일주일에 한 번 요구할 수 있습니다. 감독이 약한 자리부터, 이적 예산 안에서 지금 선수보다 나은 후보를 최대 3명 골라 영입 요청에 올립니다.</p>
     </div>`;
 }

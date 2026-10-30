@@ -4,18 +4,59 @@ import { overall, ageOn } from './player.js';
 import { SQUAD_TEMPLATE } from './worldgen.js';
 import { POSITIONS } from '../data/positions.js';
 import { windowEnd, askingPrice, openDeal } from './transfers.js';
+import { daysBetween, formatShortDate } from './calendar.js';
 
 const MIN_REQUESTS = 2;
 const MAX_REQUESTS = 4;
 
-// 자리마다 가장 좋은 선수 능력. 낮은 자리부터 보강을 원한다
+export const ASK_COOLDOWN_DAYS = 7;
+
+// 포지션 진단: 인원(권장 대비)과 가장 좋은 선수 능력. 인원이 모자라면 '부족', 최고 능력이 팀 주전 평균보다 4 넘게 낮으면 '약함'
+export function positionNeeds(state, club) {
+  const players = club.squad.map((id) => state.players[id]).filter(Boolean);
+  const top = players.map(overall).sort((a, b) => b - a).slice(0, 11);
+  const teamAvg = top.reduce((s, x) => s + x, 0) / Math.max(1, top.length);
+  return Object.entries(SQUAD_TEMPLATE).map(([pos, want]) => {
+    const here = players.filter((p) => p.position === pos);
+    const best = Math.max(0, ...here.map(overall));
+    const injured = here.filter((p) => p.injury).length;
+    const status = here.length < want ? 'short' : best < teamAvg - 4 ? 'weak' : 'ok';
+    return { pos, name: POSITIONS[pos].name, count: here.length, want, best, injured, status, gap: Math.round(teamAvg - best) };
+  });
+}
+
+// 보강 순서: 인원 부족 → 능력 약함 → 나머지, 같은 단계면 최고 능력이 낮은 자리부터
 function weakPositions(state, club) {
-  const best = Object.fromEntries(Object.keys(SQUAD_TEMPLATE).map((pos) => [pos, 0]));
-  for (const id of club.squad) {
-    const p = state.players[id];
-    best[p.position] = Math.max(best[p.position], overall(p));
+  const order = { short: 0, weak: 1, ok: 2 };
+  return positionNeeds(state, club).sort((a, b) => order[a.status] - order[b.status] || a.best - b.best);
+}
+
+function reasonFor(n) {
+  if (n.status === 'short') return `${n.name} 인원이 모자랍니다 (${n.count}/${n.want}명)`;
+  return `${n.name} 자리가 약합니다 (지금 최고 ${n.best})`;
+}
+
+// 자리마다 성향에 맞는 선수 한 명씩, n명까지 요청 목록에 올린다
+function buildRequests(state, club, n, end, onlyNeeds = false) {
+  const t = state.transfers;
+  const style = club.headCoach.style;
+  const all = Object.values(state.players);
+  const taken = new Set(activeRequests(state).map((r) => r.playerId));
+  const made = [];
+  for (const need of weakPositions(state, club)) {
+    if (made.length >= n) break;
+    if (onlyNeeds && need.status === 'ok') break;
+    const { pos, best } = need;
+    const pool = all.filter((p) => p.clubId && p.clubId !== club.id && p.position === pos && !p.loan && !p.retired && !taken.has(p.id)
+      && !state.clubs[p.clubId].youth.includes(p.id) && overall(p) > best && overall(p) <= club.level + 8
+      && askingPrice(state, p) <= club.finance.transferBudget);
+    if (!pool.length) continue;
+    const p = pool.sort((a, b) => styleScore(style, b, ageOn(b, state.date)) - styleScore(style, a, ageOn(a, state.date)))[0];
+    const req = { id: (t.nextRequestId = (t.nextRequestId ?? 0) + 1), playerId: p.id, until: end, reason: reasonFor(need) };
+    (t.requests ??= []).push(req);
+    made.push(req);
   }
-  return Object.keys(best).sort((a, b) => best[a] - best[b]).map((pos) => ({ pos, best: best[pos] }));
+  return made;
 }
 
 // 감독 성향에 맞는 후보 점수 (높을수록 먼저)
@@ -32,22 +73,20 @@ export function makeRequests(state, rng, club) {
   const end = windowEnd(state.date);
   if (!end || !club.headCoach || t.requestWindow === end) return [];
   t.requestWindow = end;
-  const style = club.headCoach.style;
-  const n = rng.int(MIN_REQUESTS, MAX_REQUESTS);
-  const all = Object.values(state.players);
-  const made = [];
-  for (const { pos, best } of weakPositions(state, club)) {
-    if (made.length >= n) break;
-    const pool = all.filter((p) => p.clubId && p.clubId !== club.id && p.position === pos && !p.loan && !p.retired
-      && !state.clubs[p.clubId].youth.includes(p.id) && overall(p) > best && overall(p) <= club.level + 8
-      && askingPrice(state, p) <= club.finance.transferBudget);
-    if (!pool.length) continue;
-    const p = pool.sort((a, b) => styleScore(style, b, ageOn(b, state.date)) - styleScore(style, a, ageOn(a, state.date)))[0];
-    const req = { id: (t.nextRequestId = (t.nextRequestId ?? 0) + 1), playerId: p.id, until: end, reason: `${POSITIONS[pos].name} 자리가 약합니다 (지금 최고 ${best})` };
-    (t.requests ??= []).push(req);
-    made.push(req);
-  }
-  return made;
+  return buildRequests(state, club, rng.int(MIN_REQUESTS, MAX_REQUESTS), end);
+}
+
+// 단장이 감독에게 추천 선수를 요구한다 (이적시장이 열려 있을 때, 일주일에 한 번)
+export function askCoach(state, club) {
+  const end = windowEnd(state.date);
+  if (!club.headCoach) return { ok: false, reason: '감독이 없습니다.' };
+  if (!end) return { ok: false, reason: '이적시장이 닫혀 있습니다. (여름 7/1~8/31, 겨울 1월)' };
+  const last = state.transfers.lastAsk;
+  if (last && daysBetween(last, state.date) < ASK_COOLDOWN_DAYS) return { ok: false, reason: `감독이 지난 ${formatShortDate(last)}에 이미 추천했습니다. 일주일 뒤에 다시 요청하세요.` };
+  state.transfers.lastAsk = state.date;
+  const made = buildRequests(state, club, 3, end);
+  if (!made.length) return { ok: false, reason: '이적 예산 안에서 지금 선수보다 나은 후보를 찾지 못했습니다.' };
+  return { ok: true, made };
 }
 
 export const activeRequests = (state) => (state.transfers.requests ?? []).filter((r) => r.until >= state.date && state.players[r.playerId]);

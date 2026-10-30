@@ -7,7 +7,7 @@ import {
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
-  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
+  adjustBudgets, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
 } from '../core/game.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
@@ -316,6 +316,13 @@ export class App {
           freeOnly: this.root.querySelector('#sFree').checked,
         };
         this.ui.transferMsg = null;
+        this.render();
+        break;
+      }
+      case 'askCoach': {
+        const res = askCoach(s);
+        this.ui.managerMsg = { ok: res.ok, text: res.ok ? `감독이 ${res.made.length}명을 추천했습니다. 이적 탭의 영입 요청에서 승인하거나 거절하세요.` : res.reason };
+        this.persist();
         this.render();
         break;
       }

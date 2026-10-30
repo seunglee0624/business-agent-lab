@@ -814,6 +814,8 @@ export function hireManager(state, coachId) {
 }
 
 export const transferRequests = (state) => requests.activeRequests(state);
+export const positionNeeds = (state) => requests.positionNeeds(state, userClub(state));
+export const askCoach = (state) => requests.askCoach(state, userClub(state));
 
 export function answerRequest(state, requestId, answer) {
   return requests.answerRequest(state, requestId, answer);

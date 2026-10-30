@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as g from '../js/core/game.js';
+import { managerView } from '../js/ui/manager.js';
 import { settingsView } from '../js/ui/views.js';
 import { createNewGame, chooseLeague, userClub, STATE_VERSION, advance, league, simulateToSeasonEnd, startNextSeason,
   managerCandidates, hireManager, fireManager, transferRequests, answerRequest } from '../js/core/game.js';
@@ -207,4 +208,24 @@ test('주간 요약: 잔고와 지난주 대비 변화, 수입·지출 항목, �
   assert.match(body, /재정: 잔고 .+ \([+-]/);
   assert.ok(!body.includes("수입:"));
   assert.match(body, /팬: 만족도 \d+ \([+-]/);
+});
+
+test('감독: 포지션 진단으로 부족한 자리를 알려 주고, 추천 선수를 요구하면 약한 자리부터 요청에 올리며 일주일에 한 번만 된다', () => {
+  const state = g.createNewGame('ask-coach');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  // 왼쪽 수비수를 모두 내보낸다
+  const lbs = club.squad.filter((id) => state.players[id].position === 'LB');
+  club.squad = club.squad.filter((id) => !lbs.includes(id));
+  const lb = g.positionNeeds(state).find((n) => n.pos === 'LB');
+  assert.equal(lb.status, 'short');
+  const res = g.askCoach(state);
+  assert.ok(res.ok, res.reason);
+  assert.equal(state.players[res.made[0].playerId].position, 'LB');
+  assert.equal(g.askCoach(state).ok, false, '일주일에 한 번');
+  const html = managerView(state, {});
+  assert.match(html, /선수단 진단/);
+  assert.match(html, /data-action="askCoach"/);
+  state.date = '2026-10-01';
+  assert.match(g.askCoach(state).reason, /이적시장이 닫혀/);
 });
