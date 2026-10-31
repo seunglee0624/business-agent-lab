@@ -597,7 +597,7 @@ export function settingsView(state, ui = {}) {
         <h3>기사·댓글 AI</h3>
         <label class="check"><input type="checkbox" data-change="togglePressAi" ${s.pressAi !== false ? 'checked' : ''}> 언론 탭 기사와 팬 댓글을 AI로 쓰기</label>
         <p class="small">${s.pressAi === false ? PRESS_STATUS.off : PRESS_STATUS[ui.pressStatus ?? 'unknown'] || '상태 확인 전'}</p>
-        <p class="muted small">개발 서버(tools/serve.py)를 ANTHROPIC_API_KEY와 함께 켜면 Claude Haiku가 기사와 댓글을 씁니다. 키가 없거나 꺼 두면 기본 기사와 팬층별 고정 문장을 씁니다. AI는 글만 쓰고 게임 숫자는 바꾸지 않습니다.</p>
+        <p class="muted small">개발 서버(tools/serve.py)를 OPENROUTER_API_KEY, OPENROUTER_MODEL과 함께 켜면 AI가 기사와 댓글을 씁니다. 키가 없거나 꺼 두면 기본 기사와 팬층별 고정 문장을 씁니다. AI는 글만 쓰고 게임 숫자는 바꾸지 않습니다.</p>
       </div>
       <div class="card">
         <h3>구단 키우기 보정</h3>
