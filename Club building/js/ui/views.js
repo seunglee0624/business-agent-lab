@@ -187,9 +187,8 @@ export function homeView(state) {
       </div>
       <div class="card">
         <h3>최근 결과</h3>${lastCard}
-        <h3 class="spaced">구단 상황</h3>
+        <div class="card-head spaced"><h3>구단 상황</h3><div class="btn-group"><button class="btn small" data-action="nav" data-view="club">구단 운영</button><button class="btn small" data-action="nav" data-view="finance">재정</button></div></div>
         ${clubStatus(state, club)}
-        <button class="btn small" data-action="nav" data-view="club">구단 운영</button> <button class="btn small" data-action="nav" data-view="finance">재정</button>
       </div>
     </div>`;
 }
