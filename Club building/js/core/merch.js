@@ -1,7 +1,7 @@
 // 굿즈: 홈·원정 유니폼(디자인·가격·수량), 머플러·아동용품, 우승·승격 때만 내는 한정판
 
 import { EUR } from '../data/economy.js';
-import { commercialPerSeason, income, expense, spendCheck, MERCH_SHARE } from './finance.js';
+import { commercialPerSeason, income, payOptional, MERCH_SHARE } from './finance.js';
 import { fansOf, SEGMENT_KEYS } from './fans.js';
 import { overall } from './player.js';
 import { addDays, daysBetween } from './calendar.js';
@@ -106,7 +106,7 @@ export function merchForecast(state, club, item, opts) {
 }
 
 // 주문: 유니폼은 시즌에 한 번 + 추가 생산 한 번(원가 1.3배, 30일 뒤), 머플러·아동용품은 언제든(14일 뒤), 한정판은 열렸을 때만
-export function orderMerch(state, club, item, { quantity, price, design }) {
+export function orderMerch(state, club, item, { quantity, price, design }, opts) {
   const m = merchOf(club);
   const it = m.items[item];
   const def = ITEMS[item];
@@ -114,32 +114,38 @@ export function orderMerch(state, club, item, { quantity, price, design }) {
   if (!def || !(quantity > 0)) return { ok: false, reason: '수량을 확인하세요.' };
   if (!(price > 0)) return { ok: false, reason: '가격을 확인하세요.' };
   if (it.incoming) return { ok: false, reason: '이미 주문한 물량이 오는 중입니다.' };
+  // 먼저 정하고, 돈을 낸 뒤에 바꾼다 (이적 예산 확인으로 한 번 막혀도 다시 주문할 수 있게)
   let unit = unitCost(item);
   let arrive = state.date;
+  let commit = () => {};
   if (def.kit) {
     if (it.ordered && it.reordered) return { ok: false, reason: '이번 시즌 유니폼 추가 생산은 이미 했습니다.' };
     if (it.ordered) {
       unit = roundMoney(unit * REORDER_COST);
       arrive = addDays(state.date, REORDER_DAYS);
-      it.reordered = true;
+      commit = () => { it.reordered = true; };
     } else {
       if (design && !DESIGNS[design]) return { ok: false, reason: '없는 디자인입니다.' };
-      if (design) it.design = design;
-      it.starId = it.design === 'star' ? starPlayer(state, club)?.id ?? null : null;
-      it.ordered = true;
+      commit = () => {
+        if (design) it.design = design;
+        it.starId = it.design === 'star' ? starPlayer(state, club)?.id ?? null : null;
+        it.ordered = true;
+      };
     }
   } else if (def.limited) {
     if (!m.limited || state.date > m.limited.orderBy) return { ok: false, reason: '한정판은 우승·승격 때만 낼 수 있습니다.' };
     if (it.ordered) return { ok: false, reason: '한정판은 한 번만 낼 수 있습니다.' };
-    it.ordered = true;
-    m.limited.until = addDays(state.date, LIMITED_DAYS);
+    commit = () => {
+      it.ordered = true;
+      m.limited.until = addDays(state.date, LIMITED_DAYS);
+    };
   } else {
     arrive = addDays(state.date, def.leadDays);
   }
   const cost = roundMoney(unit * quantity);
-  const short = spendCheck(state, club, cost);
-  if (short) return { ok: false, reason: short };
-  expense(club, 'merch', cost);
+  const fail = payOptional(state, club, 'merch', cost, opts);
+  if (fail) return fail;
+  commit();
   it.price = roundMoney(price);
   if (arrive === state.date) it.stock += quantity;
   else it.incoming = { quantity, date: arrive };

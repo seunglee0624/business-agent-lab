@@ -727,11 +727,11 @@ export const rejectSponsor = (state, offerId) => sponsors.rejectSponsor(state, u
 export const chooseTour = (state, region) => tour.chooseTour(state, userClub(state), region);
 export { EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM } from './stadium.js';
 export { CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStart as canStartCampaign, MAX_RUNNING } from './media.js';
-export const bookEvent = (state, fixtureId, kind) => stadium.bookEvent(state, userClub(state), findFixture(state, fixtureId), kind);
+export const bookEvent = (state, fixtureId, kind, opts) => stadium.bookEvent(state, userClub(state), findFixture(state, fixtureId), kind, opts);
 export const cancelEvent = (state, fixtureId) => stadium.cancelEvent(state, userClub(state), fixtureId);
-export const buildPitchSystem = (state) => stadium.buildPitchSystem(state, userClub(state));
+export const buildPitchSystem = (state, opts) => stadium.buildPitchSystem(state, userClub(state), opts);
 export const answerRental = (state, offerId, accept) => stadium.answerRental(state, userClub(state), offerId, accept, userHomeDates(state, userClub(state)));
-export const startCampaign = (state, kind) => withRng(state, (rng) => media.startCampaign(state, rng, userClub(state), kind));
+export const startCampaign = (state, kind, opts) => withRng(state, (rng) => media.startCampaign(state, rng, userClub(state), kind, opts));
 // 행사를 열 수 있는 앞으로의 홈 경기 (가까운 순)
 export function upcomingHomeFixtures(state, limit = 6) {
   const id = state.user.clubId;
@@ -739,7 +739,7 @@ export function upcomingHomeFixtures(state, limit = 6) {
     .filter((f) => f.home === id && !f.result && f.date > state.date)
     .sort((a, b) => (a.date < b.date ? -1 : 1)).slice(0, limit);
 }
-export const orderMerch = (state, item, opts) => merch.orderMerch(state, userClub(state), item, opts);
+export const orderMerch = (state, item, order, opts) => merch.orderMerch(state, userClub(state), item, order, opts);
 export const setMerchPrice = (state, item, price) => merch.setMerchPrice(userClub(state), item, price);
 
 export function setTicketPrice(state, grade, price) {
@@ -900,9 +900,9 @@ export function renewContract(state, playerId, offer) {
   return res;
 }
 
-export function upgradeFacility(state, key) {
+export function upgradeFacility(state, key, opts) {
   const club = userClub(state);
-  const res = requestUpgrade(state, club, key);
+  const res = requestUpgrade(state, club, key, opts);
   if (res.ok) addMessage(state, { view: 'club', title: `${FACILITIES[key].name} 공사 시작`, body: `${res.months}개월 뒤 ${res.level + 1}레벨이 됩니다.` });
   return res;
 }

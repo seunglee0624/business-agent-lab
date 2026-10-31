@@ -70,7 +70,7 @@ test('재정 조정: 이적 탭에서도 버튼으로 재정 조정 창을 열 �
   assert.match(html, /data-change="wageBudget"/);
 });
 
-test('이적 예산은 잔고 안에 묶인다: 시설·행사는 그 돈을 못 쓰고, 주급 같은 고정 지출로 잔고가 줄면 이적 예산도 줄어든다', async () => {
+test('이적 예산은 잔고 안에 묶인다: 시설·행사는 확인 없이는 그 돈을 못 쓰고, 주급 같은 고정 지출로 잔고가 줄면 이적 예산도 줄어든다', async () => {
   const { expense, spendable } = await import('../js/core/finance.js');
   const state = g.createNewGame('budget-lock');
   g.chooseLeague(state, 'ENG1', '테스트');
@@ -216,4 +216,64 @@ test('바 오른쪽 끝은 브라우저 바가 실제로 닿는 값이다 (최�
   const reach = r.min + Math.floor((r.top - r.min) / r.step) * r.step;
   assert.ok(g.adjustBudgets(state, reach).ok);
   assert.equal(g.userClub(state).finance.transferBudget, 0);
+});
+
+test('이적 예산 끌어 쓰기: 쓸 수 있는 돈이 모자라면 확인을 받아 이적 예산에서 꺼내고, 주급용으로 묶은 돈은 끝까지 못 쓴다', async () => {
+  const { spendable, transferDraw } = await import('../js/core/finance.js');
+  const { upgradeInfo } = await import('../js/core/facilities.js');
+  const state = g.createNewGame('budget-draw');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const f = club.finance;
+  const cost = upgradeInfo(club, 'training').cost;
+  f.balance = cost + 10e8;
+  f.transferBudget = cost; // 쓸 수 있는 돈은 10억뿐
+  assert.equal(spendable(state, club), 10e8);
+  assert.equal(transferDraw(state, club, cost), cost - 10e8);
+  // 확인 없이: 막히고 꺼낼 금액을 알려 준다. 돈은 그대로
+  const ask = g.upgradeFacility(state, 'training');
+  assert.equal(ask.ok, false);
+  assert.equal(ask.code, 'transfer');
+  assert.equal(ask.draw, cost - 10e8);
+  assert.equal(f.balance, cost + 10e8);
+  assert.equal(club.construction.length, 0);
+  // 확인하면: 잔고에서 공사비가 나가고 이적 예산은 꺼낸 만큼 준다
+  const res = g.upgradeFacility(state, 'training', { useTransfer: true });
+  assert.ok(res.ok);
+  assert.equal(f.balance, 10e8);
+  assert.equal(f.transferBudget, 10e8);
+  assert.equal(club.construction.length, 1);
+});
+
+test('이적 예산 끌어 쓰기: 주급용으로 묶은 돈까지는 못 쓰고, 그때는 재정 조정에서 주급 예산을 줄이라고 한다', () => {
+  const state = g.createNewGame('budget-draw-wage');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const f = g.userClub(state).finance;
+  f.balance = 100e8;
+  f.transferBudget = 0;
+  // 잔고를 거의 다 주급용으로 묶는다
+  assert.ok(g.adjustBudgets(state, g.budgetRange(state).max).ok);
+  const res = g.startCampaign(state, 'documentary', { useTransfer: true });
+  assert.equal(res.ok, false);
+  assert.notEqual(res.code, 'transfer');
+  assert.match(res.reason, /주급/);
+});
+
+test('이적 예산 끌어 쓰기: 확인 때문에 한 번 막힌 유니폼 추가 생산도 다시 하면 된다', async () => {
+  const { merchOf } = await import('../js/core/merch.js');
+  const state = g.createNewGame('budget-draw-merch');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const f = club.finance;
+  const it = merchOf(club).items.kitHome;
+  it.ordered = true; // 시즌 첫 생산은 이미 했다
+  f.balance = 100e8;
+  f.transferBudget = 100e8; // 쓸 수 있는 돈 0
+  const first = g.orderMerch(state, 'kitHome', { quantity: 1000, price: it.price });
+  assert.equal(first.code, 'transfer');
+  assert.ok(!it.reordered, '막힌 주문은 아무것도 바꾸지 않는다');
+  const again = g.orderMerch(state, 'kitHome', { quantity: 1000, price: it.price }, { useTransfer: true });
+  assert.ok(again.ok);
+  assert.ok(it.reordered);
+  assert.equal(f.transferBudget, 100e8 - again.cost);
 });

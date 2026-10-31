@@ -14,6 +14,7 @@ import { pressStatus, requestArticle } from '../api/press.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won, clubAccent } from './format.js';
 import { upgradeInfo } from '../core/facilities.js';
+import { transferDraw } from '../core/finance.js';
 import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
@@ -174,6 +175,19 @@ export class App {
     this.render();
   }
 
+  // 이적 예산에서 꺼내는 금액 안내 (확인 창 문구)
+  drawText(draw) {
+    const budget = userClub(this.state).finance.transferBudget;
+    return `쓸 수 있는 돈이 모자라 이적 예산에서 ${withParticle(won(draw), '을')} 꺼냅니다. 이적 예산이 ${won(budget)}에서 ${withParticle(won(Math.max(0, budget - draw)), '로')} 줄어듭니다.`;
+  }
+
+  // 고를 수 있는 지출: 이적 예산을 꺼내야 하면 확인을 받고 같은 값으로 다시 낸다 (pay(opts) → 결과, done(결과))
+  spend(title, pay, done) {
+    const res = pay();
+    if (res.code !== 'transfer') return done(res);
+    this.confirm({ title, text: `${this.drawText(res.draw)} 계속할까요?`, yes: '이적 예산 쓰기' }, () => done(pay({ useTransfer: true })));
+  }
+
   toSeasonEnd() {
     if (!this.ask?.confirmed) return this.confirm({ title: '시즌 끝까지 진행', text: '내 경기도 결과만으로 처리하며 시즌 끝까지 진행합니다. 계속할까요?', yes: '진행' }, () => this.toSeasonEnd());
     this.ui.busy = true;
@@ -323,8 +337,9 @@ export class App {
       case 'upgradeFacility': {
         const name = FACILITIES[d.key].name;
         const info = upgradeInfo(userClub(s), d.key);
-        if (!this.ask?.confirmed) return this.confirm({ title: `${name} 업그레이드`, text: info ? `${withParticle(name, '를')} 업그레이드할까요? 공사비 ${withParticle(won(info.cost), '이')} 바로 나가고 ${info.months}개월 뒤 완료됩니다.` : `${withParticle(name, '를')} 업그레이드할까요?`, yes: '공사 시작' }, () => this.onClick(ev));
-        const res = upgradeFacility(s, d.key);
+        const draw = info ? transferDraw(s, userClub(s), info.cost) : 0;
+        if (!this.ask?.confirmed) return this.confirm({ title: `${name} 업그레이드`, text: info ? `${withParticle(name, '를')} 업그레이드할까요? 공사비 ${withParticle(won(info.cost), '이')} 바로 나가고 ${info.months}개월 뒤 완료됩니다.${draw > 0 ? ` ${this.drawText(draw)}` : ''}` : `${withParticle(name, '를')} 업그레이드할까요?`, yes: '공사 시작' }, () => this.onClick(ev));
+        const res = upgradeFacility(s, d.key, { useTransfer: true });
         this.ui.clubMsg = { ok: res.ok, text: res.ok ? `${name} 공사를 시작합니다. 공사비 ${won(res.cost)}, ${res.months}개월 뒤 완료됩니다.` : res.reason };
         this.persist();
         this.render();
@@ -420,10 +435,11 @@ export class App {
         this.render();
         break;
       case 'bookEvent': {
-        const res = bookEvent(s, d.id, d.kind);
-        this.ui.eventMsg = { ok: res.ok, text: res.ok ? `${withParticle(EVENTS[d.kind].name, '을')} 예약했습니다. 비용 ${won(res.cost)}.` : res.reason };
-        this.persist();
-        this.render();
+        this.spend('경기장 행사', (opts) => bookEvent(s, d.id, d.kind, opts), (res) => {
+          this.ui.eventMsg = { ok: res.ok, text: res.ok ? `${withParticle(EVENTS[d.kind].name, '을')} 예약했습니다. 비용 ${won(res.cost)}.` : res.reason };
+          this.persist();
+          this.render();
+        });
         break;
       }
       case 'cancelEvent': {
@@ -434,10 +450,11 @@ export class App {
         break;
       }
       case 'startCampaign': {
-        const res = startCampaign(s, d.kind);
-        this.ui.fanMsg = { ok: res.ok, text: res.ok ? `${withParticle(CAMPAIGNS[d.kind].name, '을')} 시작했습니다. 참여: ${res.campaign.players.join(', ')}.` : res.reason };
-        this.persist();
-        this.render();
+        this.spend('SNS·미디어 캠페인', (opts) => startCampaign(s, d.kind, opts), (res) => {
+          this.ui.fanMsg = { ok: res.ok, text: res.ok ? `${withParticle(CAMPAIGNS[d.kind].name, '을')} 시작했습니다. 참여: ${res.campaign.players.join(', ')}.` : res.reason };
+          this.persist();
+          this.render();
+        });
         break;
       }
       case 'rentalAnswer': {
@@ -448,10 +465,11 @@ export class App {
         break;
       }
       case 'buildPitchSystem': {
-        const res = buildPitchSystem(s);
-        this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? `잔디 보호 시스템 공사를 시작했습니다. ${won(res.cost)}, ${res.done} 완공 예정.` : res.reason };
-        this.persist();
-        this.render();
+        this.spend('잔디 보호 시스템', (opts) => buildPitchSystem(s, opts), (res) => {
+          this.ui.sponsorMsg = { ok: res.ok, text: res.ok ? `잔디 보호 시스템 공사를 시작했습니다. ${won(res.cost)}, ${res.done} 완공 예정.` : res.reason };
+          this.persist();
+          this.render();
+        });
         break;
       }
       case 'openMerch':
@@ -463,10 +481,11 @@ export class App {
         const price = Number(this.root.querySelector('#merchPrice').value);
         const quantity = Number(this.root.querySelector('#merchQty').value);
         const design = this.root.querySelector('#merchDesign')?.value;
-        const res = orderMerch(s, d.item, { price, quantity, design });
-        this.ui.merchMsg = { ok: res.ok, text: res.ok ? `${ITEMS[d.item].name} ${quantity.toLocaleString()}개를 주문했습니다. 생산비 ${won(res.cost)}.${res.arrive !== s.date ? ` ${res.arrive} 도착.` : ''}` : res.reason };
-        this.persist();
-        this.render();
+        this.spend('굿즈 생산', (opts) => orderMerch(s, d.item, { price, quantity, design }, opts), (res) => {
+          this.ui.merchMsg = { ok: res.ok, text: res.ok ? `${ITEMS[d.item].name} ${quantity.toLocaleString()}개를 주문했습니다. 생산비 ${won(res.cost)}.${res.arrive !== s.date ? ` ${res.arrive} 도착.` : ''}` : res.reason };
+          this.persist();
+          this.render();
+        });
         break;
       }
       case 'merchPrice': {

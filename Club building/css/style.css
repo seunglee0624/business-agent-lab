@@ -45,6 +45,7 @@ a { color: var(--blue); }
 .small { font-size: 12px; }
 .error { color: var(--loss); }
 .good { color: var(--gain); font-weight: 700; }
+.warn { color: var(--yellow); font-weight: 700; }
 .right { text-align: right; }
 .center { text-align: center; }
 

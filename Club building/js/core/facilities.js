@@ -5,7 +5,7 @@ import {
   upgradeCost, upgradeMonths,
 } from '../data/economy.js';
 import { LEAGUES } from '../data/countries/index.js';
-import { expense, spendCheck } from './finance.js';
+import { payOptional } from './finance.js';
 import { addMonths } from './calendar.js';
 import { roundMoney } from './money.js';
 import { addMessage } from './state.js';
@@ -62,14 +62,13 @@ export function upgradeInfo(club, key) {
 
 export const isBuilding = (club, key) => club.construction.some((c) => c.key === key);
 
-// 업그레이드 요청. 수뇌부는 잔고가 비용의 1.3배 이상이고, (내 구단이면) 신뢰도가 40 이상일 때 승인한다
-export function requestUpgrade(state, club, key) {
+// 업그레이드 요청. 공사비는 바로 나간다 (이적 예산을 꺼내야 하면 opts.useTransfer일 때만)
+export function requestUpgrade(state, club, key, opts) {
   const info = upgradeInfo(club, key);
   if (!info) return { ok: false, reason: '이미 최고 레벨입니다.' };
   if (isBuilding(club, key)) return { ok: false, reason: '이미 공사 중입니다.' };
-  const short = spendCheck(state, club, info.cost);
-  if (short) return { ok: false, reason: short };
-  expense(club, 'construction', info.cost);
+  const fail = payOptional(state, club, 'construction', info.cost, opts);
+  if (fail) return fail;
   club.construction.push({ key, toLevel: info.level + 1, start: state.date, done: addMonths(state.date, info.months) });
   return { ok: true, ...info };
 }

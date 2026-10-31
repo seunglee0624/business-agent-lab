@@ -1,7 +1,7 @@
 // 경기장 행사(홈 경기에 붙이는 하프타임 공연·팬 데이·레전드 경기)와 비경기일 대관(콘서트 등), 잔디 상태
 
 import { EUR } from '../data/economy.js';
-import { income, expense, spendCheck } from './finance.js';
+import { income, expense, payOptional } from './finance.js';
 import { capacity } from './facilities.js';
 import { fanEvent } from './fans.js';
 import { addDays, addMonths } from './calendar.js';
@@ -50,15 +50,14 @@ export function eventStrength(club, kind) {
   return 0.5 ** recent;
 }
 
-export function bookEvent(state, club, fixture, kind) {
+export function bookEvent(state, club, fixture, kind, opts) {
   if (!EVENTS[kind]) return { ok: false, reason: '없는 행사입니다.' };
   if (!fixture || fixture.home !== club.id || fixture.result || fixture.date <= state.date) return { ok: false, reason: '앞으로 열릴 홈 경기에만 행사를 열 수 있습니다.' };
   const s = stadiumOf(club);
   if (s.events.booked[fixture.id]) return { ok: false, reason: '이 경기에는 이미 행사가 잡혀 있습니다.' };
   const cost = eventCost(club, kind);
-  const short = spendCheck(state, club, cost);
-  if (short) return { ok: false, reason: short };
-  expense(club, 'events', cost);
+  const fail = payOptional(state, club, 'events', cost, opts);
+  if (fail) return fail;
   s.events.booked[fixture.id] = { kind, cost, date: fixture.date };
   return { ok: true, cost };
 }
@@ -97,14 +96,13 @@ export const pitchFactor = (club) => 1 - (100 - (club.stadium?.pitch ?? 100)) * 
 export const hasPitchSystem = (state, club) => !!club.stadium.pitchSystem && club.stadium.pitchSystem.done <= state.date;
 export const pitchSystemCost = () => roundMoney(PITCH_SYSTEM.cost * EUR);
 
-export function buildPitchSystem(state, club) {
+export function buildPitchSystem(state, club, opts) {
   const s = stadiumOf(club);
   if (s.pitchSystem) return { ok: false, reason: s.pitchSystem.done <= state.date ? '이미 잔디 보호 시스템이 있습니다.' : '이미 공사 중입니다.' };
   if (club.facilities.stadium < PITCH_SYSTEM.minStadium) return { ok: false, reason: `경기장이 ${PITCH_SYSTEM.minStadium}레벨 이상이어야 합니다.` };
   const cost = pitchSystemCost();
-  const short = spendCheck(state, club, cost);
-  if (short) return { ok: false, reason: short };
-  expense(club, 'construction', cost);
+  const fail = payOptional(state, club, 'construction', cost, opts);
+  if (fail) return fail;
   s.pitchSystem = { start: state.date, done: addMonths(state.date, PITCH_SYSTEM.months) };
   return { ok: true, cost, done: s.pitchSystem.done };
 }

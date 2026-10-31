@@ -1,7 +1,7 @@
 // SNS·미디어 캠페인: 하나씩 골라 진행한다. 해외 팬·팬층 만족도가 오르고, 참여한 선수는 조금 지친다
 
 import { EUR } from '../data/economy.js';
-import { expense, spendCheck } from './finance.js';
+import { payOptional } from './finance.js';
 import { fansOf, fanEvent } from './fans.js';
 import { overall } from './player.js';
 import { addDays, daysBetween } from './calendar.js';
@@ -43,14 +43,13 @@ export function canStart(state, club, kind) {
   return null;
 }
 
-export function startCampaign(state, rng, club, kind) {
+export function startCampaign(state, rng, club, kind, opts) {
   const reason = canStart(state, club, kind);
   if (reason) return { ok: false, reason };
   const def = CAMPAIGNS[kind];
   const cost = campaignCost(club, kind);
-  const short = spendCheck(state, club, cost);
-  if (short) return { ok: false, reason: short };
-  expense(club, 'events', cost);
+  const fail = payOptional(state, club, 'events', cost, opts);
+  if (fail) return fail;
   // 반응은 운: 0.6~1.4배, 같은 캠페인을 반복하면 줄어든다
   const strength = Math.round((0.6 + rng.next() * 0.8) * repeatFactor(state, club, kind) * 100) / 100;
   const players = club.squad.map((id) => state.players[id]).filter((p) => p && !p.injury)

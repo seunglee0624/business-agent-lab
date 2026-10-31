@@ -133,11 +133,28 @@ export function refreshWageCredit(state, club) {
   f.transferBudget = Math.max(0, Math.min(f.transferBudget, Math.max(0, f.balance) + f.wageCredit));
 }
 
-// 시설·행사처럼 고를 수 있는 지출에 쓸 수 있는 돈: 잔고에서 이적 예산과 주급용으로 떼어 둔 돈을 뺀 만큼
+// 시설·행사처럼 고를 수 있는 지출에 바로 쓸 수 있는 돈: 잔고에서 이적 예산과 주급용으로 떼어 둔 돈을 뺀 만큼
 export const spendable = (state, club) => Math.max(0, club.finance.balance - club.finance.transferBudget - wageReserve(state, club));
-export function spendCheck(state, club, cost) {
-  if (cost <= spendable(state, club)) return null;
-  return club.finance.balance >= cost ? '이적 예산·주급용으로 묶인 돈은 쓸 수 없습니다. 재정 조정에서 이적 예산이나 주급 예산을 줄이세요.' : '잔고가 부족합니다.';
+// 단장이 확인하면 이적 예산까지 끌어 쓸 수 있다. 주급용으로 떼어 둔 돈은 끝까지 못 쓴다
+export const spendableWithTransfer = (state, club) => Math.max(0, club.finance.balance - wageReserve(state, club));
+// 이 지출에 이적 예산에서 꺼내야 하는 몫
+export const transferDraw = (state, club, cost) => Math.max(0, cost - spendable(state, club));
+
+// 고를 수 있는 지출을 낸다. 못 내면 실패 결과를, 내면 null을 돌려준다.
+// 이적 예산을 꺼내야 하면 useTransfer(단장이 확인함)일 때만 내고, 아니면 code 'transfer'와 꺼낼 금액(draw)을 돌려준다
+export function payOptional(state, club, key, cost, { useTransfer = false } = {}) {
+  const f = club.finance;
+  const draw = transferDraw(state, club, cost);
+  if (draw > 0) {
+    if (cost > spendableWithTransfer(state, club)) {
+      return { ok: false, reason: f.balance >= cost ? '주급용으로 묶어 둔 돈은 쓸 수 없습니다. 재정 조정에서 주급 예산을 줄이세요.' : '잔고가 부족합니다.' };
+    }
+    if (!useTransfer) return { ok: false, code: 'transfer', draw, reason: '쓸 수 있는 돈이 모자라 이적 예산에서 꺼내야 합니다.' };
+  }
+  const budget = f.transferBudget;
+  expense(club, key, cost);
+  f.transferBudget = Math.max(0, Math.min(f.transferBudget, budget - draw));
+  return null;
 }
 
 export const PROFIT_TO_BUDGET = 0.5;

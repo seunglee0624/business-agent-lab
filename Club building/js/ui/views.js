@@ -14,7 +14,7 @@ import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nex
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
-import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, spendableWithTransfer, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
 import { marketValue } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -1152,6 +1152,7 @@ export function financeView(state) {
   const coachWage = club.headCoach?.wage ?? 0;
   const reserve = wageReserve(state, club);
   const free = spendable(state, club);
+  const withTransfer = spendableWithTransfer(state, club);
   return `
     <div class="grid two">
       <div class="stack">
@@ -1162,7 +1163,8 @@ export function financeView(state) {
             <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
             <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
             <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
-            <tr><td>시설·행사에 쓸 수 있는 돈<div class="muted small">잔고 − 이적 예산${reserve ? ' − 주급용으로 묶은 돈' : ''}</div></td><td class="num"><strong>${won(free)}</strong></td></tr>
+            <tr><td>시설·행사에 바로 쓸 수 있는 돈<div class="muted small">잔고 − 이적 예산${reserve ? ' − 주급용으로 묶은 돈' : ''}</div></td><td class="num"><strong>${won(free)}</strong></td></tr>
+            <tr><td>이적 예산까지 쓰면<div class="muted small">확인을 받고 이적 예산에서 꺼냅니다${reserve ? '. 주급용으로 묶은 돈은 못 씁니다' : ''}</div></td><td class="num">${won(withTransfer)}</td></tr>
           </table>
           ${budgetSlider(state, f)}
           <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
@@ -1184,7 +1186,7 @@ export function financeView(state) {
           <h3>이번 시즌 장부</h3>
           ${ledgerTable(f.season)}
         </div>
-        ${facilityCostCard(club, free)}
+        ${facilityCostCard(club, free, withTransfer)}
         <div class="card">
           <h3>지난 시즌</h3>
           ${f.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">수입</th><th class="num">지출</th><th class="num">수지</th><th class="num">시즌 끝 잔고</th></tr></thead><tbody>
@@ -1198,14 +1200,17 @@ export function financeView(state) {
 }
 
 // 시설마다 달 유지비와 다음 업그레이드 비용. 업그레이드는 구단 탭에서
-function facilityCostCard(club, free) {
+function facilityCostCard(club, free, withTransfer) {
   const rows = FACILITY_KEYS.map((key) => {
     const info = upgradeInfo(club, key);
     const building = isBuilding(club, key);
     const next = building ? '<span class="tag">공사 중</span>'
       : !info ? '<span class="muted small">최고 레벨</span>'
       : `${won(info.cost)} <span class="muted small">· ${info.months}개월</span>`;
-    const now = !info || building ? '' : info.cost <= free ? '<span class="good small">가능</span>' : '<span class="error small">부족</span>';
+    const now = !info || building ? ''
+      : info.cost <= free ? '<span class="good small">가능</span>'
+      : info.cost <= withTransfer ? '<span class="warn small">이적 예산 사용</span>'
+      : '<span class="error small">부족</span>';
     return `<tr><td>${esc(FACILITIES[key].name)}</td><td class="num">${club.facilities[key]}</td><td class="num">${won(facilityMonthlyUpkeep(club, key))}</td><td class="num">${next}</td><td>${now}</td></tr>`;
   }).join('');
   return `
@@ -1213,7 +1218,7 @@ function facilityCostCard(club, free) {
           <div class="card-head"><h3>시설 비용</h3><button class="btn small" data-action="nav" data-view="club">구단 탭에서 업그레이드</button></div>
           <table class="table compact"><thead><tr><th>시설</th><th class="num">레벨</th><th class="num">유지비 (월)</th><th class="num">다음 업그레이드</th><th>지금</th></tr></thead><tbody>${rows}
             <tr class="line-below"><th>합계</th><th></th><th class="num">${won(monthlyUpkeep(club))}</th><th></th><th></th></tr></tbody></table>
-          <p class="muted small">업그레이드 비용은 공사를 시작할 때 한 번 나갑니다. "가능"은 시설·행사에 쓸 수 있는 돈(${won(free)})으로 낼 수 있다는 뜻입니다.</p>
+          <p class="muted small">업그레이드 비용은 공사를 시작할 때 한 번 나갑니다. "가능"은 바로 쓸 수 있는 돈(${won(free)})으로, "이적 예산 사용"은 이적 예산에서 꺼내야(${won(withTransfer)}까지) 낼 수 있다는 뜻입니다.</p>
         </div>`;
 }
 
