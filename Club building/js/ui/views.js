@@ -9,7 +9,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unregisteredPlayers, totalCount, MAX_TOTAL, pressOf, MAX_ARTICLES } from '../core/game.js';
+import { unregisteredPlayers, totalCount, MAX_TOTAL, pressOf, MAX_ARTICLES, stripSegmentLabel } from '../core/game.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
@@ -762,7 +762,7 @@ export function pressView(state, ui = {}) {
         <div class="muted small">${formatShortDate(a.date)}${a.source === 'ai' ? '' : ' · 기본 기사'}</div>
         <h4>${esc(a.headline)}</h4>
         <p>${esc(a.body)}</p>
-        <ul class="press-comments">${a.comments.map((c) => `<li><span class="dot" style="background:${SEG_COLOR[c.segment]}"></span><span class="muted small">${SEGMENTS[c.segment].name}</span> ${esc(c.text)}</li>`).join('')}</ul>
+        <ul class="press-comments">${a.comments.map((c) => `<li><span class="dot" style="background:${SEG_COLOR[c.segment]}"></span><span class="muted small">${SEGMENTS[c.segment].name}</span> ${esc(stripSegmentLabel(c.text))}</li>`).join('')}</ul>
       </article>`).join('');
   return `
     <div class="grid two">

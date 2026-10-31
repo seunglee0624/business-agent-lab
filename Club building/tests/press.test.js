@@ -97,6 +97,23 @@ test('AI 응답: 맞는 형식이면 기사를 바꾸고, 형식이 틀리거나
   assert.deepEqual(article.comments, [{ segment: 'loyal', text: '좋다 좋아' }]);
 });
 
+test('AI 댓글 앞의 팬층 표시([충성층], (loyal), 가족층:)는 떼고, 표시만 있는 댓글은 버린다', () => {
+  assert.equal(g.stripSegmentLabel('[충성층] 오늘 경기 좋았다'), '오늘 경기 좋았다');
+  assert.equal(g.stripSegmentLabel('(loyal) [충성층] 역사가 운다'), '역사가 운다');
+  assert.equal(g.stripSegmentLabel('가족층: 티켓값 좀 내려라'), '티켓값 좀 내려라');
+  assert.equal(g.stripSegmentLabel('충성층으로서 한마디 한다'), '충성층으로서 한마디 한다');
+  const state = fresh('press-label');
+  playUserMatch(state);
+  const job = g.takePressRequest(state);
+  assert.match(job.request.system, /\[충성층\] 같은 표시를 붙이지 않는다/);
+  const club = g.userClub(state);
+  g.applyAiArticle(state, job, {
+    headline: `${club.name} 기사`, body: '본문입니다.',
+    comments: [{ segment: 'loyal', text: '[충성층] 믿는다' }, { segment: 'local', text: '[지역층]' }],
+  });
+  assert.deepEqual(g.pressOf(state).articles[0].comments, [{ segment: 'loyal', text: '믿는다' }]);
+});
+
 test('기사는 최근 30편까지만 남는다 (한 시즌을 주마다 진행하면 경기 기사가 30편을 넘는다)', () => {
   const state = fresh('press-cap');
   let published = 0;

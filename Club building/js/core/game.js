@@ -32,7 +32,7 @@ import { fanMatchResult, fanMonthly, fansOf, PROTEST_LINE } from './fans.js';
 import { recordHomeGate, priceLevel } from './tickets.js';
 import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets, transferAfter, refreshWageCredit, staffWeeklyWage, wageRoom } from './finance.js';
 export { transferAfter, wageRoom };
-export { pressOf, markPressRead, applyAiArticle, takePressRequest, commentPlan, MAX_ARTICLES } from './press.js';
+export { pressOf, markPressRead, applyAiArticle, stripSegmentLabel, takePressRequest, commentPlan, MAX_ARTICLES } from './press.js';
 import { signNew, offerRenewal } from './contracts.js';
 import * as contracts from './contracts.js';
 import { monthlyMorale } from './morale.js';

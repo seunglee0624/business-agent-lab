@@ -222,6 +222,7 @@ const SYSTEM = [
   '기사: headline은 40자 이내, body는 3~4문장의 기사체.',
   'comments: plan 순서대로 하나씩, 각 항목의 segment를 그대로 쓰고 mood(good 좋음, neutral 보통, bad 나쁨)에 맞는 분위기로 쓴다.',
   '댓글은 한국 축구 커뮤니티 말투의 짧은 반말 한두 문장. 팬층 관심사: loyal 충성층은 성적과 구단 역사, trendy 유행층은 스타와 경기 재미, family 가족층은 티켓값과 즐길 거리, local 지역층은 유스 출신과 동네.',
+  '댓글 text에는 팬층 이름이나 [충성층] 같은 표시를 붙이지 않는다. 화면이 따로 보여 준다.',
   '화난 댓글도 쓰되 욕설과 비하는 쓰지 않는다.',
 ].join('\n');
 
@@ -309,6 +310,14 @@ export function takePressRequest(state) {
   return job;
 }
 
+// AI가 댓글 앞에 붙이는 팬층 표시([충성층], (loyal), 가족층: 등)를 뗀다. 화면이 팬층 이름을 따로 보여 준다.
+const SEGMENT_LABEL = /^\s*(?:[\[(（【]\s*(?:충성층|유행층|가족층|지역층|loyal|trendy|family|local)\s*[\])）】]|(?:충성층|유행층|가족층|지역층|loyal|trendy|family|local)\s*[:：])\s*/i;
+export function stripSegmentLabel(s) {
+  let out = String(s ?? '');
+  while (SEGMENT_LABEL.test(out)) out = out.replace(SEGMENT_LABEL, '');
+  return out.trim();
+}
+
 const text = (x, max) => typeof x === 'string' && x.trim().length > 0 && x.trim().length <= max;
 
 // AI가 쓴 글로 틀 기사를 바꾼다. 형식이 틀리면 틀 기사를 그대로 둔다.
@@ -322,9 +331,9 @@ export function applyAiArticle(state, job, data) {
   const foreign = (s) => outsiders.some((n) => s.includes(n));
   if (foreign(data.headline) || foreign(data.body)) return false;
   const comments = data.comments
-    .filter((c) => SEGMENT_KEYS.includes(c?.segment) && text(c.text, 200) && !foreign(c.text))
-    .slice(0, COMMENTS + 2)
-    .map((c) => ({ segment: c.segment, text: c.text.trim() }));
+    .map((c) => ({ segment: c?.segment, text: typeof c?.text === 'string' ? stripSegmentLabel(c.text) : c?.text }))
+    .filter((c) => SEGMENT_KEYS.includes(c.segment) && text(c.text, 200) && !foreign(c.text))
+    .slice(0, COMMENTS + 2);
   if (!comments.length) return false;
   Object.assign(article, { headline: data.headline.trim(), body: data.body.trim(), comments, source: 'ai' });
   return true;
