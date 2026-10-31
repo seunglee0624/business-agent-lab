@@ -107,7 +107,6 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; max-width: 100%; overflow-x: auto; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .card-head h3 { margin: 0; }
-.card-head.spaced { margin-top: 20px; }
 .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
 /* 같은 줄 카드는 높이를 맞춰 아래 끝선을 맞추고, 줄에 혼자 남은 카드는 전체 폭으로 */
 .grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; margin-bottom: 16px; }

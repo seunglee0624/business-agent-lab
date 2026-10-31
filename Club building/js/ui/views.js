@@ -185,10 +185,12 @@ export function homeView(state) {
         <div class="card-head"><h3>순위</h3><button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button></div>
         <table class="table compact"><thead><tr><th class="num">#</th><th>구단</th><th class="num">경기</th><th class="num">승점</th></tr></thead><tbody>${mini}</tbody></table>
       </div>
-      <div class="card">
-        <h3>최근 결과</h3>${lastCard}
-        <div class="card-head spaced"><h3>구단 상황</h3><div class="btn-group"><button class="btn small" data-action="nav" data-view="club">구단 운영</button><button class="btn small" data-action="nav" data-view="finance">재정</button></div></div>
-        ${clubStatus(state, club)}
+      <div class="stack">
+        <div class="card"><h3>최근 결과</h3>${lastCard}</div>
+        <div class="card">
+          <div class="card-head"><h3>구단 상황</h3><div class="btn-group"><button class="btn small" data-action="nav" data-view="club">구단 운영</button><button class="btn small" data-action="nav" data-view="finance">재정</button></div></div>
+          ${clubStatus(state, club)}
+        </div>
       </div>
     </div>`;
 }
