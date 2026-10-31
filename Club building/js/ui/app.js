@@ -8,7 +8,9 @@ import {
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub,
   adjustBudgets, transferAfter, wageRoom, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
+  markPressRead, takePressRequest, applyAiArticle,
 } from '../core/game.js';
+import { pressStatus, requestArticle } from '../api/press.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
 import { won } from './format.js';
 import { upgradeInfo } from '../core/facilities.js';
@@ -16,7 +18,7 @@ import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
 import {
   newGameView, layout, homeView, squadView, competitionView, settingsView,
-  fixtureDetail, seasonEndBanner, confirmModal, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView,
+  fixtureDetail, seasonEndBanner, confirmModal, historyView, clubView, financeView, fansView, forecastText, merchForecastText, sponsorsView, pressView,
 } from './views.js';
 import { LiveMatchView } from './match.js';
 import { transfersView } from './transfers.js';
@@ -46,6 +48,36 @@ export class App {
       this.ui.error = '저장된 게임을 불러오지 못했습니다.';
     }
     this.render();
+    pressStatus().then((st) => {
+      this.pressStatus = st;
+      if (['press', 'settings'].includes(this.ui.view)) this.render();
+      this.pumpPress();
+    });
+  }
+
+  // 새 기사가 있으면 AI에 글을 요청해 바꿔 넣는다. 게임은 기다리지 않고, 한 번에 한 요청만, 실패해도 다시 보내지 않는다
+  async pumpPress() {
+    const s = this.state;
+    if (!s?.press?.pending || this.pressBusy || !this.pressStatus) return;
+    if (s.settings.pressAi === false || ['nokey', 'noserver'].includes(this.pressStatus)) {
+      takePressRequest(s);
+      return;
+    }
+    const job = takePressRequest(s);
+    this.pressBusy = true;
+    try {
+      const data = await requestArticle(job.request);
+      this.pressStatus = 'ok';
+      if (this.state === s && applyAiArticle(s, job, data)) this.persist();
+    } catch (err) {
+      console.error('기사 AI 실패', err);
+      this.pressStatus = err.code === 'nokey' ? 'nokey' : 'error';
+    } finally {
+      this.pressBusy = false;
+    }
+    // 중계 화면은 다시 그리면 경기가 처음부터 다시 그려지므로 건드리지 않는다
+    if (this.state === s && ['press', 'settings', 'home'].includes(this.ui.view)) this.render();
+    this.pumpPress();
   }
 
   persist() {
@@ -56,6 +88,8 @@ export class App {
   // ---- 그리기 ----
 
   render() {
+    // 새 게임 때 ui를 새로 만들어도 AI 연결 상태는 앱이 들고 있다
+    this.ui.pressStatus = this.pressStatus;
     this.live?.destroy();
     this.live = null;
     const s = this.state;
@@ -76,13 +110,14 @@ export class App {
       return;
     }
     const views = {
-      home: homeView, squad: squadView, competition: competitionView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
+      home: homeView, squad: squadView, competition: competitionView, history: historyView, settings: settingsView, club: clubView, finance: financeView, fans: fansView, press: pressView, sponsors: sponsorsView, transfers: transfersView, manager: managerView,
     };
     let content = (views[this.ui.view] ?? homeView)(s, this.ui);
     if (s.phase === 'seasonEnd' && this.ui.view === 'home') content = seasonEndBanner(s, this.ui) + content;
     if (this.ui.fixtureId) content += fixtureDetail(s, this.ui.fixtureId);
     if (this.ask) content += confirmModal(this.ask);
     this.root.innerHTML = layout(s, this.ui, content);
+    if (s.press?.pending) queueMicrotask(() => this.pumpPress());
   }
 
   // ---- 진행 ----
@@ -268,6 +303,7 @@ export class App {
         if (d.tab) this.ui.compTab = d.tab;
         this.ui.needsOpen = false;
         markViewRead(this.state, d.view);
+        if (d.view === 'press') markPressRead(this.state);
         this.persist();
         this.ui.fixtureId = null;
         this.ui.merchItem = null;
@@ -647,6 +683,11 @@ export class App {
       case 'setViewMode':
         s.settings.viewMode = el.value;
         this.persist();
+        break;
+      case 'togglePressAi':
+        s.settings.pressAi = el.checked;
+        this.persist();
+        this.render();
         break;
       case 'toggleDecision':
         s.settings.decisions = { ...s.settings.decisions, [d.key]: el.checked };

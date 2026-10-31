@@ -9,7 +9,7 @@ import { LEAGUES, COUNTRIES } from '../data/countries/index.js';
 import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
-import { unregisteredPlayers, totalCount, MAX_TOTAL } from '../core/game.js';
+import { unregisteredPlayers, totalCount, MAX_TOTAL, pressOf, MAX_ARTICLES } from '../core/game.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity } from '../core/facilities.js';
@@ -93,6 +93,7 @@ const NAV = [
   ['club', '구단'],
   ['finance', '재정'],
   ['fans', '팬'],
+  ['press', '언론'],
   ['sponsors', '스폰서'],
   ['transfers', '이적'],
   ['history', '기록'],
@@ -110,7 +111,7 @@ export function layout(state, ui, content) {
     <aside class="side">
       <div class="side-club">${badge(club, 'big')}<div><strong>${esc(club.name)}</strong><div class="muted small">${esc(LEAGUES[club.leagueId].name)}</div><div class="muted small">${esc(state.user.name)} 단장</div></div></div>
       <nav>
-        ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${countBadge(key === 'home' ? unread : unreadCount(state, key))}</button>`).join('')}
+        ${NAV.map(([key, name]) => `<button class="nav ${ui.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${inMatch ? 'disabled' : ''}>${name}${countBadge(key === 'home' ? unread : key === 'press' ? pressOf(state).unread : unreadCount(state, key))}</button>`).join('')}
       </nav>
     </aside>
     <div class="main">
@@ -588,10 +589,16 @@ export const PAUSE_NAMES = {
 
 export const VIEW_MODES = { result: '결과만', highlights: '하이라이트', full: '전체 중계' };
 
-export function settingsView(state) {
+export function settingsView(state, ui = {}) {
   const s = state.settings;
   return `
     <div class="grid two">
+      <div class="card">
+        <h3>기사·댓글 AI</h3>
+        <label class="check"><input type="checkbox" data-change="togglePressAi" ${s.pressAi !== false ? 'checked' : ''}> 언론 탭 기사와 팬 댓글을 AI로 쓰기</label>
+        <p class="small">${s.pressAi === false ? PRESS_STATUS.off : PRESS_STATUS[ui.pressStatus ?? 'unknown'] || '상태 확인 전'}</p>
+        <p class="muted small">개발 서버(tools/serve.py)를 ANTHROPIC_API_KEY와 함께 켜면 Claude Haiku가 기사와 댓글을 씁니다. 키가 없거나 꺼 두면 기본 기사와 팬층별 고정 문장을 씁니다. AI는 글만 쓰고 게임 숫자는 바꾸지 않습니다.</p>
+      </div>
       <div class="card">
         <h3>구단 키우기 보정</h3>
         <p class="small">단장이 맡은 구단에만 늘 적용됩니다: 직접 버는 수입(입장·스폰서·굿즈·대관) +${Math.round((USER_BOOST.income - 1) * 100)}% · 선수 주급 요구 −${Math.round((1 - USER_BOOST.wage) * 100)}% · 기대 이상 성적이면 평판 추가 상승 · 유스 잠재력 +${USER_BOOST.youth}</p>
@@ -734,6 +741,33 @@ function ledgerTable(ledger) {
 
 const satClass = (s) => (s < PROTEST_LINE ? 'error' : s >= 70 ? 'good' : '');
 const SEG_COLOR = { loyal: '#2f6b3f', trendy: '#c2410c', family: '#2563eb', local: '#a16207' };
+const MOOD_NAME = { good: '기분 좋음', neutral: '보통', bad: '불만' };
+
+// ---- 언론: 기사와 팬 댓글, SNS 캠페인 ----
+
+export const PRESS_STATUS = { ok: 'AI 연결됨', nokey: 'AI 키 없음 (틀 기사)', error: 'AI 오류 (틀 기사)', noserver: 'AI 서버 없음: tools/serve.py로 켜야 함 (틀 기사)', off: 'AI 꺼짐 (틀 기사)', unknown: '' };
+
+export function pressView(state, ui = {}) {
+  const club = userClub(state);
+  const press = pressOf(state);
+  const status = state.settings.pressAi === false ? 'off' : ui.pressStatus ?? 'unknown';
+  const articles = press.articles.map((a) => `
+      <article class="press-article">
+        <div class="muted small">${formatShortDate(a.date)}${a.source === 'ai' ? '' : ' · 기본 기사'}</div>
+        <h4>${esc(a.headline)}</h4>
+        <p>${esc(a.body)}</p>
+        <ul class="press-comments">${a.comments.map((c) => `<li><span class="dot" style="background:${SEG_COLOR[c.segment]}"></span><span class="muted small">${SEGMENTS[c.segment].name}</span> ${esc(c.text)}</li>`).join('')}</ul>
+      </article>`).join('');
+  return `
+    <div class="grid two">
+      <div class="card">
+        <h3>기사 <span class="muted small">${PRESS_STATUS[status]}</span></h3>
+        ${articles || '<p class="muted">우리 경기가 끝나면 기사가 실립니다. 경기 없는 주에는 이적·투어 같은 큰일이 있을 때 월요일에 실립니다.</p>'}
+        <p class="muted small">최근 ${MAX_ARTICLES}편까지 보관합니다. 댓글은 팬층 비율대로 달리고, 분위기는 팬 탭의 팬층 기분을 따릅니다.</p>
+      </div>
+      ${mediaCard(state, club)}
+    </div>`;
+}
 
 // 팬 탭: 팬층 비율, 만족도와 최근 변화, 팬층별 반응
 export function fansView(state, ui = {}) {
@@ -759,8 +793,7 @@ export function fansView(state, ui = {}) {
         <h3>팬층</h3>
         <div class="fan-shares">${reactions.map((r) => `<div style="width:${r.share}%;background:${SEG_COLOR[r.key]}" title="${r.name} ${r.share}%"></div>`).join('')}</div>
         <ul class="fan-list">${reactions.map((r) => `
-          <li><span class="dot" style="background:${SEG_COLOR[r.key]}"></span><strong>${r.name}</strong> ${r.share}%
-            <p class="small ${r.mood === 'good' ? 'good' : r.mood === 'bad' ? 'error' : 'muted'}">"${esc(r.line)}"</p></li>`).join('')}</ul>
+          <li><span class="dot" style="background:${SEG_COLOR[r.key]}"></span><strong>${r.name}</strong> ${r.share}% <span class="small ${r.mood === 'good' ? 'good' : r.mood === 'bad' ? 'error' : 'muted'}">${MOOD_NAME[r.mood]}</span></li>`).join('')}</ul>
         <p class="small">해외 팬: <strong>${fans.overseas.toLocaleString()}명</strong> <span class="muted">(프리시즌 투어로 늘어나고, 스폰서 금액·굿즈 판매를 키웁니다)</span></p>
         <p class="small">라이벌: <strong>${esc(rivalOf(state, club)?.name ?? '없음')}</strong></p>
         <p class="muted small">충성층은 성적·연승, 유행층은 스타 영입(능력 75 이상)·다득점, 지역층은 유스 출신 출전, 가족층은 티켓값에 반응합니다. 비율은 시즌이 끝날 때 조금씩 바뀝니다.</p>
@@ -770,7 +803,6 @@ export function fansView(state, ui = {}) {
       ${merchCard(state, club)}
       ${merchHistory(state, club)}
       ${eventsCard(state, club)}
-      ${mediaCard(state, club)}
     </div>
     ${ui.merchItem ? merchDetail(state, club, ui.merchItem, ui.merchMsg) : ''}
     ${ui.eventFixture ? eventDetail(state, club, ui.eventFixture, ui.eventMsg) : ''}`;

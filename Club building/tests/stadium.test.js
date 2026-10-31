@@ -6,7 +6,7 @@ import { stadiumDaily, rentalMonthly, takeEvent, eventStrength } from '../js/cor
 import { mediaDaily } from '../js/core/media.js';
 import { addDays } from '../js/core/calendar.js';
 import { Rng } from '../js/core/rng.js';
-import { fansView, sponsorsView } from '../js/ui/views.js';
+import { fansView, sponsorsView, pressView } from '../js/ui/views.js';
 
 function fresh(seed = 'stadium') {
   const state = g.createNewGame(seed);
@@ -112,14 +112,14 @@ test('SNS 캠페인: 비용·선수 피로가 들고, 기간 동안 해외 팬�
   assert.equal(g.repeatFactor(state, club, 'documentary'), 1);
 });
 
-test('화면: 팬 탭에 행사·SNS, 스폰서 탭에 대관과 잔디 상태가 나온다', () => {
+test('화면: 팬 탭에 행사, 언론 탭에 SNS, 스폰서 탭에 대관과 잔디 상태가 나온다', () => {
   const state = fresh('view');
   const club = g.userClub(state);
   rentalMonthly(state, new Rng('v'), club, new Set());
   const fid = g.upcomingHomeFixtures(state)[0].id;
   const html = fansView(state, { eventFixture: fid });
   assert.match(html, /경기장 행사/);
-  assert.match(html, /SNS·미디어/);
+  assert.match(pressView(state, {}), /SNS·미디어/);
   assert.match(html, /레전드 경기/);
   const sp = sponsorsView(state, {});
   assert.match(sp, /경기장 대관/);

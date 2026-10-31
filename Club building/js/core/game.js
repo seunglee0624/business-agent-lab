@@ -8,6 +8,7 @@ import { resolveLineup } from './tactics.js';
 import * as registration from './registration.js';
 import * as transfers from './transfers.js';
 import * as tickets from './tickets.js';
+import { pressOf, pressAfterMatch, pressWeekly, pressBatch } from './press.js';
 import * as merch from './merch.js';
 import * as sponsors from './sponsors.js';
 import * as tour from './tour.js';
@@ -31,6 +32,7 @@ import { fanMatchResult, fanMonthly, fansOf, PROTEST_LINE } from './fans.js';
 import { recordHomeGate, priceLevel } from './tickets.js';
 import { initFinance, monthlySettlement, weeklyWageBill, budgetRange as clubBudgetRange, adjustBudgets as clubAdjustBudgets, transferAfter, refreshWageCredit, staffWeeklyWage, wageRoom } from './finance.js';
 export { transferAfter, wageRoom };
+export { pressOf, markPressRead, applyAiArticle, takePressRequest, commentPlan, MAX_ARTICLES } from './press.js';
 import { signNew, offerRenewal } from './contracts.js';
 import * as contracts from './contracts.js';
 import { monthlyMorale } from './morale.js';
@@ -78,6 +80,7 @@ export const DEFAULT_SETTINGS = {
     lowEnergy: false,
     injury: false,
   },
+  pressAi: true, // 언론 탭 기사·댓글을 AI로 쓴다 (로컬 서버에 키가 없으면 틀 기사)
 };
 
 // 세계를 만들고 구단 선택 단계의 state를 돌려준다
@@ -478,7 +481,10 @@ export function advance(state, { skipOffers = false, watchMatches = false } = {}
         playOtherMatches(state, date);
       }
     }
-    if (state.date >= monday) return { stop: 'week' };
+    if (state.date >= monday) {
+      pressWeekly(state);
+      return { stop: 'week' };
+    }
   }
 }
 
@@ -538,6 +544,7 @@ export function finishUserMatch(state) {
   applyResult(state, fixture, match);
   state.liveMatch = null;
   playOtherMatches(state, state.date);
+  pressAfterMatch(state);
   if (!nextUnplayedDate(state)) endSeason(state);
   return fixture;
 }
@@ -663,10 +670,12 @@ export function startNextSeason(state) {
 // 시즌이 끝날 때까지 내 경기도 결과만으로 처리하며 진행한다. 화면에서는 이적 제안에서 멈추게 한다
 export function simulateToSeasonEnd(state, { skipOffers = true } = {}) {
   if (state.phase !== 'season') return { stop: state.phase };
-  for (;;) {
-    const res = advance(state, { skipOffers });
-    if (res.stop !== 'week') return res;
-  }
+  return pressBatch(state, () => {
+    for (;;) {
+      const res = advance(state, { skipOffers });
+      if (res.stop !== 'week') return res;
+    }
+  });
 }
 
 // ---- 유스 ----
@@ -765,6 +774,8 @@ export function upgradeState(state) {
       club.staff.marketing = Math.round(levels.reduce((s, x) => s + x, 0) / Math.max(1, levels.length));
     }
   }
+  state.settings.pressAi ??= true;
+  if (state.user?.clubId) pressOf(state);
   return state;
 }
 

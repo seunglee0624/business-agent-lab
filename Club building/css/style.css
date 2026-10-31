@@ -390,6 +390,11 @@ input, select { background: var(--panel); }
 .fan-list li { padding: 6px 0; border-bottom: 1px solid var(--line, #e5e5e5); }
 .fan-list li p { margin: 2px 0 0 16px; }
 .fan-list .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.press-article { padding: 10px 0; border-bottom: 1px solid var(--line, #e5e5e5); }
+.press-article h4 { margin: 4px 0; }
+.press-comments { list-style: none; padding: 0; margin: 6px 0 0; }
+.press-comments li { padding: 3px 0; }
+.press-comments .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .fan-bar { height: 10px; border-radius: 5px; background: var(--line, #e5e5e5); overflow: hidden; margin-bottom: 8px; }
 .fan-bar > div { height: 100%; background: var(--accent, #2f6b3f); }
 .price-row { margin: 10px 0; }
