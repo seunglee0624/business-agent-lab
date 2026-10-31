@@ -14,6 +14,7 @@ export function esc(value) {
 export const TIER_NAME = { strong: '강팀', mid: '중위권', weak: '약팀' };
 
 export function badge(club, size = '') {
+  if (globalThis.__crestPrototype) return globalThis.__crestPrototype(club, size); // PROTOTYPE 훅 (prototype/club-crest 브랜치 전용)
   return `<span class="badge ${size}" style="--c1:${club.colors.primary};--c2:${club.colors.secondary}"></span>`;
 }
 
