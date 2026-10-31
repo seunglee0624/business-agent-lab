@@ -16,6 +16,10 @@ MAX_BODY = 200_000  # 화면이 보내는 요청 크기 상한 (바이트)
 FENCE = re.compile(r'^\s*```(?:json)?\s*(.*?)\s*```\s*$', re.S)
 
 
+# ▼ API 키 넣는 곳: 이 파일에 키를 직접 적지 말 것 (git에 올라감). 서버를 켤 때 환경 변수로 넘긴다.
+#   OPENROUTER_API_KEY=sk-or-... OPENROUTER_MODEL=제공자/모델:free python3 tools/serve.py 8010
+#   매번 치기 싫으면 ~/.bashrc 맨 아래에 export OPENROUTER_API_KEY=sk-or-... 한 줄 (모델도 같은 식)
+#   키는 https://openrouter.ai 의 Keys 메뉴에서 만든다
 def api_key():
     return os.environ.get('OPENROUTER_API_KEY', '').strip()
 
