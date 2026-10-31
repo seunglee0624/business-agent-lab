@@ -393,7 +393,11 @@ function userMerchDay(state, club, date) {
   const homeMatch = fixturesOn(state, date).some((f) => f.home === club.id && f.competitionId === club.leagueId);
   if (homeMatch) {
     const auto = merch.autoKits(state, club);
-    if (auto.length) addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `${auto.join('·')}을 정하지 않아 지난 디자인으로 예상 판매만큼 생산했습니다.` });
+    if (auto.length) {
+      const lines = auto.map((k) => (k.quantity ? `${k.name} ${k.quantity.toLocaleString()}개 (${won(k.cost)}${k.draw ? `, 그중 ${won(k.draw)}은 이적 예산에서` : ''})${k.short ? ' · 돈이 모자라 예상 판매보다 적게 만들었습니다' : ''}`
+        : `${k.name}: 돈이 없어 만들지 못했습니다. 다음 홈 경기 날 다시 시도합니다`));
+      addMessage(state, { view: 'fans', title: '유니폼 자동 생산', body: `유니폼을 정하지 않아 지난 디자인으로 예상 판매만큼 생산합니다.\n${lines.join('\n')}` });
+    }
   }
   const homeDates = new Set(state.competitions[club.leagueId].fixtures.filter((f) => f.home === club.id && !f.result).map((f) => f.date));
   for (const w of merch.merchDaily(state, club, LEAGUES[club.leagueId].teams - 1, homeMatch, homeDates)) {
@@ -719,7 +723,7 @@ export { ticketsOf, GRADES, GRADE_KEYS, rivalOf, referencePrice, referenceSeason
 
 export { merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST } from './merch.js';
 export { sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk } from './sponsors.js';
-export { suggestedCounter } from './transfers.js';
+export { suggestedCounter, agreedFees } from './transfers.js';
 export { TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars } from './tour.js';
 export const pitchSponsor = (state, slot, industry) => withRng(state, (rng) => sponsors.pitchSponsor(state, rng, userClub(state), slot, industry));
 export const answerSponsor = (state, offerId, opts) => sponsors.answerSponsor(state, userClub(state), offerId, opts);

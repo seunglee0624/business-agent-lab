@@ -6,7 +6,7 @@ import {
   renewContract, upgradeFacility, setStaffLevel,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
-  openMessage, markViewRead, markAllRead, firingCost, userClub,
+  openMessage, markViewRead, markAllRead, firingCost, userClub, agreedFees,
   adjustBudgets, transferAfter, wageRoom, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
   markPressRead, takePressRequest, applyAiArticle,
 } from '../core/game.js';
@@ -178,7 +178,10 @@ export class App {
   // 이적 예산에서 꺼내는 금액 안내 (확인 창 문구)
   drawText(draw) {
     const budget = userClub(this.state).finance.transferBudget;
-    return `쓸 수 있는 돈이 모자라 이적 예산에서 ${withParticle(won(draw), '을')} 꺼냅니다. 이적 예산이 ${won(budget)}에서 ${withParticle(won(Math.max(0, budget - draw)), '로')} 줄어듭니다.`;
+    const left = Math.max(0, budget - draw);
+    const agreed = agreedFees(this.state);
+    const warn = agreed > left ? ` 주의: 합의해 둔 이적료 ${withParticle(won(agreed), '이')} 남는 이적 예산보다 많아, 그 이적을 마무리하면 잔고가 마이너스가 될 수 있습니다.` : '';
+    return `쓸 수 있는 돈이 모자라 이적 예산에서 ${withParticle(won(draw), '을')} 꺼냅니다. 이적 예산이 ${won(budget)}에서 ${withParticle(won(left), '로')} 줄어듭니다.${warn}`;
   }
 
   // 고를 수 있는 지출: 이적 예산을 꺼내야 하면 확인을 받고 같은 값으로 다시 낸다 (pay(opts) → 결과, done(결과))

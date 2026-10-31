@@ -90,6 +90,11 @@ export function askingPrice(state, p) {
   return roundMoney(fee);
 }
 
+// 이적료를 합의하고 개인 조건을 협상 중인 이적료 합계 (아직 안 낸 돈. 지난 시장 협상과 자유계약은 뺀다)
+export const agreedFees = (state) => Object.values(state.transfers.deals)
+  .filter((d) => d.stage === 'terms' && d.until >= state.date && d.fee > 0)
+  .reduce((sum, d) => sum + d.fee, 0);
+
 const dealOf = (state, p) => {
   const end = windowEnd(state.date);
   let deal = state.transfers.deals[p.id];

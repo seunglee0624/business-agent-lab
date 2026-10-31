@@ -277,3 +277,58 @@ test('이적 예산 끌어 쓰기: 확인 때문에 한 번 막힌 유니폼 추
   assert.ok(it.reordered);
   assert.equal(f.transferBudget, 100e8 - again.cost);
 });
+
+test('유니폼 자동 생산: 바로 쓸 수 있는 돈이 없으면 확인 없이 이적 예산을 쓰고, 그래도 모자라면 낼 수 있는 만큼만 만든다', async () => {
+  const merch = await import('../js/core/merch.js');
+  const state = g.createNewGame('budget-autokit');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const club = g.userClub(state);
+  const f = club.finance;
+  f.transferBudget = f.balance; // 바로 쓸 수 있는 돈 0
+  const budget = f.transferBudget;
+  const [home, away] = merch.autoKits(state, club);
+  assert.ok(home.quantity > 0 && away.quantity > 0, '이적 예산으로라도 만든다');
+  assert.equal(home.draw + away.draw, home.cost + away.cost);
+  assert.equal(f.transferBudget, budget - home.cost - away.cost);
+  // 잔고가 거의 없으면 낼 수 있는 만큼만
+  const state2 = g.createNewGame('budget-autokit-poor');
+  g.chooseLeague(state2, 'ENG1', '테스트');
+  const club2 = g.userClub(state2);
+  const unit = merch.unitCost('kitHome');
+  club2.finance.balance = unit * 100;
+  club2.finance.transferBudget = 0;
+  const [h2, a2] = merch.autoKits(state2, club2);
+  assert.equal(h2.quantity, 100);
+  assert.ok(h2.short, '예상 판매보다 적게 만들었다고 표시');
+  assert.equal(a2.quantity, 0);
+  assert.equal(club2.finance.balance, 0);
+});
+
+test('합의한 이적료: 개인 조건 협상 중인 이적료 합계를 구한다 (지난 시장 협상과 자유계약은 빼고)', async () => {
+  const { agreedFees } = await import('../js/core/transfers.js');
+  const state = g.createNewGame('budget-agreed');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const ids = Object.keys(state.players).slice(0, 4);
+  state.transfers.deals[ids[0]] = { stage: 'terms', fee: 150e8, tries: 0, until: '2099-01-01' };
+  state.transfers.deals[ids[1]] = { stage: 'fee', fee: 0, tries: 1, until: '2099-01-01' };
+  state.transfers.deals[ids[2]] = { stage: 'terms', fee: 30e8, tries: 0, until: '2000-01-01' }; // 지난 시장
+  state.transfers.deals[ids[3]] = { stage: 'terms', fee: 0, tries: 0, until: '9999-12-31' }; // 자유계약
+  assert.equal(agreedFees(state), 150e8);
+});
+
+test('새 시즌 이적 예산: 시설 공사비는 한 번 드는 투자라 지난 시즌 수익 계산에서 뺀다', async () => {
+  const { setBudgets, emptyLedger } = await import('../js/core/finance.js');
+  const state = g.createNewGame('budget-construction');
+  g.chooseLeague(state, 'ENG1', '테스트');
+  const f = g.userClub(state).finance;
+  f.transferBudget = 50e8;
+  f.balance = 300e8;
+  const last = emptyLedger();
+  last.income.tv = 100e8;
+  last.expense.wages = 60e8;
+  last.expense.construction = 200e8;
+  f.history.unshift({ season: 2025, ...last, balance: f.balance });
+  const b = setBudgets(state, g.userClub(state));
+  assert.equal(b.added, 20e8);
+  assert.equal(f.transferBudget, 70e8);
+});

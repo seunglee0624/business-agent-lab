@@ -47,7 +47,7 @@ test('주문하면 생산비가 나가고, 날마다 팔리며, 홈 경기 날 �
 test('주문 안 한 유니폼은 자동 생산, 시즌 끝엔 재고 정리와 기록, 우승하면 한정판이 열린다', () => {
   const state = fresh();
   const club = g.userClub(state);
-  assert.deepEqual(autoKits(state, club), ['홈 유니폼', '원정 유니폼']);
+  assert.deepEqual(autoKits(state, club).map((k) => [k.name, k.quantity > 0, k.short]), [['홈 유니폼', true, false], ['원정 유니폼', true, false]]);
   assert.equal(g.orderMerch(state, 'limited', { quantity: 100, price: 2e5 }).ok, false);
   const before = club.finance.season.income.merch;
   merchSeasonEnd(state, club, state.season, '우승');

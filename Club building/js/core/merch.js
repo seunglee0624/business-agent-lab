@@ -1,7 +1,7 @@
 // 굿즈: 홈·원정 유니폼(디자인·가격·수량), 머플러·아동용품, 우승·승격 때만 내는 한정판
 
 import { EUR } from '../data/economy.js';
-import { commercialPerSeason, income, payOptional, MERCH_SHARE } from './finance.js';
+import { commercialPerSeason, income, payOptional, spendableWithTransfer, transferDraw, MERCH_SHARE } from './finance.js';
 import { fansOf, SEGMENT_KEYS } from './fans.js';
 import { overall } from './player.js';
 import { addDays, daysBetween } from './calendar.js';
@@ -244,14 +244,21 @@ export function merchDaily(state, club, homeGames, homeMatch, homeDates = new Se
   return warnings;
 }
 
-// 첫 리그 홈 경기 날: 주문하지 않은 유니폼은 지난 디자인으로 예상 판매만큼 자동 생산
+// 첫 리그 홈 경기 날: 주문하지 않은 유니폼은 지난 디자인으로 예상 판매만큼 자동 생산.
+// 안 만들면 시즌 유니폼 수입이 없어지므로 확인 없이 이적 예산까지 쓰고, 그래도 모자라면 낼 수 있는 만큼만 만든다.
+// 돌려주는 값: 유니폼마다 { name, quantity, cost, draw(이적 예산에서 꺼낸 돈), short(예상 판매보다 적게 만듦) }
 export function autoKits(state, club) {
   const done = [];
   for (const item of ['kitHome', 'kitAway']) {
     const it = merchOf(club).items[item];
     if (it.ordered) continue;
-    const q = seasonDemand(state, club, item);
-    if (q > 0 && orderMerch(state, club, item, { quantity: q, price: it.price }).ok) done.push(ITEMS[item].name);
+    const want = seasonDemand(state, club, item);
+    if (!(want > 0)) continue;
+    const quantity = Math.min(want, Math.floor(spendableWithTransfer(state, club) / unitCost(item)));
+    const cost = roundMoney(unitCost(item) * quantity);
+    const draw = transferDraw(state, club, cost);
+    const ok = quantity > 0 && orderMerch(state, club, item, { quantity, price: it.price }, { useTransfer: true }).ok;
+    done.push(ok ? { name: ITEMS[item].name, quantity, cost, draw, short: quantity < want } : { name: ITEMS[item].name, quantity: 0, cost: 0, draw: 0, short: true });
   }
   return done;
 }
