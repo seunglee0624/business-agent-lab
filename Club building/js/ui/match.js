@@ -194,13 +194,13 @@ export class LiveMatchView {
         <td>${posLabel(slot ? slot.pos : p[id].position)}</td>
         <td>${esc(p[id].name)} ${marks(st, slot)}</td>
         <td>${conditionBar(energy)} <span class="small">${Math.round(energy)}</span></td>
-        <td>${rating(id)}</td><td>${st.goals}</td><td>${st.assists}</td><td>${st.shots}(${st.onTarget})</td>
+        <td class="num">${rating(id)}</td><td class="num">${st.goals}</td><td class="num">${st.assists}</td><td class="num">${st.shots}(${st.onTarget})</td>
       </tr>`;
     };
     return `<div class="my-lineup">
       <h4>우리 팀 <span class="muted small">${side.tactics.formation} · 교체 ${side.subsUsed}/${side.maxSubs}</span></h4>
       ${pitchHtml(spots)}
-      <table class="table compact"><thead><tr><th>자리</th><th>선수</th><th>체력</th><th>평점</th><th>골</th><th>도움</th><th>슈팅</th></tr></thead>
+      <table class="table compact"><thead><tr><th>자리</th><th>선수</th><th>체력</th><th class="num">평점</th><th class="num">골</th><th class="num">도움</th><th class="num">슈팅</th></tr></thead>
         <tbody>${side.onPitch.map((slot) => row(slot.playerId, slot)).join('')}${outIds.map((id) => row(id, null)).join('')}</tbody></table>
       <p class="chips small muted">대기: ${side.bench.map((id) => `<span class="chip">${p[id].position} ${esc(p[id].name)}</span>`).join('') || '없음'}</p>
     </div>`;

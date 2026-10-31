@@ -32,7 +32,7 @@ function leaguePickTable(world) {
   <div class="card">
   <h3>${esc(country.name)}</h3>
   <table class="table league-pick">
-    <thead><tr><th>리그</th><th>맡게 될 구단</th><th>주전 평균</th><th>최고 선수</th><th>잔고</th><th></th></tr></thead>
+    <thead><tr><th>리그</th><th>맡게 될 구단</th><th class="num">주전 평균</th><th>최고 선수</th><th class="num">잔고</th><th>시작</th></tr></thead>
     <tbody>
       ${country.leagues.map((l) => {
         const c = weakestClub(world, l.id);
@@ -41,9 +41,9 @@ function leaguePickTable(world) {
         return `<tr>
           <td>${l.tier}부 ${esc(l.name)}</td>
           <td>${clubLabel(c)}</td>
-          <td>${xi.toFixed(1)}</td>
+          <td class="num">${xi.toFixed(1)}</td>
           <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
-          <td>${won(c.finance.balance)}</td>
+          <td class="num">${won(c.finance.balance)}</td>
           <td><button class="btn primary small" data-action="pickLeague" data-league="${l.id}">이 리그로 시작</button></td>
         </tr>`;
       }).join('')}
@@ -183,7 +183,7 @@ export function homeView(state) {
       </div>
       <div class="card">
         <h3>순위</h3>
-        <table class="table compact"><thead><tr><th>#</th><th>구단</th><th>경기</th><th>승점</th></tr></thead><tbody>${mini}</tbody></table>
+        <table class="table compact"><thead><tr><th class="num">#</th><th>구단</th><th class="num">경기</th><th class="num">승점</th></tr></thead><tbody>${mini}</tbody></table>
         <button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button>
       </div>
       <div class="card">
@@ -210,7 +210,7 @@ function clubStatus(state, club) {
 }
 
 function miniRow(state, r, i, myId) {
-  return `<tr class="${r.clubId === myId ? 'mine' : ''}"><td>${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === myId)}</td><td>${r.played}</td><td><strong>${r.points}</strong></td></tr>`;
+  return `<tr class="${r.clubId === myId ? 'mine' : ''}"><td class="num">${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === myId)}</td><td class="num">${r.played}</td><td class="num"><strong>${r.points}</strong></td></tr>`;
 }
 
 function inboxList(state) {
@@ -257,7 +257,10 @@ export function squadView(state, ui) {
       <div class="card">
         <div class="card-head"><h3>선수단 (등록 ${registeredCount(state, club, state.date)}/${MAX_SQUAD}명${unregisteredPlayers(state).length ? ` · 미등록 ${unregisteredPlayers(state).length}명` : ''} · 전체 ${totalCount(state, club, state.date)}/${MAX_TOTAL}명)</h3><div>${sortBtn('lineup', '선발순')} ${sortBtn('pos', '포지션순')} ${sortBtn('ovr', '능력순')} ${sortBtn('age', '나이순')}</div></div>
         <table class="table clickable">
-          <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>국적</th><th>능력</th><th>잠재</th><th>컨디션</th><th>사기</th><th>주급</th><th>계약</th><th>경기</th><th>골</th><th>도움</th><th>평점</th><th></th></tr></thead>
+          <thead>
+            <tr class="groups"><th colspan="4">선수</th><th colspan="4" class="g">능력·컨디션</th><th colspan="2" class="g">계약</th><th colspan="4" class="g">이번 시즌</th><th class="g"></th></tr>
+            <tr><th>포지션</th><th>이름</th><th class="num">나이</th><th>국적</th><th class="num g">능력</th><th class="num">잠재</th><th>컨디션</th><th class="num">사기</th><th class="num g">주급</th><th class="num">계약</th><th class="num g">경기</th><th class="num">골</th><th class="num">도움</th><th class="num">평점</th><th class="g">상태 표시</th></tr>
+          </thead>
           <tbody>
             ${sorted.map((p) => {
               const s = seasonStats(p, state.season, leagueId);
@@ -265,16 +268,16 @@ export function squadView(state, ui) {
               return `<tr class="${ui.playerId === p.id ? 'selected' : ''}" data-action="selectPlayer" data-id="${p.id}">
                 <td>${posLabel(p.position)}${p.secondary.length ? `<span class="muted small"> ${p.secondary.join(' ')}</span>` : ''}</td>
                 <td>${esc(p.name)}${sort === 'lineup' && lineupRank.has(p.id) ? ` <span class="muted small">${lineupRank.get(p.id) < 100 ? '선발' : '교체'}</span>` : ''}</td>
-                <td>${age(p, state.date)}</td>
+                <td class="num">${age(p, state.date)}</td>
                 <td>${esc(nationName(p.nation))}</td>
-                <td>${ovrCell(p)}</td>
-                <td class="muted">${p.potential}</td>
-                <td>${conditionBar(p.condition)}</td>
-                <td class="${moraleClass(p.morale)}" title="${moraleLabel(p.morale)}">${p.morale}</td>
-                <td class="small">${p.contract ? won(p.contract.wage) : '-'}</td>
-                <td class="small ${p.contract && canRenew(state, p) ? 'error' : ''}">${p.contract ? `${p.contract.until.slice(0, 4)}.6` : '-'}</td>
-                <td>${s?.apps ?? 0}</td><td>${s?.goals ?? 0}</td><td>${s?.assists ?? 0}</td><td>${avgRating(s)}</td>
-                <td>${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${p.transferListed ? '<span class="tag">이적 목록</span>' : ''}${p.loan ? '<span class="tag">임대</span>' : ''}${p.unregistered ? '<span class="tag red" title="등록 인원(25명) 밖이라 경기에 나갈 수 없습니다">미등록</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
+                <td class="num g">${ovrCell(p)}</td>
+                <td class="num muted">${p.potential}</td>
+                <td class="cond-cell">${conditionBar(p.condition)} <span class="small">${Math.round(p.condition)}</span></td>
+                <td class="num ${moraleClass(p.morale)}" title="${moraleLabel(p.morale)}">${p.morale}</td>
+                <td class="num small g">${p.contract ? won(p.contract.wage) : '-'}</td>
+                <td class="num small ${p.contract && canRenew(state, p) ? 'error' : ''}">${p.contract ? `${p.contract.until.slice(0, 4)}.6` : '-'}</td>
+                <td class="num g">${s?.apps ?? 0}</td><td class="num">${s?.goals ?? 0}</td><td class="num">${s?.assists ?? 0}</td><td class="num">${avgRating(s)}</td>
+                <td class="g">${p.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${p.transferListed ? '<span class="tag">이적 목록</span>' : ''}${p.loan ? '<span class="tag">임대</span>' : ''}${p.unregistered ? '<span class="tag red" title="등록 인원(25명) 밖이라 경기에 나갈 수 없습니다">미등록</span>' : ''}${banned ? '<span class="tag red">출전 정지</span>' : ''}${p.injury ? `<span class="tag red" title="${esc(p.injury.name)}, ${formatShortDate(p.injury.until)} 복귀 예정">부상 ${daysLeft(state, p)}일</span>` : ''}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -407,12 +410,12 @@ export function scheduleView(state, ui) {
       <div class="card">
         <h3>우리 경기</h3>
         <table class="table compact clickable">
-          <thead><tr><th>R</th><th>날짜</th><th></th><th>상대</th><th>결과</th></tr></thead>
+          <thead><tr><th class="num">R</th><th>날짜</th><th>장소</th><th>상대</th><th>결과</th></tr></thead>
           <tbody>${mine.map((f) => {
             const home = f.home === club.id;
             const opp = state.clubs[home ? f.away : f.home];
             return `<tr ${f.result ? `data-action="showFixture" data-id="${f.id}"` : ''}>
-              <td>${f.round}</td><td>${formatShortDate(f.date)}</td><td>${home ? '홈' : '원정'}</td><td>${clubLabel(opp)}</td><td>${result(f)}</td></tr>`;
+              <td class="num">${f.round}</td><td>${formatShortDate(f.date)}</td><td>${home ? '홈' : '원정'}</td><td>${clubLabel(opp)}</td><td>${result(f)}</td></tr>`;
           }).join('')}</tbody>
         </table>
       </div>
@@ -501,11 +504,11 @@ export function tableView(state, ui) {
       <div class="card">
         <h3>${esc(rule.name)} ${state.season}-${String(state.season + 1).slice(2)}</h3>
         <table class="table compact">
-          <thead><tr><th>#</th><th>구단</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득</th><th>실</th><th>득실</th><th>승점</th><th>최근</th></tr></thead>
+          <thead><tr><th class="num">#</th><th>구단</th><th class="num">경기</th><th class="num">승</th><th class="num">무</th><th class="num">패</th><th class="num">득</th><th class="num">실</th><th class="num">득실</th><th class="num">승점</th><th>최근</th></tr></thead>
           <tbody>${table.map((r, i) => `<tr class="${r.clubId === club.id ? 'mine' : ''} ${zone(i)}">
-            <td>${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === club.id)}</td>
-            <td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td>${r.goalsFor}</td><td>${r.goalsAgainst}</td>
-            <td>${r.goalDiff > 0 ? '+' : ''}${r.goalDiff}</td><td><strong>${r.points}</strong></td><td>${formBadges(r.form)}</td></tr>`).join('')}</tbody>
+            <td class="num">${i + 1}</td><td>${clubLabel(state.clubs[r.clubId], r.clubId === club.id)}</td>
+            <td class="num">${r.played}</td><td class="num">${r.won}</td><td class="num">${r.drawn}</td><td class="num">${r.lost}</td><td class="num">${r.goalsFor}</td><td class="num">${r.goalsAgainst}</td>
+            <td class="num">${r.goalDiff > 0 ? '+' : ''}${r.goalDiff}</td><td class="num"><strong>${r.points}</strong></td><td>${formBadges(r.form)}</td></tr>`).join('')}</tbody>
         </table>
         <p class="muted small">${rule.tier === 1 ? '<span class="legend zone-europe"></span> 상위 4팀' : `<span class="legend zone-up"></span> 승격 ${rule.promoted}팀`} · <span class="legend zone-down"></span> ${rule.tier === 3 ? '하부 리그로 강등' : '강등'} ${rule.relegated}팀</p>
       </div>
@@ -527,12 +530,12 @@ export function youthView(state) {
       <div class="card-head"><h3>U-21 팀 (${youth.length}명)</h3><span class="muted small">1군 등록 ${registered}/${MAX_SQUAD}명</span></div>
       <p class="muted small">매년 3월 유스가 입단합니다. 21세 이하이고 유스에서 2년 이상 지낸 선수는 1군 등록 인원(25명)에 들어가지 않고 출전할 수 있습니다. 시즌이 끝나면 21세가 넘었거나 정원(14명)을 넘는 유스는 방출됩니다.</p>
       <table class="table">
-        <thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>능력</th><th>잠재</th><th>입단</th><th></th></tr></thead>
+        <thead><tr><th>포지션</th><th>이름</th><th class="num">나이</th><th class="num">능력</th><th class="num">잠재</th><th>입단</th><th>작업</th></tr></thead>
         <tbody>${youth.map((p) => {
           const homegrown = isHomegrownYouth(p, state.date);
           return `<tr>
-            <td>${posLabel(p.position)}</td><td>${esc(p.name)}</td><td>${age(p, state.date)}</td><td>${ovrCell(p)}</td>
-            <td><strong>${p.potential}</strong></td><td class="muted small">${formatShortDate(p.youthSince)}${homegrown ? ' · <span class="tag">유스 출신 예외</span>' : ''}</td>
+            <td>${posLabel(p.position)}</td><td>${esc(p.name)}</td><td class="num">${age(p, state.date)}</td><td class="num">${ovrCell(p)}</td>
+            <td class="num"><strong>${p.potential}</strong></td><td class="muted small">${formatShortDate(p.youthSince)}${homegrown ? ' · <span class="tag">유스 출신 예외</span>' : ''}</td>
             <td>${canCallUp(state, p.id) ? `<button class="btn small primary" data-action="callUp" data-id="${p.id}">1군 콜업</button>` : '<span class="muted small">1군 정원 초과</span>'}</td>
           </tr>`;
         }).join('') || '<tr><td colspan="7" class="muted">유스 선수가 없습니다. 3월에 입단합니다.</td></tr>'}</tbody>
@@ -556,11 +559,11 @@ export function historyView(state, ui) {
     <div class="grid two">
       <div class="card">
         <h3>단장 기록 · ${esc(state.user.name)}</h3>
-        ${career.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>구단</th><th>리그</th><th>순위</th></tr></thead><tbody>
-          ${career.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(h.clubName)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td><strong>${h.position}위</strong></td></tr>`).join('')}
+        ${career.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>구단</th><th>리그</th><th class="num">순위</th></tr></thead><tbody>
+          ${career.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(h.clubName)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td class="num"><strong>${h.position}위</strong></td></tr>`).join('')}
         </tbody></table>` : '<p class="muted">첫 시즌을 마치면 기록이 쌓입니다.</p>'}
         <h3>${esc(club.name)} 역대 성적</h3>
-        ${club.history.length ? `<table class="table compact"><tbody>${club.history.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td>${h.position}위</td><td>${h.points}점</td></tr>`).join('')}</tbody></table>` : '<p class="muted">기록이 없습니다.</p>'}
+        ${club.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th>리그</th><th class="num">순위</th><th class="num">승점</th></tr></thead><tbody>${club.history.slice().reverse().map((h) => `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td>${esc(LEAGUES[h.leagueId].name)}</td><td class="num">${h.position}위</td><td class="num">${h.points}점</td></tr>`).join('')}</tbody></table>` : '<p class="muted">기록이 없습니다.</p>'}
       </div>
       <div class="card">
         <h3>역대 우승</h3>
@@ -695,7 +698,7 @@ export function clubView(state, ui) {
       <td><button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level - 1}" ${level <= 1 ? 'disabled' : ''}>−</button>
         <strong class="staff-level">${level}</strong>
         <button class="btn small" data-action="staffLevel" data-key="${key}" data-level="${level + 1}" ${level >= MAX_STAFF ? 'disabled' : ''}>+</button></td>
-      <td>${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(staffWeeklyWage(level + 1, key) - wage)}</div>` : ''}</td>
+      <td class="num">${won(wage)}<span class="muted small"> / 주</span>${level < MAX_STAFF ? `<div class="muted small">올리면 +${won(staffWeeklyWage(level + 1, key) - wage)}</div>` : ''}</td>
       <td class="muted small">${esc(STAFF[key].effect)}</td>
     </tr>`;
   }).join('');
@@ -717,12 +720,12 @@ export function clubView(state, ui) {
     <div class="card">
       <h3>시설</h3>
       <p class="muted small">공사비는 바로 나갑니다(잔고가 모자라면 마이너스가 됩니다). 레벨이 높을수록 매달 유지비가 늘어납니다.</p>
-      <table class="table"><thead><tr><th>시설</th><th>레벨</th><th>효과</th><th></th></tr></thead><tbody>${facilityRows}</tbody></table>
+      <table class="table"><thead><tr><th>시설</th><th>레벨</th><th>효과</th><th>작업</th></tr></thead><tbody>${facilityRows}</tbody></table>
     </div>
     <div class="card">
       <h3>스태프</h3>
       <p class="muted small">수준(1~20)을 올리면 스태프 주급이 늘어납니다. 주급 예산(${won(f.wageBudget)}) 안에서만 올릴 수 있습니다.</p>
-      <table class="table"><thead><tr><th>분야</th><th>수준</th><th>주급</th><th>효과</th></tr></thead><tbody>${staffRows}</tbody></table>
+      <table class="table"><thead><tr><th>분야</th><th>수준</th><th class="num">주급</th><th>효과</th></tr></thead><tbody>${staffRows}</tbody></table>
     </div>`;
 }
 
@@ -826,7 +829,7 @@ function eventsCard(state, club) {
   return `
     <div class="card">
       <h3>경기장 행사</h3>
-      ${rows ? `<table class="table compact"><thead><tr><th>날짜</th><th>상대</th><th>행사</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">남은 홈 경기가 없습니다.</p>'}
+      ${rows ? `<table class="table compact"><thead><tr><th>날짜</th><th>상대</th><th>행사</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">남은 홈 경기가 없습니다.</p>'}
       ${hist ? `<h4>지난 행사</h4><table class="table compact"><thead><tr><th>날짜</th><th>행사</th><th class="num">비용</th><th class="num">만족도</th></tr></thead><tbody>${hist}</tbody></table>` : ''}
       <p class="muted small">홈 경기에 행사를 붙이면 그 경기 관중이 늘고 팬층 만족도가 오릅니다. 최근 ${4}번 안에 같은 행사를 또 열면 효과가 절반씩 줄어듭니다.</p>
     </div>`;
@@ -848,7 +851,7 @@ function eventDetail(state, club, fixtureId, msg) {
   const body = `
     <p>${formatDate(f.date)} vs ${esc(state.clubs[f.away].name)}</p>
     ${b ? `<p>예약된 행사: <strong>${EVENTS[b.kind].name}</strong> (${won(b.cost)}) <button class="btn small" data-action="cancelEvent" data-id="${f.id}">취소 (절반 환불)</button></p>` : ''}
-    <table class="table compact"><thead><tr><th>행사</th><th>팬 반응</th><th class="num">관중 수요</th><th class="num">비용</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="table compact"><thead><tr><th>행사</th><th>팬 반응</th><th class="num">관중 수요</th><th class="num">비용</th><th>비고</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="muted small">비용은 예약할 때 나갑니다. 팬 반응은 각 팬층 만족도 변화이고, 전체 만족도에는 팬층 비율만큼 반영됩니다.</p>`;
   const side = msg ? `<p class="${msg.ok ? 'good' : 'error'}">${esc(msg.text)}</p>` : '';
   return modal({ title: '경기장 행사', body, side, close });
@@ -872,7 +875,7 @@ function mediaCard(state, club) {
     <div class="card">
       <h3>SNS·미디어 <span class="muted small">해외 팬 ${fansOf(club).overseas.toLocaleString()}명</span></h3>
       ${running ? `<table class="table compact"><thead><tr><th>진행 중</th><th>기간</th><th class="num">해외 팬</th><th>참여 선수</th></tr></thead><tbody>${running}</tbody></table>` : ''}
-      <table class="table compact"><thead><tr><th>캠페인</th><th class="num">기간</th><th class="num">해외 팬</th><th>팬 반응</th><th class="num">선수 피로</th><th class="num">비용</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="table compact"><thead><tr><th>캠페인</th><th class="num">기간</th><th class="num">해외 팬</th><th>팬 반응</th><th class="num">선수 피로</th><th class="num">비용</th><th>비고</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
       ${hist ? `<h4>지난 캠페인</h4><table class="table compact"><thead><tr><th>끝난 날</th><th>캠페인</th><th class="num">해외 팬</th><th class="num">만족도</th></tr></thead><tbody>${hist}</tbody></table>` : ''}
       <p class="muted small">동시에 ${MAX_RUNNING}개까지. 반응은 운에 따라 0.6~1.4배이고, 1년 안에 같은 캠페인을 다시 하면 효과가 60%로 줄어듭니다. 능력이 높은 선수부터 참여해 체력이 조금 떨어집니다.</p>
     </div>`;
@@ -893,7 +896,7 @@ function rentalCard(state, club) {
   return `
     <div class="card">
       <h3>경기장 대관 <span class="muted small">잔디 상태 ${s.pitch}/100 · 홈 경기력 ${Math.round((pitchFactor(club) - 1) * 1000) / 10}%</span></h3>
-      ${offers ? `<table class="table compact"><thead><tr><th>행사</th><th>날짜</th><th class="num">대관료</th><th class="num">잔디 손상</th><th></th><th></th></tr></thead><tbody>${offers}</tbody></table>` : '<p class="muted">받은 대관 제안이 없습니다. 매달 1일에 제안이 옵니다.</p>'}
+      ${offers ? `<table class="table compact"><thead><tr><th>행사</th><th>날짜</th><th class="num">대관료</th><th class="num">잔디 손상</th><th>답변 기한</th><th>작업</th></tr></thead><tbody>${offers}</tbody></table>` : '<p class="muted">받은 대관 제안이 없습니다. 매달 1일에 제안이 옵니다.</p>'}
       ${booked ? `<h4>예정된 대관</h4><ul class="small">${booked}</ul>` : ''}
       ${sysText}
       <p class="muted small">잔디는 하루 1씩 회복합니다. 상해 있는 동안 홈 경기 전력이 조금 떨어집니다. 6~7월 대관은 손상이 절반입니다.</p>
@@ -1058,7 +1061,7 @@ export function sponsorsView(state, ui = {}) {
   }).join('');
   const offers = s.offers.map((o) => `
       <tr><td><strong>${esc(o.company)}</strong> <span class="muted small">${INDUSTRIES[o.industry].name}</span></td><td>${SLOTS[o.slot].name}</td>
-        <td class="num">${won(o.amount)}/년</td><td>${o.years}년</td><td class="small">${o.bonus.target}위 이내 +${won(o.bonus.amount)}</td><td class="small muted">${formatShortDate(o.expires)}까지 · 요구 ${o.asks}/${MAX_ASKS}</td>
+        <td class="num">${won(o.amount)}/년</td><td class="num">${o.years}년</td><td class="small">${o.bonus.target}위 이내 +${won(o.bonus.amount)}</td><td class="small muted">${formatShortDate(o.expires)}까지 · 요구 ${o.asks}/${MAX_ASKS}</td>
         <td class="offer-actions"><button class="btn small primary" data-action="sponsorAccept" data-id="${o.id}">수락</button>
           <input id="ask-${o.id}" type="number" min="0" step="0.1" value="${askDefault(o)}" title="요구 금액 (억 원/년)"><span class="small">억</span>
           <button class="btn small" data-action="sponsorAsk" data-id="${o.id}">요구</button>
@@ -1067,12 +1070,12 @@ export function sponsorsView(state, ui = {}) {
     ${ui.sponsorMsg ? `<p class="${ui.sponsorMsg.ok ? 'good' : 'error'}">${esc(ui.sponsorMsg.text)}</p>` : ''}
     <div class="card">
       <h3>스폰서 계약 <span class="muted small">연 ${won(total)}</span></h3>
-      <table class="table compact"><thead><tr><th>자리</th><th>회사</th><th class="num">연 금액</th><th>계약 끝</th><th>성적 보너스</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="table compact"><thead><tr><th>자리</th><th>회사</th><th class="num">연 금액</th><th>계약 끝</th><th>성적 보너스</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="muted small">빈자리나 계약이 1년 안에 끝나는 자리에서 업종을 골라 영업하면 1~2주 뒤 1~3곳이 제안합니다. 금액은 리그·평판·성적·팬 만족도·해외 팬으로 정해집니다. 업종마다 팬층 반응이 다릅니다.</p>
     </div>
     <div class="card">
       <h3>받은 제안</h3>
-      ${offers ? `<table class="table compact"><thead><tr><th>회사</th><th>자리</th><th class="num">금액</th><th>기간</th><th>보너스</th><th></th><th></th></tr></thead><tbody>${offers}</tbody></table>
+      ${offers ? `<table class="table compact"><thead><tr><th>회사</th><th>자리</th><th class="num">금액</th><th class="num">기간</th><th>보너스</th><th>답변 기한</th><th>작업</th></tr></thead><tbody>${offers}</tbody></table>
         <p class="muted small">더 많이 요구하면 회사가 금액을 올려 다시 제안하거나 받아들입니다. ${MAX_ASKS}번 넘게 요구하거나 너무 많이 요구하면 협상이 끝납니다.</p>` : '<p class="muted">받은 제안이 없습니다.</p>'}
     </div>
     ${rentalCard(state, club)}
@@ -1086,7 +1089,7 @@ function pitchDetail(state, club, slot) {
       <tr><td><strong>${INDUSTRIES[ind].name}</strong></td><td class="small">${industryFans(ind)}</td>
         <td class="num small">약 ${won(baseIndustryValue(club, slot, ind))}/년</td>
         <td><button class="btn small primary" data-action="pitchSponsor" data-slot="${slot}" data-industry="${ind}">영업</button></td></tr>`).join('');
-  const body = `<table class="table compact"><thead><tr><th>업종</th><th>팬 반응</th><th class="num">기준 금액</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+  const body = `<table class="table compact"><thead><tr><th>업종</th><th>팬 반응</th><th class="num">기준 금액</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="muted small">기준 금액은 지금 성적·만족도·해외 팬을 반영하기 전 값입니다. 팬 반응은 계약 중 매달 만족도에 반영됩니다.</p>`;
   return modal({ title: `${SLOTS[slot].name} 영업`, body, close: 'data-action="openPitch" data-slot=""' });
 }
@@ -1105,7 +1108,7 @@ function tourCard(state, club) {
     return `
     <div class="card">
       <h3>프리시즌 투어 <span class="muted small">7월 15일까지</span></h3>
-      <table class="table compact"><thead><tr><th>지역</th><th class="num">초청료</th><th class="num">해외 팬</th><th class="num">피로</th><th>그 나라 주전</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="table compact"><thead><tr><th>지역</th><th class="num">초청료</th><th class="num">해외 팬</th><th class="num">피로</th><th>그 나라 주전</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
       <button class="btn small" data-action="chooseTour" data-region="none">가지 않음</button>
       <p class="muted small">투어는 7월 31일까지 다녀옵니다. 멀리 갈수록 초청료와 해외 팬이 늘지만, 개막 전 체력이 떨어지고 부상 위험이 커집니다. 주전 선수의 나라로 가면 해외 팬이 더 늘어납니다.</p>
     </div>`;

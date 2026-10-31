@@ -32,8 +32,8 @@ export function managerView(state, ui) {
     <div class="card">
       <h3>감독 후보</h3>
       <p class="muted small">능력이 높을수록 선수 성장과 경기 운영이 좋아지고 주급이 비쌉니다. 구단 평판보다 너무 뛰어난 감독은 오지 않습니다.</p>
-      <table class="table"><thead><tr><th>이름</th><th>능력</th><th>성향</th><th class="num">주급</th><th></th></tr></thead><tbody>
-        ${list.map((c) => `<tr><td>${esc(c.name)} <span class="muted small">${esc(NATIONS[c.nation]?.name ?? '')}</span></td><td>${c.ability}</td><td>${esc(COACH_STYLES[c.style].name)}</td>
+      <table class="table"><thead><tr><th>이름</th><th class="num">능력</th><th>성향</th><th class="num">주급</th><th>작업</th></tr></thead><tbody>
+        ${list.map((c) => `<tr><td>${esc(c.name)} <span class="muted small">${esc(NATIONS[c.nation]?.name ?? '')}</span></td><td class="num">${c.ability}</td><td>${esc(COACH_STYLES[c.style].name)}</td>
           <td class="num">${won(c.wage)}</td>
           <td>${c.willing ? `<button class="btn primary small" data-action="hireManager" data-id="${c.id}" ${coach ? 'disabled title="먼저 지금 감독을 해고해야 합니다"' : ''}>2년 계약</button>` : '<span class="muted small">오지 않음</span>'}</td></tr>`).join('')}
       </tbody></table>

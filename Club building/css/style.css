@@ -152,6 +152,15 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .table tr.zone-down td:first-child { box-shadow: inset 3px 0 var(--loss); }
 .num { text-align: right; white-space: nowrap; }
 th.num { text-align: right; }
+/* 열 묶음: 묶음 머리줄과, 묶음이 시작하는 열의 옅은 세로선 (선수단 표) */
+.table tr.groups th { color: var(--faint); font-weight: 500; padding-bottom: 2px; border-bottom: 0; }
+.table .g { border-left: 1px solid var(--line-soft); }
+.table td.num.g, .table th.num.g { padding-left: 16px; }
+.cond-cell { white-space: nowrap; }
+.cond-cell .small { color: var(--muted); display: inline-block; min-width: 2.2em; text-align: right; }
+/* 날짜별 머리줄 (이적 기록) */
+.table tr.date-row th { background: var(--panel-2); color: var(--text); font-size: 12px; font-weight: 600; padding: 6px 10px; border-bottom: 0; position: sticky; top: 0; }
+.table.clickable tbody tr.date-row { cursor: default; }
 
 /* 작은 표시들 */
 .badge { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: linear-gradient(135deg, var(--c1) 50%, var(--c2) 50%); border: 1px solid rgba(255, 255, 255, 0.2); vertical-align: middle; margin-right: 6px; }

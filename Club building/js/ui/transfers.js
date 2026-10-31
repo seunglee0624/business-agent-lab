@@ -10,7 +10,7 @@ import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
 import { weeklyWageBill } from '../core/finance.js';
-import { formatDate } from '../core/calendar.js';
+import { formatDate, formatShortDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
 import { esc, posLabel, won, age, attrClass, modal } from './format.js';
 import { playerProfile, budgetSlider } from './views.js';
@@ -132,12 +132,12 @@ function searchCard(state, ui) {
         <button class="btn primary" data-action="searchPlayers">검색</button>
       </div>
       ${!ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수의 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
-        : rows.length ? `<table class="table clickable"><thead><tr><th>포지션</th><th>이름</th><th>나이</th><th>구단</th><th>능력</th><th>잠재</th><th class="num">몸값</th><th class="num">주급</th><th>계약</th><th></th></tr></thead><tbody>
+        : rows.length ? `<table class="table clickable"><thead><tr><th>포지션</th><th>이름</th><th class="num">나이</th><th>구단</th><th class="num">능력</th><th class="num">잠재</th><th class="num">몸값</th><th class="num">주급</th><th class="num">계약</th><th>상태 표시</th></tr></thead><tbody>
           ${rows.map((r) => `<tr class="${ui.targetId === r.id ? 'selected' : ''}" data-action="selectTarget" data-id="${r.id}">
-            <td>${posLabel(r.position)}</td><td>${esc(r.name)}</td><td>${r.age}</td><td class="small">${esc(clubName(state, r.clubId))}</td>
-            <td><strong>${r.overall}</strong></td><td class="muted">${potentialText(r)}</td>
+            <td>${posLabel(r.position)}</td><td>${esc(r.name)}</td><td class="num">${r.age}</td><td class="small">${esc(clubName(state, r.clubId))}</td>
+            <td class="num"><strong>${r.overall}</strong></td><td class="num muted">${potentialText(r)}</td>
             <td class="num small">${r.clubId ? won(r.value) : '-'}</td><td class="num small">${r.wage ? won(r.wage) : '-'}</td>
-            <td class="small">${r.until ? `${r.until.slice(0, 4)}.6` : '-'}</td>
+            <td class="num small">${r.until ? `${r.until.slice(0, 4)}.6` : '-'}</td>
             <td>${r.transferRequest ? '<span class="tag red">이적 요청</span>' : ''}${r.injured ? '<span class="tag red">부상</span>' : ''}</td></tr>`).join('')}
           </tbody></table>${rows.length >= 100 ? '<p class="muted small">능력 순 상위 100명만 보여 줍니다. 조건을 좁혀 보세요.</p>' : ''}`
         : '<p class="muted">조건에 맞는 선수가 없습니다.</p>'}
@@ -249,6 +249,10 @@ function historyCard(state, ui, club) {
   const seasons = [];
   for (let y = state.season; y >= START_YEAR; y--) seasons.push([y, `${y}-${String(y + 1).slice(2)}`]);
   const side = (id) => (id ? `<span class="${id === club.id ? 'good' : ''}">${esc(state.clubs[id].name)}</span>` : '<span class="muted">자유계약</span>');
+  // 날짜는 날마다 한 번만 머리줄로
+  const shown = rows.slice(0, 300);
+  const perDay = new Map();
+  for (const t of shown) perDay.set(t.date, (perDay.get(t.date) ?? 0) + 1);
   return `
     <div class="card">
       <div class="card-head"><h3>시즌 이적 기록 <span class="muted small">${rows.length}건</span></h3>
@@ -257,13 +261,14 @@ function historyCard(state, ui, club) {
           <select data-change="logSeason">${options(seasons, season)}</select>
         </div></div>
       <p class="small">우리 구단 지출 <strong>${won(spent)}</strong> · 수입 <strong>${won(earned)}</strong></p>
-      ${rows.length ? `<div class="scroll-box"><table class="table compact clickable"><thead><tr><th>날짜</th><th>선수</th><th>보낸 구단</th><th></th><th>받은 구단</th><th class="num">이적료</th></tr></thead><tbody>
-        ${rows.slice(0, 300).map((t) => {
+      ${rows.length ? `<div class="scroll-box"><table class="table compact clickable"><thead><tr><th>선수</th><th>이동</th><th class="num">이적료</th></tr></thead><tbody>
+        ${shown.map((t, i) => {
           const p = state.players[t.playerId];
-          return `<tr data-action="showProfile" data-id="${p.id}"><td class="small">${formatDate(t.date)}</td>
+          const head = i === 0 || shown[i - 1].date !== t.date ? `<tr class="date-row"><th colspan="3">${formatShortDate(t.date)} <span class="muted">· ${perDay.get(t.date)}건</span></th></tr>` : '';
+          return `${head}<tr data-action="showProfile" data-id="${p.id}">
             <td>${posLabel(p.position)} ${esc(p.name)} <span class="muted small">${overall(p)}</span></td>
-            <td>${side(t.from)}</td><td>→</td><td>${side(t.to)}</td>
-            <td class="num">${t.fee ? won(t.fee) : `<span class="muted small">${LOG_TYPE[t.type] ?? '-'}</span>`}</td></tr>`;
+            <td>${side(t.from)} <span class="muted">→</span> ${side(t.to)}</td>
+            <td class="num">${t.fee ? won(t.fee) : `<span class="tag">${LOG_TYPE[t.type] ?? '-'}</span>`}</td></tr>`;
         }).join('')}</tbody></table></div>` : '<p class="muted">이 시즌 기록이 없습니다.</p>'}
     </div>`;
 }
