@@ -182,9 +182,8 @@ export function homeView(state) {
         ${inboxList(state)}
       </div>
       <div class="card">
-        <h3>순위</h3>
+        <div class="card-head"><h3>순위</h3><button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button></div>
         <table class="table compact"><thead><tr><th class="num">#</th><th>구단</th><th class="num">경기</th><th class="num">승점</th></tr></thead><tbody>${mini}</tbody></table>
-        <button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button>
       </div>
       <div class="card">
         <h3>최근 결과</h3>${lastCard}
