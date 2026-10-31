@@ -177,23 +177,26 @@ export function homeView(state) {
   return `
     <div class="grid two">
       <div class="card"><h3>다음 경기</h3>${nextCard}</div>
-      <div class="card"><h3>최근 결과</h3>${lastCard}</div>
+      <div class="card">
+        <div class="card-head"><h3>메시지</h3>${unreadCount(state) ? '<button class="btn small" data-action="readAll">전체 읽음</button>' : ''}</div>
+        ${inboxList(state)}
+      </div>
       <div class="card">
         <h3>순위</h3>
         <table class="table compact"><thead><tr><th>#</th><th>구단</th><th>경기</th><th>승점</th></tr></thead><tbody>${mini}</tbody></table>
         <button class="btn small" data-action="nav" data-view="competition" data-tab="table">전체 순위</button>
       </div>
       <div class="card">
-        <h3>구단 상황</h3>
+        <h3>최근 결과</h3>${lastCard}
+        <h3 class="spaced">구단 상황</h3>
         ${clubStatus(state, club)}
         <button class="btn small" data-action="nav" data-view="club">구단 운영</button> <button class="btn small" data-action="nav" data-view="finance">재정</button>
       </div>
-      <div class="card">
-        <div class="card-head"><h3>메시지</h3>${unreadCount(state) ? '<button class="btn small" data-action="readAll">전체 읽음</button>' : ''}</div>
-        ${inboxList(state)}
-      </div>
     </div>`;
 }
+
+// 늘어난 값은 ▲ 초록, 줄어든 값은 ▼ 빨강 (색만으로 구분하지 않게 부호도 붙인다)
+const signedWon = (n) => `<span class="delta ${n < 0 ? 'down' : n > 0 ? 'up' : ''}">${n > 0 ? '+' : ''}${won(n)}</span>`;
 
 function clubStatus(state, club) {
   const f = club.finance;
@@ -506,7 +509,7 @@ export function tableView(state, ui) {
         </table>
         <p class="muted small">${rule.tier === 1 ? '<span class="legend zone-europe"></span> 상위 4팀' : `<span class="legend zone-up"></span> 승격 ${rule.promoted}팀`} · <span class="legend zone-down"></span> ${rule.tier === 3 ? '하부 리그로 강등' : '강등'} ${rule.relegated}팀</p>
       </div>
-      <div>
+      <div class="stack">
         <div class="card"><h3>득점 순위</h3><table class="table compact">${scorers.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.player)}</td><td><strong>${x.s.goals}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
         <div class="card"><h3>도움 순위</h3><table class="table compact">${assists.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.p)}</td><td><strong>${x.s.assists}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
       </div>
@@ -730,17 +733,17 @@ const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facil
 
 function ledgerTable(ledger) {
   const rows = (names, part, sign) => Object.entries(names)
-    .map(([k, name]) => `<tr><td>${name}</td><td class="num">${part[k] ? `${sign}${won(part[k])}` : '-'}</td></tr>`).join('');
+    .map(([k, name]) => `<tr><td>${name}</td><td class="num ${part[k] ? (sign ? 'down' : 'up') : 'muted'}">${part[k] ? `${sign || '+'}${won(part[k])}` : '-'}</td></tr>`).join('');
   const net = ledgerTotal(ledger.income) - ledgerTotal(ledger.expense);
   return `<table class="table compact">
     <tr class="line-below"><th>수입</th><th class="num">${won(ledgerTotal(ledger.income))}</th></tr>${rows(INCOME_NAMES, ledger.income, '')}
     <tr class="line-below"><th>지출</th><th class="num">${won(ledgerTotal(ledger.expense))}</th></tr>${rows(EXPENSE_NAMES, ledger.expense, '-')}
-    <tr><th>수지</th><th class="num ${net < 0 ? 'error' : 'good'}">${won(net)}</th></tr>
+    <tr class="line-below"><th>수지</th><th class="num">${signedWon(net)}</th></tr>
   </table>`;
 }
 
 const satClass = (s) => (s < PROTEST_LINE ? 'error' : s >= 70 ? 'good' : '');
-const SEG_COLOR = { loyal: '#2f6b3f', trendy: '#c2410c', family: '#2563eb', local: '#a16207' };
+const SEG_COLOR = { loyal: '#8ccfa7', trendy: '#e09a5e', family: '#8fb0e6', local: '#d9b45a' };
 const MOOD_NAME = { good: '기분 좋음', neutral: '보통', bad: '불만' };
 
 // ---- 언론: 기사와 팬 댓글, SNS 캠페인 ----
@@ -1145,32 +1148,36 @@ export function financeView(state) {
   const top = club.squad.map((id) => state.players[id]).sort((a, b) => b.contract.wage - a.contract.wage).slice(0, 8);
   return `
     <div class="grid two">
-      <div class="card">
-        <h3>잔고와 예산</h3>
-        <table class="table compact">
-          <tr><td>잔고</td><td class="num ${f.balance < 0 ? 'error' : ''}"><strong>${won(f.balance)}</strong></td></tr>
-          <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
-          <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
-          <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
-        </table>
-        ${budgetSlider(state, f)}
-        <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
+      <div class="stack">
+        <div class="card">
+          <h3>잔고와 예산</h3>
+          <div class="balance ${f.balance < 0 ? 'down' : ''}">${won(f.balance)}</div>
+          <table class="table compact">
+            <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
+            <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
+            <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
+          </table>
+          ${budgetSlider(state, f)}
+          <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
+        </div>
+        <div class="card">
+          <h3>주급 상위 선수</h3>
+          <table class="table compact">${top.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td><td class="num">${won(p.contract.wage)}</td><td class="muted small">${p.contract.until.slice(0, 4)}년 6월까지</td></tr>`).join('')}</table>
+        </div>
       </div>
-      <div class="card">
-        <h3>이번 시즌 장부</h3>
-        ${ledgerTable(f.season)}
-      </div>
-      <div class="card">
-        <h3>주급 상위 선수</h3>
-        <table class="table compact">${top.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td><td class="num">${won(p.contract.wage)}</td><td class="muted small">${p.contract.until.slice(0, 4)}년 6월까지</td></tr>`).join('')}</table>
-      </div>
-      <div class="card">
-        <h3>지난 시즌</h3>
-        ${f.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">수입</th><th class="num">지출</th><th class="num">수지</th><th class="num">시즌 끝 잔고</th></tr></thead><tbody>
-          ${f.history.map((h) => {
-            const net = ledgerTotal(h.income) - ledgerTotal(h.expense);
-            return `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td class="num">${won(ledgerTotal(h.income))}</td><td class="num">${won(ledgerTotal(h.expense))}</td><td class="num ${net < 0 ? 'error' : 'good'}">${won(net)}</td><td class="num">${won(h.balance)}</td></tr>`;
-          }).join('')}</tbody></table>` : '<p class="muted">아직 지난 시즌 기록이 없습니다.</p>'}
+      <div class="stack">
+        <div class="card">
+          <h3>이번 시즌 장부</h3>
+          ${ledgerTable(f.season)}
+        </div>
+        <div class="card">
+          <h3>지난 시즌</h3>
+          ${f.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">수입</th><th class="num">지출</th><th class="num">수지</th><th class="num">시즌 끝 잔고</th></tr></thead><tbody>
+            ${f.history.map((h) => {
+              const net = ledgerTotal(h.income) - ledgerTotal(h.expense);
+              return `<tr><td>${h.season}-${String(h.season + 1).slice(2)}</td><td class="num">${won(ledgerTotal(h.income))}</td><td class="num">${won(ledgerTotal(h.expense))}</td><td class="num">${signedWon(net)}</td><td class="num">${won(h.balance)}</td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="muted">아직 지난 시즌 기록이 없습니다.</p>'}
+        </div>
       </div>
     </div>`;
 }

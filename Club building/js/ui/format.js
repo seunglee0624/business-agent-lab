@@ -77,3 +77,20 @@ export function modal({ title, body, side = '', close }) {
     </div>
   </div>`;
 }
+
+// 화면 강조색: 단장 구단의 유니폼 색 중 채도가 있는 쪽을 어두운 바탕에서 읽히는 밝기로 맞춘다.
+// 흑백 유니폼이면 강조색 없이 밝은 회색
+export function clubAccent(club) {
+  const hsl = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    if (!d) return [0, 0, l];
+    const sat = d / (1 - Math.abs(2 * l - 1));
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, sat, l];
+  };
+  const pick = [club.colors.primary, club.colors.secondary].map(hsl).find(([, sat]) => sat >= 0.3);
+  if (!pick) return '#c9ced6';
+  const [h, sat] = pick;
+  return `hsl(${Math.round(h)} ${Math.round(Math.min(sat, 0.7) * 100)}% 62%)`;
+}

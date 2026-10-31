@@ -12,7 +12,7 @@ import {
 } from '../core/game.js';
 import { pressStatus, requestArticle } from '../api/press.js';
 import { FACILITIES, PROMISES } from '../data/economy.js';
-import { won } from './format.js';
+import { won, clubAccent } from './format.js';
 import { upgradeInfo } from '../core/facilities.js';
 import { withParticle } from '../core/korean.js';
 import { saveState, loadState, clearState, exportState, importState } from '../save/storage.js';
@@ -99,6 +99,7 @@ export class App {
       return;
     }
     this.root.className = 'app';
+    this.root.style.setProperty('--club', clubAccent(userClub(s)));
     if (this.ui.view === 'match') {
       this.root.innerHTML = layout(s, this.ui, '');
       this.live = new LiveMatchView({
