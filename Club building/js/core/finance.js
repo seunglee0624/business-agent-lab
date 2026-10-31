@@ -55,7 +55,9 @@ export const staffWeeklyWage = (level, key) => roundMoney(staffWage(level, key) 
 export const staffWageBill = (club) => STAFF_KEYS.reduce((s, k) => s + staffWeeklyWage(club.staff[k], k), 0) + (club.headCoach?.wage ?? 0);
 // 주급 예산에 들어가는 주간 지출 (선수 + 스태프)
 export const weeklyWageBill = (state, club) => playerWageBill(state, club) + staffWageBill(club);
-export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + roundMoney(facilityUpkeep(club.facilities[k], k) * EUR), 0);
+// 시설 하나의 달 유지비와 전체 합
+export const facilityMonthlyUpkeep = (club, key) => roundMoney(facilityUpkeep(club.facilities[key], key) * EUR);
+export const monthlyUpkeep = (club) => FACILITY_KEYS.reduce((s, k) => s + facilityMonthlyUpkeep(club, k), 0);
 
 // 강등 보조금: 강등된 구단은 두 시즌 동안 떠난 리그 중계권료의 50%, 25%를 받는다 (매달 나눠서 중계권 수입으로)
 export const PARACHUTE = [0.5, 0.25];

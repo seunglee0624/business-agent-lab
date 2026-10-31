@@ -12,9 +12,9 @@ import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unregisteredPlayers, totalCount, MAX_TOTAL, pressOf, MAX_ARTICLES } from '../core/game.js';
 import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
-import { upgradeInfo, capacity } from '../core/facilities.js';
+import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
-import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
 import { marketValue } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -1149,6 +1149,9 @@ export function financeView(state) {
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
   const top = club.squad.map((id) => state.players[id]).sort((a, b) => b.contract.wage - a.contract.wage).slice(0, 8);
+  const coachWage = club.headCoach?.wage ?? 0;
+  const reserve = wageReserve(state, club);
+  const free = spendable(state, club);
   return `
     <div class="grid two">
       <div class="stack">
@@ -1159,13 +1162,21 @@ export function financeView(state) {
             <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
             <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
             <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
+            <tr><td>시설·행사에 쓸 수 있는 돈<div class="muted small">잔고 − 이적 예산${reserve ? ' − 주급용으로 묶은 돈' : ''}</div></td><td class="num"><strong>${won(free)}</strong></td></tr>
           </table>
           ${budgetSlider(state, f)}
           <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
         </div>
         <div class="card">
-          <h3>주급 상위 선수</h3>
-          <table class="table compact">${top.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td><td class="num">${won(p.contract.wage)}</td><td class="muted small">${p.contract.until.slice(0, 4)}년 6월까지</td></tr>`).join('')}</table>
+          <h3>주급 <span class="muted small">주 단위</span></h3>
+          <table class="table compact">
+            <tr><td>선수</td><td class="num">${won(playerWageBill(state, club))}</td></tr>
+            <tr><td>스태프</td><td class="num">${won(staffWageBill(club) - coachWage)}</td></tr>
+            <tr><td>감독</td><td class="num">${club.headCoach ? won(coachWage) : '<span class="muted">없음</span>'}</td></tr>
+            <tr class="line-below"><th>합계</th><th class="num">${won(bill)} <span class="muted small">/ 예산 ${won(f.wageBudget)}</span></th></tr>
+          </table>
+          <h4>주급 상위 선수</h4>
+          <table class="table compact">${top.map((p) => `<tr><td>${posLabel(p.position)} ${esc(p.name)}</td><td class="num">${won(p.contract.wage)}</td><td class="num muted small">${p.contract.until.slice(0, 4)}년 6월까지</td></tr>`).join('')}</table>
         </div>
       </div>
       <div class="stack">
@@ -1173,6 +1184,7 @@ export function financeView(state) {
           <h3>이번 시즌 장부</h3>
           ${ledgerTable(f.season)}
         </div>
+        ${facilityCostCard(club, free)}
         <div class="card">
           <h3>지난 시즌</h3>
           ${f.history.length ? `<table class="table compact"><thead><tr><th>시즌</th><th class="num">수입</th><th class="num">지출</th><th class="num">수지</th><th class="num">시즌 끝 잔고</th></tr></thead><tbody>
@@ -1183,6 +1195,26 @@ export function financeView(state) {
         </div>
       </div>
     </div>`;
+}
+
+// 시설마다 달 유지비와 다음 업그레이드 비용. 업그레이드는 구단 탭에서
+function facilityCostCard(club, free) {
+  const rows = FACILITY_KEYS.map((key) => {
+    const info = upgradeInfo(club, key);
+    const building = isBuilding(club, key);
+    const next = building ? '<span class="tag">공사 중</span>'
+      : !info ? '<span class="muted small">최고 레벨</span>'
+      : `${won(info.cost)} <span class="muted small">· ${info.months}개월</span>`;
+    const now = !info || building ? '' : info.cost <= free ? '<span class="good small">가능</span>' : '<span class="error small">부족</span>';
+    return `<tr><td>${esc(FACILITIES[key].name)}</td><td class="num">${club.facilities[key]}</td><td class="num">${won(facilityMonthlyUpkeep(club, key))}</td><td class="num">${next}</td><td>${now}</td></tr>`;
+  }).join('');
+  return `
+        <div class="card">
+          <div class="card-head"><h3>시설 비용</h3><button class="btn small" data-action="nav" data-view="club">구단 탭에서 업그레이드</button></div>
+          <table class="table compact"><thead><tr><th>시설</th><th class="num">레벨</th><th class="num">유지비 (월)</th><th class="num">다음 업그레이드</th><th>지금</th></tr></thead><tbody>${rows}
+            <tr class="line-below"><th>합계</th><th></th><th class="num">${won(monthlyUpkeep(club))}</th><th></th><th></th></tr></tbody></table>
+          <p class="muted small">업그레이드 비용은 공사를 시작할 때 한 번 나갑니다. "가능"은 시설·행사에 쓸 수 있는 돈(${won(free)})으로 낼 수 있다는 뜻입니다.</p>
+        </div>`;
 }
 
 // 게임 안 확인 창 (브라우저 confirm 대신)
