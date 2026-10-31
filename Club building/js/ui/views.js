@@ -1163,8 +1163,7 @@ export function financeView(state) {
             <tr><td>이적 예산</td><td class="num">${won(f.transferBudget)}</td></tr>
             <tr><td>주급 예산 (주)</td><td class="num">${won(f.wageBudget)}</td></tr>
             <tr><td>남은 주급 여유 (주)</td><td class="num">${won(wageRoom(f.wageBudget, bill))}<div class="muted small">지금 주급 ${won(bill)}</div></td></tr>
-            <tr><td>시설·행사에 바로 쓸 수 있는 돈<div class="muted small">잔고 − 이적 예산${reserve ? ' − 주급용으로 묶은 돈' : ''}</div></td><td class="num"><strong>${won(free)}</strong></td></tr>
-            <tr><td>이적 예산까지 쓰면<div class="muted small">확인을 받고 이적 예산에서 꺼냅니다${reserve ? '. 주급용으로 묶은 돈은 못 씁니다' : ''}</div></td><td class="num">${won(withTransfer)}</td></tr>
+            <tr><td>시설·행사에 쓸 수 있는 돈<div class="muted small">${withTransfer > free ? `${won(free)}을 넘게 쓰면 넘는 만큼 이적 예산이 줄어듭니다 (확인을 받습니다)` : '이적 예산은 쓰지 않습니다'}${reserve ? ' · 주급용으로 묶은 돈은 제외' : ''}</div></td><td class="num"><strong>${won(withTransfer)}</strong></td></tr>
           </table>
           ${budgetSlider(state, f)}
           <p class="muted small">예산은 시즌이 시작할 때 새로 정해집니다. 중계권 절반과 스폰서 수입은 매달, 나머지 중계권은 시즌이 끝날 때 순위 상금으로 들어옵니다. 입장 수입은 홈 경기마다 들어옵니다. 재정은 매달 마지막 날 정산합니다.</p>
