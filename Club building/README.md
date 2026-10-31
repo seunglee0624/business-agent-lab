@@ -9,8 +9,8 @@
 ```
 cd "Club building"
 python3 tools/serve.py 8010
-# 언론 탭 기사·댓글을 AI로 쓰려면 (OpenRouter 키와 모델 이름):
-# OPENROUTER_API_KEY=sk-or-... OPENROUTER_MODEL=제공자/모델:free python3 tools/serve.py 8010
+# 언론 탭 기사·댓글을 AI로 쓰려면: .env.example을 .env로 복사해 OpenRouter 키와 모델 이름을 적고 위처럼 켠다
+# (.env는 git에 올라가지 않는다)
 ```
 브라우저에서 `http://localhost:8010` 을 연다. 테스트는 `node --test tests/*.test.js`.
 
@@ -270,7 +270,7 @@ Club building/
 | `inflation.js` | 1군 능력 변화를 성장·나감·들어옴·승강으로 분해 |
 | `deficit.js` | 적자·흑자 구단 장부 비교 |
 | `invariants.js` | 상태 규칙 검사(소속·계약·재정·인원·임대·능력치·일정) |
-| `serve.py [포트]` | 개발 서버. 캐시를 끄고, `OPENROUTER_API_KEY`와 `OPENROUTER_MODEL`이 있으면 `/api/press`로 언론 AI 요청을 OpenRouter에 대신 보낸다(키는 브라우저에 넘기지 않음) |
+| `serve.py [포트]` | 개발 서버. 캐시를 끄고, `.env`(또는 환경 변수)에 `OPENROUTER_API_KEY`와 `OPENROUTER_MODEL`이 있으면 `/api/press`로 언론 AI 요청을 OpenRouter에 대신 보낸다(키는 브라우저에 넘기지 않음) |
 
 ### 테스트
 - `core/` 로직은 `node --test`로, `game.js` 함수를 통해 테스트한다

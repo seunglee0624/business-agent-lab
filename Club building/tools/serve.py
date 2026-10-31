@@ -1,6 +1,6 @@
 # 개발 서버: 캐시를 끄고(기본 http.server는 Cache-Control을 안 보내서 크롬이 고치기 전 JS 모듈을 계속 쓸 수 있음),
-# 언론 탭 기사·댓글을 쓰는 AI 요청을 OpenRouter로 대신 보낸다. API 키는 환경 변수로만 받고 브라우저에는 넘기지 않는다.
-# 실행: OPENROUTER_API_KEY=... OPENROUTER_MODEL=... python3 tools/serve.py [포트]   (둘 중 하나라도 없으면 게임은 틀 기사를 쓴다)
+# 언론 탭 기사·댓글을 쓰는 AI 요청을 OpenRouter로 대신 보낸다. API 키는 .env나 환경 변수로 받고 브라우저에는 넘기지 않는다.
+# 실행: python3 tools/serve.py [포트]   (키나 모델이 없으면 게임은 틀 기사를 쓴다)
 import json
 import os
 import re
@@ -11,15 +11,32 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+
+
+# ▼ API 키 넣는 곳: 프로젝트 폴더의 .env 파일 (.env.example을 복사해 만든다). .env는 git에 올라가지 않는다.
+#   OPENROUTER_API_KEY=sk-or-...
+#   OPENROUTER_MODEL=제공자/모델:free
+#   이 파일(serve.py)에는 키를 적지 말 것 (git에 올라감). 키는 https://openrouter.ai 의 Keys 메뉴에서 만든다.
+#   터미널에서 같은 이름의 환경 변수를 주면 .env보다 그쪽이 먼저다.
+def load_env(path):
+    if not path.exists():
+        return
+    for line in path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        name, value = line.split('=', 1)
+        os.environ.setdefault(name.strip(), value.strip().strip('"\''))
+
+
+load_env(ROOT / '.env')
+
 API_URL = os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1').rstrip('/') + '/chat/completions'
 MAX_BODY = 200_000  # 화면이 보내는 요청 크기 상한 (바이트)
 FENCE = re.compile(r'^\s*```(?:json)?\s*(.*?)\s*```\s*$', re.S)
 
 
-# ▼ API 키 넣는 곳: 이 파일에 키를 직접 적지 말 것 (git에 올라감). 서버를 켤 때 환경 변수로 넘긴다.
-#   OPENROUTER_API_KEY=sk-or-... OPENROUTER_MODEL=제공자/모델:free python3 tools/serve.py 8010
-#   매번 치기 싫으면 ~/.bashrc 맨 아래에 export OPENROUTER_API_KEY=sk-or-... 한 줄 (모델도 같은 식)
-#   키는 https://openrouter.ai 의 Keys 메뉴에서 만든다
 def api_key():
     return os.environ.get('OPENROUTER_API_KEY', '').strip()
 
@@ -116,5 +133,4 @@ class Handler(SimpleHTTPRequestHandler):
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8010
 if api_key() and not model():
     print('OPENROUTER_MODEL이 없어서 AI 기사를 쓰지 않습니다 (틀 기사)', file=sys.stderr)
-root = Path(__file__).resolve().parent.parent
-ThreadingHTTPServer(('127.0.0.1', port), partial(Handler, directory=str(root))).serve_forever()
+ThreadingHTTPServer(('127.0.0.1', port), partial(Handler, directory=str(ROOT))).serve_forever()

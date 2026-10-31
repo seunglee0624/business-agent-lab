@@ -166,3 +166,4 @@
   - 테스트 8개 추가. 실제 API 호출은 키가 없어 확인하지 못했고, 가짜 API 서버로 브라우저에서 요청 형식과 바꿔 넣기까지 확인
 - 언론 AI를 OpenRouter로 바꿈: `tools/serve.py`가 `OPENROUTER_API_KEY`와 `OPENROUTER_MODEL`(무료 모델 목록이 자주 바뀌어 코드에 두지 않음)로 chat/completions에 JSON 스키마 출력을 요청. 모델이 형식 지정을 무시하고 ```json 블록으로 감싸 보내도 읽음. 키나 모델이 없으면 틀 기사. 설정 탭에는 회사·모델 이름을 보여 주지 않음. Anthropic 직접 호출은 뺌. 가짜 OpenRouter 서버로 일반 응답·코드 블록 응답 모두 브라우저에서 기사 바꿔 넣기까지 확인, 실제 OpenRouter 호출은 키가 없어 확인 못 함
 - `tools/serve.py`에 API 키를 어디로 넘기는지 주석 추가 (파일에 적지 말고 환경 변수로)
+- 언론 AI 키를 프로젝트 폴더의 `.env`에서 읽음(`.env.example` 복사해 채움, `.env`는 git 제외). 터미널 환경 변수가 있으면 그쪽이 먼저
