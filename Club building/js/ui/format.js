@@ -2,6 +2,7 @@
 
 import { overall, ageOn } from '../core/player.js';
 import { POSITIONS } from '../data/positions.js';
+import { crestSvg } from './crest.js';
 
 export function esc(value) {
   return String(value ?? '')
@@ -13,8 +14,10 @@ export function esc(value) {
 
 export const TIER_NAME = { strong: '강팀', mid: '중위권', weak: '약팀' };
 
+const BADGE_PX = { '': 18, big: 40 };
+
 export function badge(club, size = '') {
-  return `<span class="badge ${size}" style="--c1:${club.colors.primary};--c2:${club.colors.secondary}"></span>`;
+  return `<span class="badge ${size}">${crestSvg(club, BADGE_PX[size] ?? 18)}</span>`;
 }
 
 export function clubLabel(club, isUser = false) {
