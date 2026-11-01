@@ -301,7 +301,7 @@ test('협상 취소: 협상 창에서 취소하면 목록에서 빠지고 합의
   assert.doesNotMatch(transfersView(state, { targetId: p.id }), /data-action="cancelDeal"/);
 });
 
-test('선수 찾기 카드는 접고 펼칠 수 있고, 접어도 검색 조건과 결과 수는 남는다', async () => {
+test('선수 찾기 카드를 접으면 결과 표만 숨기고, 검색 조건 줄과 결과 수는 남는다', async () => {
   const { transfersView } = await import('../js/ui/transfers.js');
   const state = fresh('fold');
   const search = { position: 'ST' };
@@ -310,6 +310,8 @@ test('선수 찾기 카드는 접고 펼칠 수 있고, 접어도 검색 조건�
   assert.match(open, /id="sPosition"/);
   const folded = transfersView(state, { search, searchFolded: true });
   assert.match(folded, /data-action="foldSearch">펼치기/);
-  assert.doesNotMatch(folded, /id="sPosition"/);
+  assert.match(folded, /id="sPosition"/, '접어도 검색 조건 줄은 남는다');
+  assert.match(open, /<table class="table clickable">/);
+  assert.doesNotMatch(folded, /<table class="table clickable">/, '결과 표만 숨긴다');
   assert.match(folded, new RegExp(`선수 찾기 <span class="muted small">${searchPlayers(state, search).length}명`));
 });

@@ -120,13 +120,14 @@ function searchCard(state, ui) {
   const q = ui.search ?? {};
   const head = (folded) => `<div class="card-head"><h3>선수 찾기${ui.search ? ` <span class="muted small">${searchPlayers(state, q).length}명</span>` : ''}</h3>
       <button class="btn small" data-action="foldSearch">${folded ? '펼치기 ▼' : '접기 ▲'}</button></div>`;
-  if (ui.searchFolded) return `<div class="card">${head(true)}</div>`;
-  const rows = ui.search ? searchPlayers(state, q) : [];
+  // 접으면 검색 조건 줄은 남기고 결과 표만 숨긴다
+  const folded = !!ui.searchFolded;
+  const rows = ui.search && !folded ? searchPlayers(state, q) : [];
   const leagues = [['', '모든 리그'], ...Object.values(LEAGUES).map((l) => [l.id, l.name])];
   const positions = [['', '모든 포지션'], ...Object.entries(POSITIONS).map(([k, v]) => [k, `${k} ${v.name}`])];
   return `
     <div class="card">
-      ${head(false)}
+      ${head(folded)}
       <div class="form-row search-form">
         <label>포지션 <select id="sPosition">${options(positions, q.position)}</select></label>
         <label>리그 <select id="sLeague">${options(leagues, q.leagueId)}</select></label>
@@ -135,7 +136,7 @@ function searchCard(state, ui) {
         <label class="check"><input id="sFree" type="checkbox" ${q.freeOnly ? 'checked' : ''}> 자유계약만</label>
         <button class="btn primary" data-action="searchPlayers">검색</button>
       </div>
-      ${!ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수의 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
+      ${folded ? '' : !ui.search ? '<p class="muted">조건을 정하고 검색하세요. 다른 구단 선수의 잠재력은 스카우트 수준에 따라 범위로 보입니다.</p>'
         : rows.length ? `<table class="table clickable"><thead><tr><th>포지션</th><th>이름</th><th class="num">나이</th><th>구단</th><th class="num">능력</th><th class="num">잠재</th><th class="num">몸값</th><th class="num">주급</th><th class="num">계약</th><th>상태 표시</th></tr></thead><tbody>
           ${rows.map((r) => `<tr class="${ui.targetId === r.id ? 'selected' : ''}" data-action="selectTarget" data-id="${r.id}">
             <td>${posLabel(r.position)}</td><td>${esc(r.name)}</td><td class="num">${r.age}</td><td class="small">${esc(clubName(state, r.clubId))}</td>

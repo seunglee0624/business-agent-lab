@@ -386,6 +386,7 @@ export class App {
           freeOnly: this.root.querySelector('#sFree').checked,
         };
         this.ui.transferMsg = null;
+        this.ui.searchFolded = false; // 접어 둔 채 검색하면 결과를 다시 펼친다
         this.render();
         break;
       }
