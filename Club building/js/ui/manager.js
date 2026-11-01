@@ -24,7 +24,7 @@ export function managerView(state, ui) {
           <tr><td>계약</td><td>${formatDate(coach.until)}까지</td></tr>
         </tbody></table>
         <p><button class="btn danger small" data-action="fireManager">해고하기 (위약금 ${won(firingCost(state))})</button></p>
-        <p class="muted small">해고하면 남은 계약 주급의 절반을 위약금으로 냅니다. 새 감독을 뽑을 때까지는 코치가 임시로 팀을 맡습니다.</p>`
+        <p class="muted small">해고하면 남은 계약 기간 연봉의 절반을 위약금으로 냅니다. 새 감독을 뽑을 때까지는 코치가 임시로 팀을 맡습니다.</p>`
       : '<p class="error">감독 자리가 비어 있습니다. 아래 후보 중에서 고르세요. 그동안 코치가 임시로 팀을 맡습니다.</p>'}
     </div>
     ${teamTacticsCard(state)}

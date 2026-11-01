@@ -84,7 +84,7 @@ export function assignInitialCoaches(rng, state) {
 // ---- 후보, 고용, 해고 ----
 
 const POOL_SIZE = 6;
-const COMPENSATION = 0.5; // 해고 위약금: 남은 계약 주급의 절반
+const COMPENSATION = 0.5; // 해고 위약금: 남은 계약 기간 연봉(남은 주 × 주급)의 절반
 const WILLING_GAP = 3; // 구단에 맞는 수준보다 이만큼 넘게 뛰어난 감독은 오지 않는다
 
 // 후보 명단: 능력이 고르게 퍼지도록 만든다. 해고된 감독도 명단에 들어간다

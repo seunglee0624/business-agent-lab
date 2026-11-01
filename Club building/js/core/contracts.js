@@ -163,7 +163,7 @@ export function expiringContracts(state, rng, endDate, userId) {
   return leaving;
 }
 
-// 계약 해지(방출): 남은 계약 주급의 절반을 위약금으로 주고 자유계약 선수로 내보낸다
+// 계약 해지(방출): 남은 계약 기간 연봉(남은 주 × 주급)의 절반을 위약금으로 주고 자유계약 선수로 내보낸다
 export const RELEASE_SHARE = 0.5;
 export function releaseCost(state, p) {
   if (!p.contract) return 0;

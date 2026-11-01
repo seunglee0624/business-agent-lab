@@ -359,7 +359,7 @@ function contractBox(state, p, ui) {
     ${club.squad.includes(p.id) && !isHomegrownYouth(p, state.date) ? `<p>${p.unregistered
       ? `<button class="btn small" data-action="setRegistered" data-id="${p.id}" data-registered="1">1군 등록</button> <span class="muted small">미등록 선수는 경기에 나갈 수 없습니다. 등록 명단은 이적시장 기간에만 바꿀 수 있습니다.</span>`
       : `<button class="btn small" data-action="setRegistered" data-id="${p.id}" data-registered="0">등록 해제</button> <span class="muted small">등록 인원 ${MAX_SQUAD}명 안에서 경기 명단을 고릅니다. 이적시장 기간에만 바꿀 수 있습니다.</span>`}</p>` : ''}
-    ${club.squad.includes(p.id) && !p.loan ? `<p><button class="btn small danger" data-action="releasePlayer" data-id="${p.id}">계약 해지 (위약금 ${won(releaseCost(state, p))})</button> <span class="muted small">남은 주급의 절반을 주고 바로 내보냅니다. 1군 자리가 하나 빕니다.</span></p>` : ''}
+    ${club.squad.includes(p.id) && !p.loan ? `<p><button class="btn small danger" data-action="releasePlayer" data-id="${p.id}">계약 해지 (위약금 ${won(releaseCost(state, p))})</button> <span class="muted small">남은 계약 기간 연봉의 절반을 주고 바로 내보냅니다. 1군 자리가 하나 빕니다.</span></p>` : ''}
     ${talk}`;
 }
 
