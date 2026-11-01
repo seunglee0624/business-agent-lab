@@ -800,6 +800,10 @@ export function bidForPlayer(state, playerId, fee) {
   return transfers.bidForPlayer(state, userClub(state), state.players[playerId], fee);
 }
 
+export function cancelDeal(state, playerId) {
+  return transfers.cancelDeal(state, state.players[playerId]);
+}
+
 export function offerTerms(state, playerId, offer) {
   const p = state.players[playerId];
   const from = p.clubId;

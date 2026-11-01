@@ -5,7 +5,7 @@ import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, startNextSeason, callUpYouth, sendDownToYouth, STATE_VERSION,
   renewContract, upgradeFacility, setStaffLevel,
-  bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
+  bidForPlayer, offerTerms, cancelDeal, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
   fireManager, hireManager, answerRequest,
   openMessage, markViewRead, markAllRead, firingCost, userClub, agreedFees,
   adjustBudgets, transferAfter, wageRoom, upgradeState, setTicketPrice, forecast, seasonForecast, orderMerch, setMerchPrice, ITEMS, pitchSponsor, answerSponsor, rejectSponsor, chooseTour, SLOTS, INDUSTRIES, TOURS, bookEvent, cancelEvent, askCoach, setRegistered, releasePlayer, releaseCost, buildPitchSystem, answerRental, startCampaign, EVENTS, CAMPAIGNS,
@@ -517,6 +517,20 @@ export class App {
         this.render();
         break;
       }
+      case 'cancelDeal': {
+        const name = s.players[d.id].name;
+        this.confirm({ title: '협상 취소', text: `${withParticle(name, '와')} 진행 중인 협상을 취소할까요?`, yes: '협상 취소' }, () => {
+          const res = cancelDeal(s, d.id);
+          this.ui.transferMsg = { ok: res.ok, text: res.ok ? `${withParticle(name, '와')}의 협상을 취소했습니다.` : res.reason };
+          this.persist();
+          this.render();
+        });
+        break;
+      }
+      case 'foldSearch':
+        this.ui.searchFolded = !this.ui.searchFolded;
+        this.render();
+        break;
       case 'offerTerms': {
         const wage = Number(this.root.querySelector('#termWage').value) * 1e4;
         const years = Number(this.root.querySelector('#termYears').value);

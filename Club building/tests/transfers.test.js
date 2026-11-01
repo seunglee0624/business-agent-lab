@@ -3,7 +3,7 @@ import { totalCount, MAX_TOTAL } from '../js/core/registration.js';
 import assert from 'node:assert/strict';
 import {
   createNewGame, chooseLeague, userClub, playerInfo, searchPlayers, bidForPlayer, offerTerms,
-  advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed, suggestedCounter,
+  advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed, suggestedCounter, cancelDeal, agreedFees,
 } from '../js/core/game.js';
 import { ageOn } from '../js/core/player.js';
 import { roundMoney } from '../js/core/money.js';
@@ -282,4 +282,34 @@ test('AI 제안: 답하지 않으면 7일 뒤 자동으로 거절된다', () => 
 
 test('역제안 추천: 받은 이적료의 115%', () => {
   assert.equal(suggestedCounter({ fee: 10e8 }), 11.5e8);
+});
+
+test('협상 취소: 협상 창에서 취소하면 목록에서 빠지고 합의 이적료도 풀리며, 다시 처음부터 협상할 수 있다. 결렬된 협상은 취소할 수 없다', async () => {
+  const { transfersView } = await import('../js/ui/transfers.js');
+  const { state, p, fee } = agreed('cancel');
+  assert.equal(agreedFees(state), fee);
+  assert.match(transfersView(state, { targetId: p.id }), /data-action="cancelDeal"/);
+  assert.deepEqual(cancelDeal(state, p.id), { ok: true });
+  assert.equal(state.transfers.deals[p.id], undefined);
+  assert.equal(agreedFees(state), 0);
+  assert.doesNotMatch(transfersView(state, { targetId: p.id }), /data-action="cancelDeal"/, '협상 전에는 취소 버튼이 없다');
+  assert.equal(cancelDeal(state, p.id).ok, false);
+  bidForPlayer(state, p.id, 1e6);
+  assert.equal(state.transfers.deals[p.id].tries, 1, '다시 처음부터');
+  state.transfers.deals[p.id].stage = 'collapsed';
+  assert.match(cancelDeal(state, p.id).reason, /결렬/);
+  assert.doesNotMatch(transfersView(state, { targetId: p.id }), /data-action="cancelDeal"/);
+});
+
+test('선수 찾기 카드는 접고 펼칠 수 있고, 접어도 검색 조건과 결과 수는 남는다', async () => {
+  const { transfersView } = await import('../js/ui/transfers.js');
+  const state = fresh('fold');
+  const search = { position: 'ST' };
+  const open = transfersView(state, { search });
+  assert.match(open, /data-action="foldSearch">접기/);
+  assert.match(open, /id="sPosition"/);
+  const folded = transfersView(state, { search, searchFolded: true });
+  assert.match(folded, /data-action="foldSearch">펼치기/);
+  assert.doesNotMatch(folded, /id="sPosition"/);
+  assert.match(folded, new RegExp(`선수 찾기 <span class="muted small">${searchPlayers(state, search).length}명`));
 });

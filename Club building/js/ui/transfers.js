@@ -118,12 +118,15 @@ function dealsCard(state) {
 
 function searchCard(state, ui) {
   const q = ui.search ?? {};
+  const head = (folded) => `<div class="card-head"><h3>선수 찾기${ui.search ? ` <span class="muted small">${searchPlayers(state, q).length}명</span>` : ''}</h3>
+      <button class="btn small" data-action="foldSearch">${folded ? '펼치기 ▼' : '접기 ▲'}</button></div>`;
+  if (ui.searchFolded) return `<div class="card">${head(true)}</div>`;
   const rows = ui.search ? searchPlayers(state, q) : [];
   const leagues = [['', '모든 리그'], ...Object.values(LEAGUES).map((l) => [l.id, l.name])];
   const positions = [['', '모든 포지션'], ...Object.entries(POSITIONS).map(([k, v]) => [k, `${k} ${v.name}`])];
   return `
     <div class="card">
-      <h3>선수 찾기</h3>
+      ${head(false)}
       <div class="form-row search-form">
         <label>포지션 <select id="sPosition">${options(positions, q.position)}</select></label>
         <label>리그 <select id="sLeague">${options(leagues, q.leagueId)}</select></label>
@@ -210,7 +213,10 @@ function targetDetail(state, p, msg = null) {
       ${p.transferRequest ? '<p class="error small">이적을 요청한 선수라 조금 싸게 살 수 있습니다.</p>' : ''}
       ${p.injury ? `<p class="error small">부상: ${esc(p.injury.name)} · ${formatDate(p.injury.until)} 복귀 예정</p>` : ''}
       ${playerProfile(state, p)}`;
-  const side = `<h4>${p.clubId === club.id ? '받은 제안' : '협상'}</h4>${msg ? `<p class="${msg.ok ? 'good' : 'error'} small">${esc(msg.text)}</p>` : ''}<div class="renew">${box}</div>${p.clubId === club.id ? '' : loanBox(state, p)}`;
+  // 진행 중인 협상(결렬 제외)은 협상 창 안에서 취소할 수 있다
+  const cancel = live && live.stage !== 'collapsed' && p.clubId !== club.id
+    ? `<p class="deal-cancel"><button class="btn small danger" data-action="cancelDeal" data-id="${p.id}">협상 취소</button> <span class="muted small">${live.fee ? '합의한 이적료는 없던 일이 됩니다. ' : ''}나중에 처음부터 다시 협상할 수 있습니다.</span></p>` : '';
+  const side = `<h4>${p.clubId === club.id ? '받은 제안' : '협상'}</h4>${msg ? `<p class="${msg.ok ? 'good' : 'error'} small">${esc(msg.text)}</p>` : ''}<div class="renew">${box}${cancel}</div>${p.clubId === club.id ? '' : loanBox(state, p)}`;
   return modal({ title: esc(p.name), body, side, close: 'data-action="selectTarget" data-id=""' });
 }
 

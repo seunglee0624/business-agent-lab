@@ -102,6 +102,16 @@ const dealOf = (state, p) => {
   return (state.transfers.deals[p.id] = deal ?? { stage: 'fee', tries: 0, fee: 0, until: end });
 };
 
+// 진행 중인 협상 취소: 목록에서 지운다. 합의한 이적료는 없던 일이 되고, 나중에 처음부터 다시 협상할 수 있다.
+// 결렬된 협상은 지워서 횟수를 되살릴 수 없게 취소하지 않는다 (이적시장이 끝나면 저절로 사라진다)
+export function cancelDeal(state, p) {
+  const deal = state.transfers.deals[p.id];
+  if (!deal || deal.until < state.date) return { ok: false, reason: '진행 중인 협상이 없습니다.' };
+  if (deal.stage === 'collapsed') return { ok: false, reason: '이미 결렬된 협상입니다.' };
+  delete state.transfers.deals[p.id];
+  return { ok: true };
+}
+
 // 협상 목록에 올린다 (감독 요청 승인). 자유계약 선수는 바로 개인 조건 협상
 // 자유계약 협상은 요청이 유효했던 날(다음 시장 마감)까지 목록에 남는다
 export function openDeal(state, p, until) {

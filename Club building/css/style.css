@@ -193,6 +193,7 @@ th.num { text-align: right; }
 .cond.low span, .meter.low span { background: var(--loss); }
 .renew { border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--radius); padding: 10px 14px; margin-top: 10px; }
 .renew input { width: 110px; }
+.deal-cancel { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .staff-level { display: inline-block; min-width: 26px; text-align: center; }
 .form { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 3px; color: #111315; }
 .form.w { background: var(--gain); }
