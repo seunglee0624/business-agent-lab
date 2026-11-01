@@ -6,6 +6,7 @@ import {
   advance, simulateUserMatch, finishUserMatch, respondToOffer, setTransferListed, suggestedCounter,
 } from '../js/core/game.js';
 import { ageOn } from '../js/core/player.js';
+import { roundMoney } from '../js/core/money.js';
 import { overall } from '../js/core/player.js';
 
 // 7월 1일, 이적시장이 열린 상태로 시작하는 내 구단
@@ -132,7 +133,7 @@ test('개인 조건이 맞으면 이적이 끝난다: 소속, 계약, 잔고, �
   assert.equal(p.clubId, me.id);
   assert.ok(me.squad.includes(p.id) && !seller.squad.includes(p.id));
   assert.deepEqual([p.contract.wage, p.contract.promise, p.contract.until], [1e10, 'starter', '2029-06-30']);
-  const bonus = 1e10 * 52 * 0.2; // 계약금: 연봉의 20%, 이적 예산에서 낸다
+  const bonus = roundMoney(fee * 0.1); // 계약금: 이적료의 10%(주급과 상관없음), 이적 예산에서 낸다
   assert.equal(res.bonus, bonus);
   assert.equal(me.finance.balance, myBal - fee - bonus);
   assert.equal(me.finance.transferBudget, Math.max(0, Math.min(myBudget - fee - bonus, me.finance.balance))); // 이적 예산은 잔고를 넘지 않는다
@@ -145,7 +146,7 @@ test('개인 조건이 맞으면 이적이 끝난다: 소속, 계약, 잔고, �
 
 test('계약금: 이적료 + 계약금이 이적 예산을 넘으면 영입할 수 없다', () => {
   const { state, me, p, fee } = agreed('bonus-cap');
-  me.finance.transferBudget = fee + 1e8 * 52 * 0.2 - 1;
+  me.finance.transferBudget = fee + roundMoney(fee * 0.1) - 1;
   const res = offerTerms(state, p.id, { wage: 1e8, years: 3, promise: 'starter' });
   assert.equal(res.ok, false);
   assert.match(res.reason, /계약금/);

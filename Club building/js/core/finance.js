@@ -162,9 +162,15 @@ export const PROFIT_TO_BUDGET = 0.5;
 export const RICH_WAGE_RATIO = 0.85;
 export const RICH_BALANCE = 1.5;
 export const isRichAi = (state, club) => club.id !== state.user?.clubId && club.finance.balance > seasonRevenueEstimate(club) * RICH_BALANCE;
-// 계약금: 영입(이적·자유계약)과 재계약 때 한 번 내는 돈 = 연봉(주급 × 52)의 20%, 부자 AI 구단은 30%. 유스 승격·임대는 없음
-export const SIGNING_BONUS = { base: 0.2, rich: 0.3 };
-export const signingBonus = (state, club, wage) => roundMoney(wage * 52 * (isRichAi(state, club) ? SIGNING_BONUS.rich : SIGNING_BONUS.base));
+// 계약금: 계약할 때 한 번 내는 돈. 유스 승격·임대는 없음
+// - 이적료가 있는 영입: 이적료의 10%, 부자 AI 구단은 15%
+// - 자유계약·재계약(이적료 없음): 연봉(주급 × 52)의 20%, 부자 AI 구단은 30%
+export const SIGNING_BONUS = { base: 0.2, rich: 0.3, feeBase: 0.1, feeRich: 0.15 };
+export function signingBonus(state, club, wage, fee = 0) {
+  const rich = isRichAi(state, club);
+  if (fee > 0) return roundMoney(fee * (rich ? SIGNING_BONUS.feeRich : SIGNING_BONUS.feeBase));
+  return roundMoney(wage * 52 * (rich ? SIGNING_BONUS.rich : SIGNING_BONUS.base));
+}
 export const WAGE_HEADROOM = 1.1; // 재계약·영입으로 주급이 오를 여유
 export const TRANSFER_FLOOR = 0.2; // 적자 시즌 뒤에도 잔고의 20%는 이적 예산으로
 

@@ -18,17 +18,20 @@ const renewable = (s) => {
   return { club, p, offer: { wage: requiredWage(d, d.promise), years: 3, promise: d.promise } };
 };
 
-test('계약금은 연봉의 20%, 잔고가 연봉의 1.5년치를 넘는 AI 구단은 30%, 내 구단은 늘 20%', () => {
+test('계약금: 이적료가 있으면 이적료의 10%(부자 AI 15%), 없으면 연봉의 20%(부자 AI 30%), 내 구단은 부자 규칙 없음', () => {
   const s = structuredClone(base);
   const me = g.userClub(s);
   const ai = g.activeClubs(s).find((c) => c.id !== me.id);
   assert.equal(signingBonus(s, ai, 1e7), 1e7 * 52 * SIGNING_BONUS.base);
+  assert.equal(signingBonus(s, ai, 1e7, 50e8), 5e8, '이적료가 있으면 주급과 상관없이 이적료의 10%');
   ai.finance.balance = seasonRevenueEstimate(ai) * 1.5 + 1;
   assert.ok(isRichAi(s, ai));
   assert.equal(signingBonus(s, ai, 1e7), 1e7 * 52 * SIGNING_BONUS.rich);
+  assert.equal(signingBonus(s, ai, 1e7, 50e8), 7.5e8);
   me.finance.balance = seasonRevenueEstimate(me) * 10;
   assert.ok(!isRichAi(s, me), '내 구단은 부자 AI 규칙을 받지 않는다');
   assert.equal(signingBonus(s, me, 1e7), 1e7 * 52 * SIGNING_BONUS.base);
+  assert.equal(signingBonus(s, me, 1e7, 50e8), 5e8);
 });
 
 test('재계약: 서명하면 계약금을 잔고에서 내고 장부 "계약금"에 적는다', () => {
@@ -53,7 +56,7 @@ test('재계약: 계약금을 낼 잔고가 없으면 협상 횟수를 쓰지 �
   assert.equal(p.contract.until, '2027-06-30');
 });
 
-test('AI 새 계약은 계약금을 내고, 유스 승격은 내지 않는다', () => {
+test('AI 새 계약은 계약금을 내고(이적이면 이적료 기준), 유스 승격은 내지 않는다', () => {
   const s = structuredClone(base);
   const ai = g.activeClubs(s).find((c) => c.id !== g.userClub(s).id);
   const rng = new Rng('bonus');
@@ -64,6 +67,8 @@ test('AI 새 계약은 계약금을 내고, 유스 승격은 내지 않는다', 
   const after = ai.finance.balance;
   signNew(rng, s, ai, p, { youth: true });
   assert.equal(ai.finance.balance, after);
+  signNew(rng, s, ai, p, { fee: 40e8 });
+  assert.equal(ai.finance.balance, after - signingBonus(s, ai, 0, 40e8));
 });
 
 test('예전 저장 장부(계약금 칸 없음)에도 계약금을 적을 수 있다', () => {
@@ -74,16 +79,15 @@ test('예전 저장 장부(계약금 칸 없음)에도 계약금을 적을 수 �
   assert.equal(club.finance.season.expense.bonus, 1e8);
 });
 
-test('이적료 단계: 이적료 + 예상 계약금(요구 주급 기준)이 이적 예산을 넘으면 제안할 수 없다', async () => {
-  const { transferDemand } = await import('../js/core/contracts.js');
+test('이적료 단계: 이적료 + 계약금(이적료의 10%)이 이적 예산을 넘으면 제안할 수 없다', () => {
   const s = structuredClone(base);
   const me = g.userClub(s);
   const p = Object.values(s.players).find((q) => q.clubId && q.clubId !== me.id && !q.loan);
-  const bonus = signingBonus(s, me, transferDemand(s, me, p).wage);
+  const bonus = 1e8;
   me.finance.transferBudget = 1e9 + bonus - 1;
   const res = g.bidForPlayer(s, p.id, 1e9);
   assert.equal(res.ok, false);
-  assert.match(res.reason, /예상 계약금/);
+  assert.match(res.reason, /계약금 1억 원/);
   me.finance.transferBudget = 1e9 + bonus;
   assert.doesNotMatch(g.bidForPlayer(s, p.id, 1e9).reason ?? '', /이적 예산/);
 });
@@ -95,10 +99,13 @@ test('협상 화면 미리 보기: 계약금과 총비용, 남는 돈이나 모�
   const p = s.players[me.squad[0]];
   me.finance.transferBudget = 50e8;
   me.finance.balance = 60e8;
-  const terms = bonusPreview(s, me, p, 'terms', 1e8, 30e8); // 주급 1억 → 계약금 10억 4,000만
-  assert.match(terms, /계약금이 10억 4,000만 원/);
-  assert.match(terms, /모두 40억 4,000만 원이 듭니다/);
-  assert.match(terms, /이적 예산이 9억 6,000만 원 남습니다/);
-  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 45e8), /이적 예산\(50억 원\)이 5억 4,000만 원 모자랍니다/);
+  const terms = bonusPreview(s, me, p, 'terms', 1e8, 30e8); // 이적료 30억 → 계약금 3억(주급과 상관없음)
+  assert.match(terms, /이적료의 10%인 3억 원/);
+  assert.match(terms, /모두 33억 원이 듭니다/);
+  assert.match(terms, /이적 예산이 17억 원 남습니다/);
+  assert.equal(bonusPreview(s, me, p, 'terms', 5e8, 30e8), terms);
+  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 46e8), /이적 예산\(50억 원\)이 6,000만 원 모자랍니다/);
+  assert.match(bonusPreview(s, me, p, 'bid', 30e8), /계약금 3억 원\(이적료의 10%\).*모두 33억 원/);
+  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 0), /계약금이 10억 4,000만 원\(연봉의 20%\)/); // 자유계약
   assert.match(bonusPreview(s, me, p, 'renew', 1e8), /잔고가 49억 6,000만 원 남습니다/);
 });

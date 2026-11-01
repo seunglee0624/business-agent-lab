@@ -117,9 +117,9 @@ export function bidForPlayer(state, club, p, fee) {
   if (p.loan) return { ok: false, reason: '임대 중인 선수는 데려올 수 없습니다.' };
   if (!windowEnd(state.date)) return { ok: false, reason: '이적시장이 닫혀 있습니다. (여름 7/1~8/31, 겨울 1월)' };
   fee = roundMoney(fee);
-  // 개인 조건 단계에서 낼 계약금(선수 요구 주급 기준)까지 이적 예산에 들어와야 한다
-  const bonus = signingBonus(state, club, transferDemand(state, club, p).wage);
-  if (fee + bonus > club.finance.transferBudget) return { ok: false, reason: `이적 예산을 넘습니다 (이적료 ${won(fee)} + 예상 계약금 ${won(bonus)}).` };
+  // 개인 조건 단계에서 낼 계약금(이적료의 10%)까지 이적 예산에 들어와야 한다
+  const bonus = signingBonus(state, club, transferDemand(state, club, p).wage, fee);
+  if (fee + bonus > club.finance.transferBudget) return { ok: false, reason: `이적 예산을 넘습니다 (이적료 ${won(fee)} + 계약금 ${won(bonus)}).` };
   const deal = dealOf(state, p);
   if (deal.stage === 'collapsed') return { ok: false, reason: '협상이 결렬되었습니다. 다음 이적시장에 다시 시도하세요.' };
   if (deal.stage === 'terms') return { ok: true, stage: 'terms', fee: deal.fee };
@@ -173,7 +173,7 @@ export function offerTerms(state, club, p, offer) {
   }
   const fee = deal.fee;
   // 계약금도 이적료처럼 이적 예산에서 낸다
-  const bonus = signingBonus(state, club, wage);
+  const bonus = signingBonus(state, club, wage, fee);
   if (fee + bonus > club.finance.transferBudget) return { ok: false, reason: `이적 예산이 모자랍니다 (이적료 ${won(fee)} + 계약금 ${won(bonus)}).` };
   completeTransfer(state, p, seller, club, fee, { wage, until: contractEnd(state.date, offer.years), promise: offer.promise, signed: state.date });
   club.finance.transferBudget = Math.max(0, club.finance.transferBudget - bonus);
@@ -263,7 +263,7 @@ export function respondToOffer(state, rng, club, offerId, answer) {
   }
   const p = state.players[offer.playerId];
   completeTransfer(state, p, club, buyer, fee, null);
-  signNew(rng, state, buyer, p);
+  signNew(rng, state, buyer, p, { fee });
   trimSquad(state, buyer);
   return { ok: true, fee };
 }
@@ -341,8 +341,9 @@ function aiSign(state, rng, club, userId) {
   if (!bought.length) return false;
   const p = rng.pick(bought);
   const seller = state.clubs[p.clubId];
-  completeTransfer(state, p, seller, club, askingPrice(state, p), null);
-  signNew(rng, state, club, p);
+  const fee = askingPrice(state, p);
+  completeTransfer(state, p, seller, club, fee, null);
+  signNew(rng, state, club, p, { fee });
   trimSquad(state, club);
   return true;
 }

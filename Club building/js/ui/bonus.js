@@ -11,14 +11,16 @@ const rest = (budget, total, name) => (total <= budget
   : `<span class="error">${name}(${won(budget)})이 ${won(total - budget)} 모자랍니다.</span>`);
 
 // kind: bid(이적료 단계, amount = 이적료) | terms(개인 조건, amount = 주급, fee = 합의 이적료) | renew(재계약, amount = 주급)
+// 이적료가 있으면 계약금은 이적료의 10%(주급과 상관없음), 자유계약·재계약은 연봉의 20%
 export function bonusPreview(state, club, p, kind, amount, fee = 0) {
   const f = club.finance;
   if (kind === 'bid') {
-    const bonus = signingBonus(state, club, transferDemand(state, club, p).wage);
-    return `이적료에 계약금 약 ${won(bonus)}(선수가 원하는 주급 기준)이 더해져 모두 ${won(amount + bonus)}이 듭니다.<br>${rest(f.transferBudget, amount + bonus, '이적 예산')}`;
+    const bonus = signingBonus(state, club, transferDemand(state, club, p).wage, amount);
+    return `이적료에 계약금 ${won(bonus)}(이적료의 10%)이 더해져 모두 ${won(amount + bonus)}이 듭니다.<br>${rest(f.transferBudget, amount + bonus, '이적 예산')}`;
   }
-  const bonus = signingBonus(state, club, amount);
-  if (kind === 'terms') return `이 주급이면 계약금이 ${won(bonus)}(연봉의 20%)이라, 이적료까지 모두 ${won(fee + bonus)}이 듭니다.<br>${rest(f.transferBudget, fee + bonus, '이적 예산')}`;
+  const bonus = signingBonus(state, club, amount, fee);
+  if (kind === 'terms' && fee > 0) return `계약금은 이적료의 10%인 ${won(bonus)}이라, 이적료까지 모두 ${won(fee + bonus)}이 듭니다.<br>${rest(f.transferBudget, fee + bonus, '이적 예산')}`;
+  if (kind === 'terms') return `이 주급이면 계약금이 ${won(bonus)}(연봉의 20%)입니다.<br>${rest(f.transferBudget, bonus, '이적 예산')}`;
   return `이 주급이면 계약금 ${won(bonus)}(연봉의 20%)을 잔고에서 바로 냅니다.<br>${rest(Math.max(0, f.balance), bonus, '잔고')}`;
 }
 

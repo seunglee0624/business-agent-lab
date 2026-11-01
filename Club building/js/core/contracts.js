@@ -55,11 +55,11 @@ export function aiWageMult(state, club) {
 }
 
 // 시즌 중 새로 들어온 선수 한 명 (보강, 유스 승격)
-export function signNew(rng, state, club, p, { youth = false } = {}) {
+export function signNew(rng, state, club, p, { youth = false, fee = 0 } = {}) {
   const promise = youth ? 'backup' : promiseForRank(squadRank(state, club, p));
   const mult = (youth ? 0.6 : rng.float(0.9, 1.1)) * aiWageMult(state, club);
   p.contract = newContract(p, { date: state.date, years: youth ? 3 : contractYears(rng, ageOn(p, state.date)), promise, wageMult: mult });
-  if (!youth) expense(club, 'bonus', signingBonus(state, club, p.contract.wage));
+  if (!youth) expense(club, 'bonus', signingBonus(state, club, p.contract.wage, fee));
 }
 
 // ---- 재계약 ----
