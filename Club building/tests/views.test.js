@@ -213,7 +213,7 @@ test('홈 다음 경기: 두 팀 이름 밑에 순위·최근 전적, 득점·�
   assert.equal(sides?.length, 2, '두 팀 이름 밑에 각각 순위와 최근 전적');
   assert.match(sides[0], new RegExp(g.userClub(state).name));
   assert.equal(html.match(/<span class="badge huge">/g)?.length, 2, '큰 로고 두 개');
-  for (const name of ['승점', '전적', '득점', '실점', '득실차']) assert.match(html, new RegExp(`<td>${name}</td>`));
+  for (const name of ['승점', '전적', '득점', '실점', '득실차']) assert.match(html, new RegExp(`<div class="vs-label">${name}</div>`));
   assert.doesNotMatch(html, /NaN|undefined/);
   // 득점·도움 순위에서 우리 선수 행은 강조
   const comp = competitionView(state, {});

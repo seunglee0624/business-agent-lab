@@ -163,10 +163,11 @@ export function homeView(state) {
     const side = (c, row, pos, me) => `
           <div class="vs-side">${badge(c, 'huge')}<div class="vs-name ${me ? 'me' : ''}">${esc(c.name)}</div>
             <div class="vs-form">${pos + 1}위 · 최근 ${formBadges(row.form) || '-'}</div></div>`;
-    // 시즌 기록 한 줄: 더 나은 쪽 숫자를 밝게 (cmp: 1 = 클수록 좋음, -1 = 작을수록 좋음, 0 = 비교 안 함)
+    // 시즌 기록 한 줄: 더 나은 쪽 숫자를 굵게 (cmp: 1 = 클수록 좋음, -1 = 작을수록 좋음, 0 = 비교 안 함)
+    // 로고와 같은 3칸 격자에 넣어 숫자가 각 로고 바로 밑에 온다
     const stat = (name, a, b, cmp = 1, fmt = String) => {
-      const d = cmp * (a - b);
-      return `<tr><td class="num ${d > 0 ? 'lead' : ''}">${fmt(a)}</td><td>${name}</td><td class="num ${d < 0 ? 'lead' : ''}">${fmt(b)}</td></tr>`;
+      const d = cmp ? cmp * (a - b) : 0;
+      return `<div class="vs-num ${d > 0 ? 'lead' : ''}">${fmt(a)}</div><div class="vs-label">${name}</div><div class="vs-num ${d < 0 ? 'lead' : ''}">${fmt(b)}</div>`;
     };
     const sign = (n) => `${n > 0 ? '+' : ''}${n}`;
     const wdl = (r) => `${r.won}승 ${r.drawn}무 ${r.lost}패`;
@@ -174,14 +175,13 @@ export function homeView(state) {
     nextCard = `
       <div class="next-match">
         <div class="vs-meta">${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
-        <div class="vs">${side(club, myRow, myPos, true)}<span class="vs-mid">vs</span>${side(opp, oppRow, oppPos, false)}</div>
-        <table class="vs-stats"><tbody>
+        <div class="vs">${side(club, myRow, myPos, true)}<span class="vs-mid">vs</span>${side(opp, oppRow, oppPos, false)}
           ${stat('승점', myRow.points, oppRow.points)}
-          <tr><td class="num">${wdl(myRow)}</td><td>전적</td><td class="num">${wdl(oppRow)}</td></tr>
+          ${stat('전적', wdl(myRow), wdl(oppRow), 0)}
           ${stat('득점', myRow.goalsFor, oppRow.goalsFor)}
           ${stat('실점', myRow.goalsAgainst, oppRow.goalsAgainst, -1)}
           ${stat('득실차', myRow.goalDiff, oppRow.goalDiff, 1, sign)}
-        </tbody></table>
+        </div>
         ${met ? `<p class="vs-met muted small">이번 시즌 첫 맞대결: ${esc(state.clubs[met.home].name)} ${met.result.home} - ${met.result.away} ${esc(state.clubs[met.away].name)}</p>` : ''}
       </div>`;
   }
