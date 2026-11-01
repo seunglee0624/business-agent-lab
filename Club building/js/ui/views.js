@@ -1228,9 +1228,10 @@ function facilityCostCard(club, free, withTransfer) {
 export function confirmModal(ask) {
   return modal({
     title: esc(ask.title),
-    body: `<p>${esc(ask.text)}</p>
-      <div class="form-row"><button class="btn primary" data-action="confirmYes">${esc(ask.yes ?? '확인')}</button>
-      <button class="btn" data-action="confirmNo">취소</button></div>`,
+    body: `<p class="confirm-text">${esc(ask.text)}</p>
+      <div class="confirm-actions"><button class="btn" data-action="confirmNo">취소</button>
+      <button class="btn primary" data-action="confirmYes">${esc(ask.yes ?? '확인')}</button></div>`,
     close: 'data-action="confirmNo"',
+    cls: 'confirm',
   });
 }

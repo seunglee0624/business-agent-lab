@@ -253,6 +253,10 @@ th.num { text-align: right; }
 .modal-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 20px; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; width: min(720px, 100%); max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); animation: pop-in 0.15s var(--ease); }
 .modal.wide { width: min(1000px, 100%); }
+.modal.confirm { width: min(480px, 100%); padding: 20px 24px 22px; }
+.modal.confirm .card-head { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.confirm-text { margin: 0 0 22px; line-height: 1.7; word-break: keep-all; overflow-wrap: break-word; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .modal-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; align-items: start; }
 .modal-side { border-left: 1px solid var(--line); padding-left: 18px; position: sticky; top: 0; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(4px); } }
