@@ -96,9 +96,9 @@ test('협상 화면 미리 보기: 계약금과 총비용, 남는 돈이나 모�
   me.finance.transferBudget = 50e8;
   me.finance.balance = 60e8;
   const terms = bonusPreview(s, me, p, 'terms', 1e8, 30e8); // 주급 1억 → 계약금 10억 4,000만
-  assert.match(terms, /계약금 10억 4,000만 원/);
-  assert.match(terms, /이적료 \+ 계약금 40억 4,000만 원/);
-  assert.match(terms, /9억 6,000만 원 남음/);
-  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 45e8), /모자람/);
-  assert.match(bonusPreview(s, me, p, 'renew', 1e8), /잔고 60억 원 중 49억 6,000만 원 남음/);
+  assert.match(terms, /계약금이 10억 4,000만 원/);
+  assert.match(terms, /모두 40억 4,000만 원이 듭니다/);
+  assert.match(terms, /이적 예산이 9억 6,000만 원 남습니다/);
+  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 45e8), /이적 예산\(50억 원\)이 5억 4,000만 원 모자랍니다/);
+  assert.match(bonusPreview(s, me, p, 'renew', 1e8), /잔고가 49억 6,000만 원 남습니다/);
 });
