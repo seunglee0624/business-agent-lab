@@ -9,7 +9,8 @@ import { seasonTransfers, START_YEAR, coachComment, userClub, searchPlayers, pla
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
-import { weeklyWageBill, signingBonus } from '../core/finance.js';
+import { weeklyWageBill } from '../core/finance.js';
+import { bonusLine } from './bonus.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
 import { esc, posLabel, won, age, attrClass, modal } from './format.js';
@@ -184,20 +185,22 @@ function targetDetail(state, p, msg = null) {
       <p><strong>1단계: 이적료</strong> <span class="muted small">${live?.tries ?? 0}/${MAX_FEE_TRIES}번 실패하면 결렬</span></p>
       ${live?.counter ? `<p class="small error">${esc(clubName(state, p.clubId))} 요구 이적료: <strong>${won(live.counter)}</strong></p>` : ''}
       <div class="form-row">
-        <label>이적료 (억 원) <input id="bidFee" type="number" min="0" step="0.1" value="${eok(live?.counter ?? value)}"></label>
+        <label>이적료 (억 원) <input id="bidFee" type="number" min="0" step="0.1" value="${eok(live?.counter ?? value)}" data-preview="bonus"></label>
         <button class="btn primary small" data-action="bidForPlayer" data-id="${p.id}">제안</button>
-      </div>`;
+      </div>
+      ${bonusLine(state, club, p, 'bid', Number(eok(live?.counter ?? value)) * 1e8)}`;
   } else {
     const d = transferDemand(state, club, p);
     box = `
       <p><strong>${p.clubId ? `2단계: 개인 조건 (이적료 ${won(live.fee)} 합의)` : '자유계약: 개인 조건'}</strong> <span class="muted small">${live?.termTries ?? 0}/${MAX_TERM_TRIES}번 실패하면 결렬</span></p>
-      <p class="small">선수 요구: 주급 ${won(d.wage)} · ${PROMISES[d.promise].name} · 계약금 ${won(signingBonus(state, club, d.wage))} (연봉의 20%, 이적료와 함께 이적 예산에서 냄)</p>
+      <p class="small">선수 요구: 주급 ${won(d.wage)} · ${PROMISES[d.promise].name}</p>
       <div class="form-row">
-        <label>주급 (만 원) <input id="termWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}"></label>
+        <label>주급 (만 원) <input id="termWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}" data-preview="bonus"></label>
         <label>기간 <select id="termYears">${[1, 2, 3, 4, 5].map((y) => `<option value="${y}" ${y === 3 ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
         <label>출전 약속 <select id="termPromise">${Object.entries(PROMISES).map(([k, v]) => `<option value="${k}" ${k === d.promise ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
         <button class="btn primary small" data-action="offerTerms" data-id="${p.id}">제안</button>
-      </div>`;
+      </div>
+      ${bonusLine(state, club, p, 'terms', Math.round(d.wage / 1e4) * 1e4, live?.fee ?? 0)}`;
   }
   const body = `
       <p>${posLabel(p.position)} ${esc(POSITIONS[p.position].name)} · ${info.age}세 · ${esc(clubName(state, p.clubId))}</p>

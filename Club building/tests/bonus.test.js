@@ -73,3 +73,32 @@ test('예전 저장 장부(계약금 칸 없음)에도 계약금을 적을 수 �
   expense(club, 'bonus', 1e8);
   assert.equal(club.finance.season.expense.bonus, 1e8);
 });
+
+test('이적료 단계: 이적료 + 예상 계약금(요구 주급 기준)이 이적 예산을 넘으면 제안할 수 없다', async () => {
+  const { transferDemand } = await import('../js/core/contracts.js');
+  const s = structuredClone(base);
+  const me = g.userClub(s);
+  const p = Object.values(s.players).find((q) => q.clubId && q.clubId !== me.id && !q.loan);
+  const bonus = signingBonus(s, me, transferDemand(s, me, p).wage);
+  me.finance.transferBudget = 1e9 + bonus - 1;
+  const res = g.bidForPlayer(s, p.id, 1e9);
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /예상 계약금/);
+  me.finance.transferBudget = 1e9 + bonus;
+  assert.doesNotMatch(g.bidForPlayer(s, p.id, 1e9).reason ?? '', /이적 예산/);
+});
+
+test('협상 화면 미리 보기: 계약금과 총비용, 남는 돈이나 모자란 돈을 보여 준다', async () => {
+  const { bonusPreview } = await import('../js/ui/bonus.js');
+  const s = structuredClone(base);
+  const me = g.userClub(s);
+  const p = s.players[me.squad[0]];
+  me.finance.transferBudget = 50e8;
+  me.finance.balance = 60e8;
+  const terms = bonusPreview(s, me, p, 'terms', 1e8, 30e8); // 주급 1억 → 계약금 10억 4,000만
+  assert.match(terms, /계약금 10억 4,000만 원/);
+  assert.match(terms, /이적료 \+ 계약금 40억 4,000만 원/);
+  assert.match(terms, /9억 6,000만 원 남음/);
+  assert.match(bonusPreview(s, me, p, 'terms', 1e8, 45e8), /모자람/);
+  assert.match(bonusPreview(s, me, p, 'renew', 1e8), /잔고 60억 원 중 49억 6,000만 원 남음/);
+});

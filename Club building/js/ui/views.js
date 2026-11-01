@@ -14,9 +14,10 @@ import { activeClubs, unreadCount, standings, topScorers, league, userClub, user
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
-import { signingBonus, weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, spendableWithTransfer, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
+import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, spendableWithTransfer, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
 import { marketValue } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
+import { bonusLine } from './bonus.js';
 import { moraleLabel } from '../core/morale.js';
 import { COACH_STYLES } from '../core/coaches.js';
 import { esc, badge, clubLabel, TIER_NAME, ovrCell, posLabel, age, conditionBar, formBadges, avgRating, attrClass, won, modal } from './format.js';
@@ -336,13 +337,14 @@ function contractBox(state, p, ui) {
     talk = `
       <div class="renew">
         <p><strong>재계약 협상</strong> <span class="muted small">이번 달 ${tries}/3번</span></p>
-        <p class="small">선수 요구: 주급 ${won(d.wage)} · ${d.years}년 · ${PROMISES[d.promise].name} · 계약금 ${won(signingBonus(state, club, d.wage))} (연봉의 20%, 잔고에서 냄)</p>
+        <p class="small">선수 요구: 주급 ${won(d.wage)} · ${d.years}년 · ${PROMISES[d.promise].name}</p>
         <div class="form-row">
-          <label>주급 (만 원) <input id="offerWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}"></label>
+          <label>주급 (만 원) <input id="offerWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}" data-preview="bonus"></label>
           <label>기간 <select id="offerYears">${[1, 2, 3, 4, 5].map((y) => `<option value="${y}" ${y === d.years ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
           <label>출전 약속 <select id="offerPromise">${Object.entries(PROMISES).map(([k, v]) => `<option value="${k}" ${k === d.promise ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
           <button class="btn primary small" data-action="offerRenewal" data-id="${p.id}">제안</button>
         </div>
+        ${bonusLine(state, club, p, 'renew', Math.round(d.wage / 1e4) * 1e4)}
         <p class="muted small">약속을 낮추면 주급을 더 원하고, 높여 주면 조금 덜 받아도 됩니다. 주급 예산(${won(club.finance.wageBudget)}) 안에서만 제안할 수 있습니다.</p>
         ${ui.contractMsg ? `<p class="${ui.contractMsg.ok ? 'good' : 'error'} small">${esc(ui.contractMsg.text)}</p>` : ''}
       </div>`;

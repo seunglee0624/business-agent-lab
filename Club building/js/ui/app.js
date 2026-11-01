@@ -1,5 +1,6 @@
 // 앱 제어: 상태를 들고 화면을 그리고, 버튼 동작을 게임 로직 함수로 연결한다.
 
+import { bonusPreview } from './bonus.js';
 import {
   createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, startNextSeason, callUpYouth, sendDownToYouth, STATE_VERSION,
@@ -645,6 +646,15 @@ export class App {
   // 재정 조정 바를 끄는 동안 금액만 바꿔 보여 준다
   onInput(ev) {
     const el = ev.target;
+    if (el.dataset?.preview === 'bonus') {
+      const line = this.root.querySelector('#bonusPreview');
+      if (!line) return;
+      const s = this.state;
+      const unit = line.dataset.kind === 'bid' ? 1e8 : 1e4; // 이적료는 억 원, 주급은 만 원 단위로 입력
+      const amount = Math.max(0, Number(el.value) || 0) * unit;
+      line.innerHTML = bonusPreview(s, userClub(s), s.players[line.dataset.player], line.dataset.kind, amount, Number(line.dataset.fee));
+      return;
+    }
     if (el.dataset?.preview === 'merch') {
       const box = this.root.querySelector('#merchForecast');
       const price = Number(this.root.querySelector('#merchPrice').value);

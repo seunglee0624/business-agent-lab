@@ -117,7 +117,9 @@ export function bidForPlayer(state, club, p, fee) {
   if (p.loan) return { ok: false, reason: '임대 중인 선수는 데려올 수 없습니다.' };
   if (!windowEnd(state.date)) return { ok: false, reason: '이적시장이 닫혀 있습니다. (여름 7/1~8/31, 겨울 1월)' };
   fee = roundMoney(fee);
-  if (fee > club.finance.transferBudget) return { ok: false, reason: '이적 예산을 넘습니다.' };
+  // 개인 조건 단계에서 낼 계약금(선수 요구 주급 기준)까지 이적 예산에 들어와야 한다
+  const bonus = signingBonus(state, club, transferDemand(state, club, p).wage);
+  if (fee + bonus > club.finance.transferBudget) return { ok: false, reason: `이적 예산을 넘습니다 (이적료 ${won(fee)} + 예상 계약금 ${won(bonus)}).` };
   const deal = dealOf(state, p);
   if (deal.stage === 'collapsed') return { ok: false, reason: '협상이 결렬되었습니다. 다음 이적시장에 다시 시도하세요.' };
   if (deal.stage === 'terms') return { ok: true, stage: 'terms', fee: deal.fee };
