@@ -9,7 +9,7 @@ import { seasonTransfers, START_YEAR, coachComment, userClub, searchPlayers, pla
 import { windowEnd, MAX_FEE_TRIES, MAX_TERM_TRIES } from '../core/transfers.js';
 import { transferDemand } from '../core/contracts.js';
 import { loanOptionFee } from '../core/loans.js';
-import { weeklyWageBill } from '../core/finance.js';
+import { weeklyWageBill, signingBonus } from '../core/finance.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { marketValue } from '../core/money.js';
 import { esc, posLabel, won, age, attrClass, modal } from './format.js';
@@ -191,7 +191,7 @@ function targetDetail(state, p, msg = null) {
     const d = transferDemand(state, club, p);
     box = `
       <p><strong>${p.clubId ? `2단계: 개인 조건 (이적료 ${won(live.fee)} 합의)` : '자유계약: 개인 조건'}</strong> <span class="muted small">${live?.termTries ?? 0}/${MAX_TERM_TRIES}번 실패하면 결렬</span></p>
-      <p class="small">선수 요구: 주급 ${won(d.wage)} · ${PROMISES[d.promise].name}</p>
+      <p class="small">선수 요구: 주급 ${won(d.wage)} · ${PROMISES[d.promise].name} · 계약금 ${won(signingBonus(state, club, d.wage))} (연봉의 20%, 이적료와 함께 이적 예산에서 냄)</p>
       <div class="form-row">
         <label>주급 (만 원) <input id="termWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}"></label>
         <label>기간 <select id="termYears">${[1, 2, 3, 4, 5].map((y) => `<option value="${y}" ${y === 3 ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>

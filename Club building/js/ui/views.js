@@ -14,7 +14,7 @@ import { activeClubs, unreadCount, standings, topScorers, league, userClub, user
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
-import { weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, spendableWithTransfer, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
+import { signingBonus, weeklyWageBill, ledgerTotal, attendanceRate, wageRoom, staffWeeklyWage, playerWageBill, staffWageBill, spendable, spendableWithTransfer, wageReserve, facilityMonthlyUpkeep, monthlyUpkeep } from '../core/finance.js';
 import { marketValue } from '../core/money.js';
 import { canRenew, renewalDemand } from '../core/contracts.js';
 import { moraleLabel } from '../core/morale.js';
@@ -336,7 +336,7 @@ function contractBox(state, p, ui) {
     talk = `
       <div class="renew">
         <p><strong>재계약 협상</strong> <span class="muted small">이번 달 ${tries}/3번</span></p>
-        <p class="small">선수 요구: 주급 ${won(d.wage)} · ${d.years}년 · ${PROMISES[d.promise].name}</p>
+        <p class="small">선수 요구: 주급 ${won(d.wage)} · ${d.years}년 · ${PROMISES[d.promise].name} · 계약금 ${won(signingBonus(state, club, d.wage))} (연봉의 20%, 잔고에서 냄)</p>
         <div class="form-row">
           <label>주급 (만 원) <input id="offerWage" type="number" min="1" step="10" value="${Math.round(d.wage / 1e4)}"></label>
           <label>기간 <select id="offerYears">${[1, 2, 3, 4, 5].map((y) => `<option value="${y}" ${y === d.years ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
@@ -734,7 +734,7 @@ export function clubView(state, ui) {
 // ---- 재정 ----
 
 const INCOME_NAMES = { tv: '중계권', prize: '순위 상금', gate: '입장 수입', commercial: '스폰서·상업', merch: '굿즈', rental: '경기장 대관', transfers: '선수 판매' };
-const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', merch: '굿즈 생산', events: '행사·SNS', transfers: '선수 영입' };
+const EXPENSE_NAMES = { wages: '선수 주급', staff: '스태프 주급', facilities: '시설 유지비', construction: '시설 공사', merch: '굿즈 생산', events: '행사·SNS', transfers: '선수 영입', bonus: '계약금' };
 
 function ledgerTable(ledger) {
   const rows = (names, part, sign) => Object.entries(names)

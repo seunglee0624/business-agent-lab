@@ -3,9 +3,9 @@
 import { PROMISES } from '../data/economy.js';
 import { seasonOf, addDays } from './calendar.js';
 import { overall, ageOn } from './player.js';
-import { wageFor, roundMoney, monthsBetween } from './money.js';
+import { wageFor, roundMoney, monthsBetween, won } from './money.js';
 import { boostFor } from './boost.js';
-import { weeklyWageBill, seasonRevenueEstimate, expense } from './finance.js';
+import { weeklyWageBill, seasonRevenueEstimate, expense, signingBonus } from './finance.js';
 
 export const RENEWAL_MONTHS = 12; // 계약이 이만큼 남으면 재계약 협상을 할 수 있다
 export const MAX_TALKS_PER_MONTH = 3;
@@ -59,6 +59,7 @@ export function signNew(rng, state, club, p, { youth = false } = {}) {
   const promise = youth ? 'backup' : promiseForRank(squadRank(state, club, p));
   const mult = (youth ? 0.6 : rng.float(0.9, 1.1)) * aiWageMult(state, club);
   p.contract = newContract(p, { date: state.date, years: youth ? 3 : contractYears(rng, ageOn(p, state.date)), promise, wageMult: mult });
+  if (!youth) expense(club, 'bonus', signingBonus(state, club, p.contract.wage));
 }
 
 // ---- 재계약 ----
@@ -116,6 +117,8 @@ export function offerRenewal(state, club, p, offer) {
   const wage = roundMoney(offer.wage);
   const bill = weeklyWageBill(state, club) - p.contract.wage + wage;
   if (bill > club.finance.wageBudget) return { ok: false, reason: '주급 예산을 넘습니다.' };
+  const bonus = signingBonus(state, club, wage);
+  if (bonus > Math.max(0, club.finance.balance)) return { ok: false, reason: `계약금을 낼 잔고가 없습니다 (계약금 ${won(bonus)}).` };
   p.talks.tries++;
   const demand = renewalDemand(state, club, p);
   if (wage < requiredWage(demand, offer.promise) * 0.95) {
@@ -124,7 +127,8 @@ export function offerRenewal(state, club, p, offer) {
   }
   p.contract = { wage, until: contractEnd(state.date, offer.years), promise: offer.promise, signed: state.date };
   delete p.talks;
-  return { ok: true };
+  expense(club, 'bonus', bonus);
+  return { ok: true, bonus };
 }
 
 // ---- 시즌 끝 만료 ----
@@ -147,7 +151,10 @@ export function expiringContracts(state, rng, endDate, userId) {
         // 주급 예산을 넘으면 주전(능력 상위 11명)만 붙잡고 나머지는 보낸다
         const over = weeklyWageBill(state, club) - p.contract.wage + next.wage > club.finance.wageBudget;
         if (over && rank >= 11) leaving.push({ club, player: p });
-        else p.contract = next;
+        else {
+          p.contract = next;
+          expense(club, 'bonus', signingBonus(state, club, next.wage));
+        }
       } else {
         leaving.push({ club, player: p });
       }

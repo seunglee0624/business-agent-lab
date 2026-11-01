@@ -8,7 +8,7 @@ import { addMessage } from './state.js';
 import { fanTransfer } from './fans.js';
 import { withParticle } from './korean.js';
 import { contractEnd, transferDemand, requiredWage, signNew } from './contracts.js';
-import { weeklyWageBill, recordTransfer } from './finance.js';
+import { weeklyWageBill, recordTransfer, isRichAi, signingBonus, expense } from './finance.js';
 import { registeredCount, MAX_SQUAD } from './season.js';
 import { totalCount, MAX_TOTAL, fitRegistration } from './registration.js';
 import { SQUAD_TEMPLATE } from './worldgen.js';
@@ -170,12 +170,17 @@ export function offerTerms(state, club, p, offer) {
     return { ok: false, reason: `조건이 맞지 않는다며 거절했습니다. (${MAX_TERM_TRIES - deal.termTries}번 더 제안할 수 있습니다)` };
   }
   const fee = deal.fee;
+  // 계약금도 이적료처럼 이적 예산에서 낸다
+  const bonus = signingBonus(state, club, wage);
+  if (fee + bonus > club.finance.transferBudget) return { ok: false, reason: `이적 예산이 모자랍니다 (이적료 ${won(fee)} + 계약금 ${won(bonus)}).` };
   completeTransfer(state, p, seller, club, fee, { wage, until: contractEnd(state.date, offer.years), promise: offer.promise, signed: state.date });
+  club.finance.transferBudget = Math.max(0, club.finance.transferBudget - bonus);
+  expense(club, 'bonus', bonus);
   // 등록 25명이 꽉 찼으면 미등록으로 들어온다 (이적시장 안이면 포지션·능력으로 다시 고른다)
   p.newcomer = true;
   const unregistered = fitRegistration(state, club, { keep: !windowEnd(state.date) });
   delete p.newcomer;
-  return { ok: true, fee, unregistered };
+  return { ok: true, fee, bonus, unregistered };
 }
 
 // 선수를 옮기고 돈을 정산한다. from이 null이면 자유계약 선수
@@ -278,14 +283,18 @@ export function trimSquad(state, club) {
 
 // 시장마다 한 구단이 사는 최대 인원과 하루 시도 확률 (여름 약 1.5명, 겨울 약 0.3명)
 const AI_BUYS = { summer: { max: 3, chance: 0.025 }, winter: { max: 1, chance: 0.01 } };
+// 부자 AI 구단(finance.isRichAi): 더 자주, 더 많이, 더 좋은 선수를 산다
+const RICH_BUYS = { summer: { max: 5, chance: 0.05 }, winter: { max: 2, chance: 0.02 } };
+const SIGN_RANGE = { normal: 6, rich: 10 };
 
 // 이적시장 중 매일: AI 구단 몇 곳이 약한 자리를 자유계약 선수 → 다른 구단 선수 순으로 보강한다
 export function dailyAiTransfers(state, rng, userId) {
   const end = windowEnd(state.date);
   if (!end) return;
-  const rule = end.endsWith('08-31') ? AI_BUYS.summer : AI_BUYS.winter;
+  const season = end.endsWith('08-31') ? 'summer' : 'winter';
   for (const club of Object.values(state.clubs)) {
     if (club.status !== 'active' || club.id === userId) continue;
+    const rule = (isRichAi(state, club) ? RICH_BUYS : AI_BUYS)[season];
     const buys = club.windowBuys?.until === end ? club.windowBuys : (club.windowBuys = { until: end, n: 0 });
     if (buys.n >= rule.max || !rng.chance(rule.chance)) continue;
     if (aiSign(state, rng, club, userId)) buys.n++;
@@ -308,8 +317,9 @@ function aiSign(state, rng, club, userId) {
   const pos = neediestPosition(state, club);
   // 주급 예산(+10% 여유) 안에서 데려올 수 있는 선수만. 여유가 없으면 이적 시장이 크게 줄어든다
   const bill = weeklyWageBill(state, club);
+  const top = club.level + (isRichAi(state, club) ? SIGN_RANGE.rich : SIGN_RANGE.normal);
   const fits = (p) => p.position === pos && !p.retired && !p.injury && !p.loan && ageOn(p, state.date) <= 31
-    && overall(p) >= club.level - 3 && overall(p) <= club.level + 6
+    && overall(p) >= club.level - 3 && overall(p) <= top
     && bill + transferDemand(state, club, p).wage <= club.finance.wageBudget * AI_SIGN_HEADROOM;
   const all = Object.values(state.players);
   const free = all.filter((p) => !p.clubId && fits(p));

@@ -806,7 +806,7 @@ export function offerTerms(state, playerId, offer) {
   const res = transfers.offerTerms(state, userClub(state), p, offer);
   if (res.ok) {
     const where = from ? `${state.clubs[from].name}에서` : '자유계약으로';
-    addMessage(state, { view: 'transfers', title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}${unregisteredNote(res.unregistered)}` });
+    addMessage(state, { view: 'transfers', title: `${p.name} 영입`, body: `${withParticle(p.name, '가')} ${where} 우리 팀에 왔습니다.${res.fee ? ` 이적료 ${won(res.fee)}.` : ''}${res.bonus ? ` 계약금 ${won(res.bonus)}.` : ''}${unregisteredNote(res.unregistered)}` });
   }
   return res;
 }

@@ -365,7 +365,7 @@ export class App {
         const years = Number(this.root.querySelector('#offerYears').value);
         const promise = this.root.querySelector('#offerPromise').value;
         const res = renewContract(s, d.id, { wage, years, promise });
-        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `${years}년, 주급 ${won(wage)}, ${PROMISES[promise].name} 약속으로 재계약했습니다.` : res.reason };
+        this.ui.contractMsg = { ok: res.ok, text: res.ok ? `${years}년, 주급 ${won(wage)}, ${PROMISES[promise].name} 약속으로 재계약했습니다. 계약금 ${won(res.bonus ?? 0)}.` : res.reason };
         this.persist();
         this.render();
         break;
@@ -522,7 +522,7 @@ export class App {
         const promise = this.root.querySelector('#termPromise').value;
         const name = s.players[d.id].name;
         const res = offerTerms(s, d.id, { wage, years, promise });
-        this.ui.transferMsg = { ok: res.ok, text: res.ok ? `${name} 영입을 마쳤습니다. (${years}년, 주급 ${won(wage)})` : res.reason };
+        this.ui.transferMsg = { ok: res.ok, text: res.ok ? `${name} 영입을 마쳤습니다. (${years}년, 주급 ${won(wage)}, 계약금 ${won(res.bonus ?? 0)})` : res.reason };
         if (res.ok) this.ui.targetId = null;
         this.persist();
         this.render();

@@ -132,12 +132,24 @@ test('개인 조건이 맞으면 이적이 끝난다: 소속, 계약, 잔고, �
   assert.equal(p.clubId, me.id);
   assert.ok(me.squad.includes(p.id) && !seller.squad.includes(p.id));
   assert.deepEqual([p.contract.wage, p.contract.promise, p.contract.until], [1e10, 'starter', '2029-06-30']);
-  assert.equal(me.finance.balance, myBal - fee);
-  assert.equal(me.finance.transferBudget, Math.min(myBudget - fee, me.finance.balance)); // 이적 예산은 잔고를 넘지 않는다
+  const bonus = 1e10 * 52 * 0.2; // 계약금: 연봉의 20%, 이적 예산에서 낸다
+  assert.equal(res.bonus, bonus);
+  assert.equal(me.finance.balance, myBal - fee - bonus);
+  assert.equal(me.finance.transferBudget, Math.max(0, Math.min(myBudget - fee - bonus, me.finance.balance))); // 이적 예산은 잔고를 넘지 않는다
   assert.equal(me.finance.season.expense.transfers, fee);
+  assert.equal(me.finance.season.expense.bonus, bonus);
   assert.equal(seller.finance.balance, sellBal + fee);
   assert.equal(seller.finance.season.income.transfers, fee);
   assert.equal(seller.finance.transferBudget, sellBudget + fee); // 흑자 구단은 판 돈 전부를 예산에 더한다
+});
+
+test('계약금: 이적료 + 계약금이 이적 예산을 넘으면 영입할 수 없다', () => {
+  const { state, me, p, fee } = agreed('bonus-cap');
+  me.finance.transferBudget = fee + 1e8 * 52 * 0.2 - 1;
+  const res = offerTerms(state, p.id, { wage: 1e8, years: 3, promise: 'starter' });
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /계약금/);
+  assert.notEqual(p.clubId, me.id);
 });
 
 test('개인 조건: 이적료 합의 전에는 협상할 수 없고, 주급이 낮으면 거절하며 세 번이면 결렬된다', () => {
@@ -180,12 +192,14 @@ test('자유계약 선수: 이적시장이 닫혀 있어도 이적료 없이 개
   old.squad = old.squad.filter((id) => id !== p.id);
   Object.assign(p, { clubId: null, contract: null, freeSince: '2026-06-30' });
   state.date = '2026-10-01';
+  const offer = { wage: 1e8, years: 3, promise: 'starter' };
+  me.finance.transferBudget = Math.min(me.finance.balance, 1e8 * 52);
   const balance = me.finance.balance;
   assert.ok(searchPlayers(state, { freeOnly: true }).some((r) => r.id === p.id && r.value === 0));
-  assert.deepEqual(offerTerms(state, p.id, generous), { ok: true, fee: 0, unregistered: [] });
+  assert.deepEqual(offerTerms(state, p.id, offer), { ok: true, fee: 0, bonus: 1e8 * 52 * 0.2, unregistered: [] });
   assert.equal(p.clubId, me.id);
   assert.equal(p.freeSince, undefined);
-  assert.equal(me.finance.balance, balance);
+  assert.equal(me.finance.balance, balance - 1e8 * 52 * 0.2, '이적료는 없고 계약금만 낸다');
 });
 
 // 이적 목록에 올린 선수 둘을 두고, 제안이 올 때까지 진행한다

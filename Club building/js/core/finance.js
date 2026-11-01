@@ -14,7 +14,7 @@ const HISTORY_SEASONS = 5;
 
 export const emptyLedger = () => ({
   income: { tv: 0, prize: 0, gate: 0, commercial: 0, merch: 0, rental: 0, transfers: 0 },
-  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, merch: 0, events: 0, transfers: 0 },
+  expense: { wages: 0, staff: 0, facilities: 0, construction: 0, merch: 0, events: 0, transfers: 0, bonus: 0 },
 });
 
 export const ledgerTotal = (part) => Object.values(part).reduce((s, x) => s + x, 0);
@@ -111,7 +111,7 @@ export function income(club, key, amount) {
 export function expense(club, key, amount) {
   const f = club.finance;
   f.balance -= amount;
-  f.season.expense[key] += amount;
+  f.season.expense[key] = (f.season.expense[key] ?? 0) + amount; // 예전 저장 장부에는 없는 항목(bonus)도 있다
   f.transferBudget = Math.max(0, Math.min(f.transferBudget, Math.max(0, f.balance) + (f.wageCredit ?? 0)));
 }
 
@@ -158,6 +158,13 @@ export function payOptional(state, club, key, cost, { useTransfer = false } = {}
 }
 
 export const PROFIT_TO_BUDGET = 0.5;
+// 부자 AI 구단: 잔고가 예상 시즌 수입 1.5년치를 넘으면 주급·영입에 더 쓴다 (돈이 끝없이 쌓이지 않게)
+export const RICH_WAGE_RATIO = 0.85;
+export const RICH_BALANCE = 1.5;
+export const isRichAi = (state, club) => club.id !== state.user?.clubId && club.finance.balance > seasonRevenueEstimate(club) * RICH_BALANCE;
+// 계약금: 영입(이적·자유계약)과 재계약 때 한 번 내는 돈 = 연봉(주급 × 52)의 20%, 부자 AI 구단은 30%. 유스 승격·임대는 없음
+export const SIGNING_BONUS = { base: 0.2, rich: 0.3 };
+export const signingBonus = (state, club, wage) => roundMoney(wage * 52 * (isRichAi(state, club) ? SIGNING_BONUS.rich : SIGNING_BONUS.base));
 export const WAGE_HEADROOM = 1.1; // 재계약·영입으로 주급이 오를 여유
 export const TRANSFER_FLOOR = 0.2; // 적자 시즌 뒤에도 잔고의 20%는 이적 예산으로
 
@@ -166,8 +173,8 @@ export function setBudgets(state, club) {
   const f = club.finance;
   const bill = weeklyWageBill(state, club);
   const user = club.id === state.user?.clubId;
-  const byRevenue = (seasonRevenueEstimate(club) * WAGE_BUDGET_RATIO) / 52;
-  // AI 구단은 주급이 수입의 70%를 넘었으면 지금 주급에서 묶는다 (1.1배 여유를 매년 주면 주급이 끝없이 오른다)
+  const byRevenue = (seasonRevenueEstimate(club) * (isRichAi(state, club) ? RICH_WAGE_RATIO : WAGE_BUDGET_RATIO)) / 52;
+  // AI 구단은 주급이 수입의 70%(부자 구단 85%)를 넘었으면 지금 주급에서 묶는다 (1.1배 여유를 매년 주면 주급이 끝없이 오른다)
   f.wageBudget = Math.max(Math.ceil(bill), roundMoney(Math.max(user ? bill * WAGE_HEADROOM : bill, byRevenue)));
   f.baseWage = f.wageBudget;
   f.wageCredit = 0;
