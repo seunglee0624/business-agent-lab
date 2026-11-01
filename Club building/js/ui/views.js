@@ -158,14 +158,31 @@ export function homeView(state) {
     const home = next.home === club.id;
     const opp = state.clubs[home ? next.away : next.home];
     const oppPos = table.findIndex((r) => r.clubId === opp.id);
+    const oppRow = table[oppPos];
+    // 크게 보여 주는 맞대결: 두 구단 로고·이름·순위·최근 전적, 아래에 시즌 기록 비교
+    const side = (c, row, pos, me) => `
+          <div class="vs-side">${badge(c, 'huge')}<div class="vs-name ${me ? 'me' : ''}">${esc(c.name)}</div>
+            <div class="vs-form">${pos + 1}위 · 최근 ${formBadges(row.form) || '-'}</div></div>`;
+    // 시즌 기록 한 줄: 더 나은 쪽 숫자를 밝게 (cmp: 1 = 클수록 좋음, -1 = 작을수록 좋음, 0 = 비교 안 함)
+    const stat = (name, a, b, cmp = 1, fmt = String) => {
+      const d = cmp * (a - b);
+      return `<tr><td class="num ${d > 0 ? 'lead' : ''}">${fmt(a)}</td><td>${name}</td><td class="num ${d < 0 ? 'lead' : ''}">${fmt(b)}</td></tr>`;
+    };
+    const sign = (n) => `${n > 0 ? '+' : ''}${n}`;
+    const wdl = (r) => `${r.won}승 ${r.drawn}무 ${r.lost}패`;
+    const met = league(state).fixtures.find((f) => f.result && [f.home, f.away].includes(club.id) && [f.home, f.away].includes(opp.id));
     nextCard = `
       <div class="next-match">
-        <div>${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
-        <div class="vs">
-          <div class="vs-side">${clubLabel(club, true)}<div class="vs-form">${myPos + 1}위 · 최근 ${formBadges(myRow.form) || '-'}</div></div>
-          <span class="muted vs-mid">vs</span>
-          <div class="vs-side">${clubLabel(opp)}<div class="vs-form">${oppPos + 1}위 · 최근 ${formBadges(table[oppPos].form) || '-'}</div></div>
-        </div>
+        <div class="vs-meta">${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
+        <div class="vs">${side(club, myRow, myPos, true)}<span class="vs-mid">vs</span>${side(opp, oppRow, oppPos, false)}</div>
+        <table class="vs-stats"><tbody>
+          ${stat('승점', myRow.points, oppRow.points)}
+          <tr><td class="num">${wdl(myRow)}</td><td>전적</td><td class="num">${wdl(oppRow)}</td></tr>
+          ${stat('득점', myRow.goalsFor, oppRow.goalsFor)}
+          ${stat('실점', myRow.goalsAgainst, oppRow.goalsAgainst, -1)}
+          ${stat('득실차', myRow.goalDiff, oppRow.goalDiff, 1, sign)}
+        </tbody></table>
+        ${met ? `<p class="vs-met muted small">이번 시즌 첫 맞대결: ${esc(state.clubs[met.home].name)} ${met.result.home} - ${met.result.away} ${esc(state.clubs[met.away].name)}</p>` : ''}
       </div>`;
   }
 

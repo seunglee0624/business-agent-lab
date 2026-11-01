@@ -14,7 +14,7 @@ export function esc(value) {
 
 export const TIER_NAME = { strong: '강팀', mid: '중위권', weak: '약팀' };
 
-const BADGE_PX = { '': 18, big: 40 };
+const BADGE_PX = { '': 18, big: 40, huge: 80 };
 
 export function badge(club, size = '') {
   return `<span class="badge ${size}">${crestSvg(club, BADGE_PX[size] ?? 18)}</span>`;
