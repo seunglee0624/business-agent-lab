@@ -53,13 +53,30 @@ function check(pages) {
   }
 }
 
-test('새 게임 화면: 리그마다 맡게 될 가장 약한 구단을 보여 주고 리그를 고른다', () => {
+test('새 게임 화면: 나라·리그 탭으로 고른 리그의 구단 전체를 보여 주고, 가장 약한 구단에 도전 표시', () => {
   assert.ok(newGameView(null, {}).includes('세계 생성'));
   const preview = g.createNewGame('v');
   const html = newGameView(null, { preview });
-  assert.equal((html.match(/data-action="pickLeague"/g) ?? []).length, 15);
-  assert.ok(html.includes(g.weakestClub(preview, 'ENG1').name));
-  assert.ok(!BAD.test(html));
+  const eng1 = g.activeClubs(preview).filter((c) => c.leagueId === 'ENG1');
+  assert.equal((html.match(/data-action="pickClub"/g) ?? []).length, eng1.length);
+  assert.equal((html.match(/data-action="previewLeague"/g) ?? []).length, 5 + 3);
+  assert.equal((html.match(/>도전</g) ?? []).length, 1);
+  assert.ok(html.includes(`data-club="${g.weakestClub(preview, 'ENG1').id}"`));
+  const ger3 = newGameView(null, { preview, pickLeague: 'GER3' });
+  const ger3Clubs = g.activeClubs(preview).filter((c) => c.leagueId === 'GER3');
+  assert.equal((ger3.match(/data-action="pickClub"/g) ?? []).length, ger3Clubs.length);
+  assert.ok(!BAD.test(html) && !BAD.test(ger3));
+});
+
+test('어느 구단이든 골라 시작하고, 보정은 그 구단에 붙는다', () => {
+  const state = g.createNewGame('pick-any');
+  const strong = g.activeClubs(state).filter((c) => c.leagueId === 'ITA1' && c.tier === 'strong')[0];
+  g.chooseClub(state, strong.id, '단장');
+  assert.equal(g.userClub(state).id, strong.id);
+  assert.equal(state.phase, 'season');
+  assert.equal(strong.userBoost, true);
+  assert.equal(g.userLeagueId(state), 'ITA1');
+  assert.throws(() => g.chooseClub(g.createNewGame('pick-bad'), 'nope', '단장'));
 });
 
 test('시즌 시작·중간·종료·다음 시즌에 모든 화면을 그릴 수 있다', () => {

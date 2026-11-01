@@ -10,7 +10,7 @@ import { isHomegrownYouth } from '../core/development.js';
 import { overall, ratingAt } from '../core/player.js';
 import { formatDate, formatShortDate } from '../core/calendar.js';
 import { unregisteredPlayers, totalCount, MAX_TOTAL, pressOf, MAX_ARTICLES, stripSegmentLabel } from '../core/game.js';
-import { unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
+import { activeClubs, unreadCount, standings, topScorers, league, userClub, userLeagueId, nextUserFixture, seasonStats, isUnavailable, findFixture, weakestClub, registeredCount, canCallUp, MAX_SQUAD, budgetRange, fansOf, fanReactions, expectedPosition, PROTEST_LINE, ticketsOf, GRADES, GRADE_KEYS, rivalOf, priceRange, forecast, seasonForecast, priceLevel, merchOf, ITEMS, ITEM_KEYS, DESIGNS, DESIGN_KEYS, merchForecast, starPlayer, unitCost, basePrice, REORDER_COST, sponsorsOf, SLOTS, SLOT_KEYS, INDUSTRIES, INDUSTRY_KEYS, canPitch, MAX_ASKS, baseValue, suggestedAsk, TOURS, TOUR_KEYS, canChooseTour, tourFee, tourGain, tourStars, EVENTS, EVENT_KEYS, eventCost, eventStrength, RENTALS, stadiumOf, pitchFactor, hasPitchSystem, pitchSystemCost, PITCH_SYSTEM, CAMPAIGNS, CAMPAIGN_KEYS, mediaOf, campaignCost, repeatFactor, canStartCampaign, MAX_RUNNING, upcomingHomeFixtures, SEGMENTS, DECISION_STOPS, merchProjection, releaseCost } from '../core/game.js';
 import { FACILITIES, FACILITY_KEYS, STAFF, STAFF_KEYS, MAX_STAFF, PROMISES } from '../data/economy.js';
 import { upgradeInfo, capacity, isBuilding } from '../core/facilities.js';
 import { USER_BOOST } from '../core/boost.js';
@@ -26,30 +26,31 @@ const options = (map, current) =>
 
 // ---- 새 게임 ----
 
-// 리그마다 맡게 될 구단(가장 약한 구단) 미리 보기
-function leaguePickTable(world) {
-  return Object.values(COUNTRIES).map((country) => `
-  <div class="card">
-  <h3>${esc(country.name)}</h3>
-  <table class="table league-pick">
-    <thead><tr><th>리그</th><th>맡게 될 구단</th><th class="num">주전 평균</th><th>최고 선수</th><th class="num">잔고</th><th>시작</th></tr></thead>
+// 고른 리그의 구단 전체 미리 보기 (강한 순). 가장 약한 구단에는 "도전" 표시
+function clubPickTable(world, leagueId) {
+  const weakest = weakestClub(world, leagueId);
+  const clubs = activeClubs(world).filter((c) => c.leagueId === leagueId)
+    .map((c) => {
+      const best = c.squad.map((id) => world.players[id]).sort((a, b) => overall(b) - overall(a));
+      return { c, best, xi: best.slice(0, 11).reduce((sum, p) => sum + overall(p), 0) / 11 };
+    })
+    .sort((a, b) => b.xi - a.xi);
+  return `<div class="card">
+  <table class="table club-pick">
+    <thead><tr><th>구단</th><th>전력</th><th class="num">기대 순위</th><th class="num">주전 평균</th><th>최고 선수</th><th class="num">잔고</th><th>시작</th></tr></thead>
     <tbody>
-      ${country.leagues.map((l) => {
-        const c = weakestClub(world, l.id);
-        const best = c.squad.map((id) => world.players[id]).sort((a, b) => overall(b) - overall(a));
-        const xi = best.slice(0, 11).reduce((sum, p) => sum + overall(p), 0) / 11;
-        return `<tr>
-          <td>${l.tier}부 ${esc(l.name)}</td>
-          <td>${clubLabel(c)}</td>
+      ${clubs.map(({ c, best, xi }) => `<tr>
+          <td>${clubLabel(c)}${c.id === weakest.id ? ' <span class="tier tier-weak">도전</span>' : ''}</td>
+          <td>${TIER_NAME[c.tier]}</td>
+          <td class="num">${expectedPosition(world, c)}위</td>
           <td class="num">${xi.toFixed(1)}</td>
           <td>${esc(best[0].name)} (${best[0].position} ${overall(best[0])})</td>
           <td class="num">${won(c.finance.balance)}</td>
-          <td><button class="btn primary small" data-action="pickLeague" data-league="${l.id}">이 리그로 시작</button></td>
-        </tr>`;
-      }).join('')}
+          <td><button class="btn ${c.id === weakest.id ? 'primary' : ''} small" data-action="pickClub" data-club="${c.id}">이 구단으로 시작</button></td>
+        </tr>`).join('')}
     </tbody>
   </table>
-  </div>`).join('');
+  </div>`;
 }
 
 // 나라 → 리그 탭
@@ -63,13 +64,14 @@ function leagueTabs(selectedLeague, action) {
 export function newGameView(state, ui) {
   const preview = ui.preview;
   const leagueList = preview ? `
-      <h2>리그 선택</h2>
-      <p class="muted">고른 리그에서 가장 약한 구단의 단장이 됩니다. 1부일수록 돈은 많고 경쟁은 치열합니다. 아래 리그일수록 시작부터 함께합니다. 시드: <code>${esc(preview.seed)}</code></p>
-      ${leaguePickTable(preview)}` : '';
+      <h2>구단 선택</h2>
+      <p class="muted">나라와 리그를 고른 뒤 맡을 구단을 고르세요. 강팀은 기대 순위가 높아 팬과 이사회의 눈높이도 높습니다. 리그에서 가장 약한 구단에는 "도전" 표시가 붙습니다. 1부일수록 돈은 많고 경쟁은 치열합니다. 시드: <code>${esc(preview.seed)}</code></p>
+      ${leagueTabs(ui.pickLeague ?? 'ENG1', 'previewLeague')}
+      ${clubPickTable(preview, ui.pickLeague ?? 'ENG1')}` : '';
   return `
     <div class="newgame">
       <h1>축구구단 키우기</h1>
-      <p class="muted">가상의 유럽 5개 리그에서 가장 약한 구단의 단장을 맡습니다. 감독을 뽑고, 돈을 벌고, 선수를 사고팔며 구단을 키워 보세요.</p>
+      <p class="muted">가상의 유럽 5개 리그, 1~3부 구단 가운데 하나의 단장을 맡습니다. 감독을 뽑고, 돈을 벌고, 선수를 사고팔며 구단을 키워 보세요.</p>
       <div class="card form-row">
         <label>단장 이름 <input id="managerName" value="${esc(ui.managerName ?? '')}" placeholder="이름을 입력하세요" maxlength="20"></label>
         <label>세계 시드 (선택) <input id="seed" value="${esc(ui.seedInput ?? '')}" placeholder="비우면 무작위" maxlength="30"></label>

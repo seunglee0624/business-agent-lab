@@ -1,7 +1,7 @@
 // 앱 제어: 상태를 들고 화면을 그리고, 버튼 동작을 게임 로직 함수로 연결한다.
 
 import {
-  createNewGame, chooseLeague, advance, startUserMatch, simulateUserMatch, finishUserMatch,
+  createNewGame, chooseClub, advance, startUserMatch, simulateUserMatch, finishUserMatch,
   simulateToSeasonEnd, startNextSeason, callUpYouth, sendDownToYouth, STATE_VERSION,
   renewContract, upgradeFacility, setStaffLevel,
   bidForPlayer, offerTerms, respondToOffer, setTransferListed, loanOut, offerLoan, buyLoanedPlayer,
@@ -244,7 +244,12 @@ export class App {
         this.render();
         break;
       }
-      case 'pickLeague': {
+      case 'previewLeague':
+        this.ui.managerName = this.root.querySelector('#managerName')?.value.trim() ?? this.ui.managerName;
+        this.ui.pickLeague = d.league;
+        this.render();
+        break;
+      case 'pickClub': {
         const name = (this.root.querySelector('#managerName')?.value ?? this.ui.managerName ?? '').trim();
         if (!name) {
           this.ui.error = '단장 이름을 입력하세요.';
@@ -252,7 +257,7 @@ export class App {
           return;
         }
         this.state = this.ui.preview;
-        chooseLeague(this.state, d.league, name);
+        chooseClub(this.state, d.club, name);
         this.ui = { view: 'home' };
         this.persist();
         this.render();

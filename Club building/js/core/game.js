@@ -46,7 +46,7 @@ import { addNotice, unreadCount, markViewRead, markAllRead, openMessage,
   unavailableSet, activeClubs, clubStrength,
 } from './state.js';
 
-export { userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, unreadCount, markViewRead, markAllRead, openMessage };
+export { activeClubs, userClub, userLeagueId, league, standings, seasonStats, topScorers, isUnavailable, addMessage, unreadCount, markViewRead, markAllRead, openMessage };
 
 export const STATE_VERSION = 5;
 export const START_YEAR = 2026;
@@ -123,13 +123,15 @@ export function weakestClub(state, leagueId) {
     .sort((a, b) => clubStrength(state, a) - clubStrength(state, b))[0];
 }
 
-// 리그를 고르면 그 리그에서 가장 약한 구단의 단장이 된다
+// 리그의 가장 약한 구단으로 시작한다 (테스트와 도구에서 쓰는 지름길)
 export function chooseLeague(state, leagueId, name) {
   chooseClub(state, weakestClub(state, leagueId).id, name);
 }
 
-function chooseClub(state, clubId, name) {
+// 1~3부 어느 구단이든 골라 단장으로 시작한다
+export function chooseClub(state, clubId, name) {
   const club = state.clubs[clubId];
+  if (!club || club.status !== 'active') throw new Error(`고를 수 없는 구단: ${clubId}`);
   state.user = { name, clubId, history: [] };
   state.clubs[clubId].userBoost = true;
   state.phase = 'season';

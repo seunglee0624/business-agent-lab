@@ -317,12 +317,7 @@ button.link { background: none; border: 0; padding: 0; color: inherit; cursor: p
 .search-form #sMaxValue { width: 110px; }
 .search-form .check { display: flex; flex-direction: row; align-items: center; gap: 4px; align-self: flex-end; padding-bottom: 8px; }
 .search-form .btn { align-self: flex-end; }
-.table.league-pick { table-layout: fixed; }
-.table.league-pick th:nth-child(1) { width: 22%; }
-.table.league-pick th:nth-child(2) { width: 20%; }
-.table.league-pick th:nth-child(3) { width: 10%; }
-.table.league-pick th:nth-child(4) { width: 22%; }
-.table.league-pick th:nth-child(5) { width: 13%; }
+.table.club-pick td:first-child { white-space: nowrap; }
 
 /* 예산·가격 바 */
 .budget-slider { margin: 14px 0; padding: 12px 14px; background: var(--panel-2); border-radius: var(--radius); }
