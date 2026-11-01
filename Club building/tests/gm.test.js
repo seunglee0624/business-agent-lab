@@ -72,7 +72,7 @@ test('감독 후보: 6명쯤 있고, 능력이 높을수록 비싸다', () => {
   for (const c of list) assert.ok(typeof c.willing === 'boolean' && c.style);
 });
 
-test('감독 해고: 남은 계약 주급의 절반을 위약금으로 내고, 감독 없이도 진행된다 (코치가 임시로 맡는다)', () => {
+test('감독 해고: 남은 계약 기간 연봉의 절반을 위약금으로 내고, 감독 없이도 진행된다 (코치가 임시로 맡는다)', () => {
   const state = fresh('gm6');
   const club = userClub(state);
   const coach = club.headCoach;
@@ -239,7 +239,7 @@ test('감독: 포지션 진단으로 부족한 자리를 알려 주고, 추천 �
   assert.ok(closed.made.every((r) => r.until === '2027-01-31'));
 });
 
-test('계약 해지: 남은 주급의 절반을 위약금으로 내고 자유계약 선수가 되며, 1군 자리가 빈다', () => {
+test('계약 해지: 남은 계약 기간 연봉의 절반을 위약금으로 내고 자유계약 선수가 되며, 1군 자리가 빈다', () => {
   const state = g.createNewGame('release');
   g.chooseLeague(state, 'ENG1', '테스트');
   const club = g.userClub(state);
