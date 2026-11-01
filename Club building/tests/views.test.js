@@ -199,3 +199,16 @@ test('대회 정보 탭: 순위표와 일정을 안의 버튼으로 바꿔 보�
   g.upgradeState(state);
   assert.equal(state.inbox.find((m) => m.id === 'old').view, 'competition');
 });
+
+test('홈 다음 경기: 상대뿐 아니라 우리 순위와 최근 전적도 보인다', () => {
+  const state = g.createNewGame('form');
+  g.chooseLeague(state, 'ENG3', '테스트');
+  for (let i = 0; i < 3; i++) {
+    toMatch(state);
+    g.simulateUserMatch(state);
+    g.finishUserMatch(state);
+  }
+  const html = homeView(state, {});
+  assert.match(html, /우리: \d+위 · 최근 <span/);
+  assert.match(html, /상대: \d+위 · 최근 /);
+});

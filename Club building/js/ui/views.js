@@ -162,6 +162,7 @@ export function homeView(state) {
       <div class="next-match">
         <div>${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
         <div class="vs">${clubLabel(club, true)} <span class="muted">vs</span> ${clubLabel(opp)}</div>
+        <div class="muted">우리: ${myPos + 1}위 · 최근 ${formBadges(myRow.form) || '-'}</div>
         <div class="muted">상대: ${oppPos + 1}위 · 최근 ${formBadges(table[oppPos].form) || '-'}</div>
       </div>`;
   }
