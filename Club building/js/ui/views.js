@@ -615,7 +615,7 @@ export const PAUSE_NAMES = {
   drawingAt75: '75분에 비기고 있을 때',
   theirRed: '상대 팀 퇴장',
   lowEnergy: '주전 체력이 크게 떨어졌을 때',
-  injury: '우리 팀 선수 부상 (교체를 맡긴 경우. 직접 교체하면 항상 멈춤)',
+  injury: '우리 팀 선수 부상',
 };
 
 export const VIEW_MODES = { result: '결과만', highlights: '하이라이트', full: '전체 중계' };
