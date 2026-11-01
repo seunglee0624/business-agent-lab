@@ -9,7 +9,7 @@
 ```
 cd "Club building"
 python3 tools/serve.py 8010
-# 언론 탭 기사·댓글을 AI로 쓰려면: .env.example을 .env로 복사해 OpenRouter 키와 모델 이름을 적고 위처럼 켠다
+# 언론 탭 기사·댓글을 AI로 쓰려면: 프로젝트 폴더에 .env를 만들어 OPENROUTER_API_KEY=키, OPENROUTER_MODEL=모델 이름(:free로 끝나고 structured outputs 지원) 두 줄을 적고 위처럼 켠다
 # (.env는 git에 올라가지 않는다)
 ```
 브라우저에서 `http://localhost:8010` 을 연다. 테스트는 `node --test tests/*.test.js`.

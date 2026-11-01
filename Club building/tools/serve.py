@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-# ▼ API 키 넣는 곳: 프로젝트 폴더의 .env 파일 (.env.example을 복사해 만든다). .env는 git에 올라가지 않는다.
+# ▼ API 키 넣는 곳: 프로젝트 폴더의 .env 파일 (OPENROUTER_API_KEY=, OPENROUTER_MODEL= 두 줄). .env는 git에 올라가지 않는다.
 #   OPENROUTER_API_KEY=sk-or-...
 #   OPENROUTER_MODEL=제공자/모델:free
 #   이 파일(serve.py)에는 키를 적지 말 것 (git에 올라감). 키는 https://openrouter.ai 의 Keys 메뉴에서 만든다.
