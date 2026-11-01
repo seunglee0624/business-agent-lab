@@ -37,10 +37,14 @@ export const FACILITIES = {
 export const FACILITY_KEYS = Object.keys(FACILITIES);
 export const MAX_FACILITY = 5;
 
-// 업그레이드 비용(유로)과 공사 기간(개월). level은 지금 레벨
+// 업그레이드 비용(원)과 공사 기간(개월). level은 지금 레벨, 표의 n번째 칸은 n → n+1 비용
 // 유스 아카데미·유스 코치는 다른 시설·스태프의 절반 값 (작은 구단도 유스에 투자할 수 있게)
 export const YOUTH_COST = 0.5;
-export const upgradeCost = (key, level) => (key === 'stadium' ? 4 : key === 'academy' ? YOUTH_COST : 1) * 1.5e6 * 2.5 ** (level - 1);
+export const UPGRADE_COST = {
+  facility: [15e8, 40e8, 90e8, 180e8],
+  stadium: [60e8, 150e8, 350e8, 700e8],
+};
+export const upgradeCost = (key, level) => (key === 'stadium' ? UPGRADE_COST.stadium : UPGRADE_COST.facility)[level - 1] * (key === 'academy' ? YOUTH_COST : 1);
 export const upgradeMonths = (key, level) => (key === 'stadium' ? 6 + 2 * level : 2 + level);
 // 시설 유지비 (한 달, 유로)
 export const facilityUpkeep = (level, key) => 4000 * 2.2 ** (level - 1) * (key === 'academy' ? YOUTH_COST : 1);

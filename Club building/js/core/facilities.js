@@ -1,7 +1,7 @@
 // 시설(1~5)과 스태프(1~20): 처음 수준, 효과, 업그레이드와 공사
 
 import {
-  EUR, FACILITY_KEYS, FACILITIES, MAX_FACILITY, STAFF_KEYS, MAX_STAFF, STADIUM_BASE, STADIUM_LEVELS, STADIUM_TARGET,
+  FACILITY_KEYS, FACILITIES, MAX_FACILITY, STAFF_KEYS, MAX_STAFF, STADIUM_BASE, STADIUM_LEVELS, STADIUM_TARGET,
   upgradeCost, upgradeMonths,
 } from '../data/economy.js';
 import { LEAGUES } from '../data/countries/index.js';
@@ -57,7 +57,7 @@ export function capacity(club) {
 export function upgradeInfo(club, key) {
   const level = club.facilities[key];
   if (level >= MAX_FACILITY) return null;
-  return { level, cost: roundMoney(upgradeCost(key, level) * EUR), months: upgradeMonths(key, level) };
+  return { level, cost: roundMoney(upgradeCost(key, level)), months: upgradeMonths(key, level) };
 }
 
 export const isBuilding = (club, key) => club.construction.some((c) => c.key === key);

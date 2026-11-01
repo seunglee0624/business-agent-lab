@@ -156,6 +156,8 @@ test('유스: 입단 능력은 아카데미, 잠재력 보정은 유스 코치�
   assert.equal(youthIntakeAbility(club), 39);
   assert.equal(youthPotentialBoost(club), 8);
   assert.equal(upgradeCost('academy', 2), upgradeCost('training', 2) / 2);
+  assert.deepEqual([1, 2, 3, 4].map((l) => upgradeCost('training', l) / 1e8), [15, 40, 90, 180], '일반 시설 15·40·90·180억');
+  assert.deepEqual([1, 2, 3, 4].map((l) => upgradeCost('stadium', l) / 1e8), [60, 150, 350, 700], '경기장 60·150·350·700억');
   assert.equal(facilityUpkeep(3, 'academy'), facilityUpkeep(3, 'training') / 2);
   assert.equal(staffWage(10, 'youthCoach'), staffWage(10, 'coach') / 2);
 });
