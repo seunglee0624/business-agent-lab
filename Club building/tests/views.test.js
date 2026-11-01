@@ -200,7 +200,7 @@ test('대회 정보 탭: 순위표와 일정을 안의 버튼으로 바꿔 보�
   assert.equal(state.inbox.find((m) => m.id === 'old').view, 'competition');
 });
 
-test('홈 다음 경기: 상대뿐 아니라 우리 순위와 최근 전적도 보인다', () => {
+test('홈 다음 경기: 두 팀 이름 밑에 순위·최근 전적, 득점·도움 순위에서 우리 선수 강조', () => {
   const state = g.createNewGame('form');
   g.chooseLeague(state, 'ENG3', '테스트');
   for (let i = 0; i < 3; i++) {
@@ -209,6 +209,13 @@ test('홈 다음 경기: 상대뿐 아니라 우리 순위와 최근 전적도 �
     g.finishUserMatch(state);
   }
   const html = homeView(state, {});
-  assert.match(html, /우리: \d+위 · 최근 <span/);
-  assert.match(html, /상대: \d+위 · 최근 /);
+  const sides = html.match(/<div class="vs-side">[\s\S]*?<div class="vs-form">\d+위 · 최근 <span/g);
+  assert.equal(sides?.length, 2, '두 팀 이름 밑에 각각 순위와 최근 전적');
+  assert.match(sides[0], new RegExp(g.userClub(state).name));
+  // 득점·도움 순위에서 우리 선수 행은 강조
+  const comp = competitionView(state, {});
+  const me = g.userClub(state);
+  const rows = [...comp.matchAll(/<tr class="(mine)?"><td>\d+<\/td><td>([^<]+) <span class="muted small">([^<]*)<\/span>/g)];
+  assert.ok(rows.length > 0);
+  for (const [, mine, , clubName] of rows) assert.equal(!!mine, clubName === me.name, clubName);
 });

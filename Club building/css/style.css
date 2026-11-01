@@ -224,7 +224,9 @@ th.num { text-align: right; }
 .newgame h1 { font-size: 34px; letter-spacing: -0.02em; }
 
 /* 홈 */
-.next-match .vs { font-size: 19px; font-weight: 700; margin: 12px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.next-match .vs { font-size: 19px; font-weight: 700; margin: 12px 0; display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.next-match .vs-mid { padding-top: 2px; }
+.next-match .vs-form { font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 6px; }
 .result-line { font-size: 16px; margin-bottom: 10px; }
 .result-line strong { font-size: 19px; margin: 0 4px; }
 .inbox { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; }

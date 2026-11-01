@@ -161,9 +161,11 @@ export function homeView(state) {
     nextCard = `
       <div class="next-match">
         <div>${formatDate(next.date)} · ${esc(league(state).name)} ${next.round}라운드 · ${home ? '홈' : '원정'}</div>
-        <div class="vs">${clubLabel(club, true)} <span class="muted">vs</span> ${clubLabel(opp)}</div>
-        <div class="muted">우리: ${myPos + 1}위 · 최근 ${formBadges(myRow.form) || '-'}</div>
-        <div class="muted">상대: ${oppPos + 1}위 · 최근 ${formBadges(table[oppPos].form) || '-'}</div>
+        <div class="vs">
+          <div class="vs-side">${clubLabel(club, true)}<div class="vs-form">${myPos + 1}위 · 최근 ${formBadges(myRow.form) || '-'}</div></div>
+          <span class="muted vs-mid">vs</span>
+          <div class="vs-side">${clubLabel(opp)}<div class="vs-form">${oppPos + 1}위 · 최근 ${formBadges(table[oppPos].form) || '-'}</div></div>
+        </div>
       </div>`;
   }
 
@@ -496,6 +498,7 @@ export function tableView(state, ui) {
     .slice(0, 10);
   const clubName = (p) => (p.clubId ? state.clubs[p.clubId].name : '');
   const person = (p) => `${esc(p.name)} <span class="muted small">${esc(clubName(p))}</span>`;
+  const mine = (p) => (p.clubId === club.id ? 'mine' : ''); // 우리 선수는 순위표의 우리 구단처럼 강조
   // 구역: 1부는 상위 4팀(유럽 대회 예정)과 강등 3팀, 2·3부는 승격 3팀과 강등 3팀
   const zone = (i) => {
     if (rule.tier === 1 && i < 4) return 'zone-europe';
@@ -518,8 +521,8 @@ export function tableView(state, ui) {
         <p class="muted small">${rule.tier === 1 ? '<span class="legend zone-europe"></span> 상위 4팀' : `<span class="legend zone-up"></span> 승격 ${rule.promoted}팀`} · <span class="legend zone-down"></span> ${rule.tier === 3 ? '하부 리그로 강등' : '강등'} ${rule.relegated}팀</p>
       </div>
       <div class="stack">
-        <div class="card"><h3>득점 순위</h3><table class="table compact">${scorers.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.player)}</td><td><strong>${x.s.goals}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
-        <div class="card"><h3>도움 순위</h3><table class="table compact">${assists.map((x, i) => `<tr><td>${i + 1}</td><td>${person(x.p)}</td><td><strong>${x.s.assists}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
+        <div class="card"><h3>득점 순위</h3><table class="table compact">${scorers.map((x, i) => `<tr class="${mine(x.player)}"><td>${i + 1}</td><td>${person(x.player)}</td><td><strong>${x.s.goals}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
+        <div class="card"><h3>도움 순위</h3><table class="table compact">${assists.map((x, i) => `<tr class="${mine(x.p)}"><td>${i + 1}</td><td>${person(x.p)}</td><td><strong>${x.s.assists}</strong></td></tr>`).join('') || '<tr><td class="muted">기록 없음</td></tr>'}</table></div>
       </div>
     </div>`;
 }
