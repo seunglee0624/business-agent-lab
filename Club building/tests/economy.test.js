@@ -35,7 +35,7 @@ test('금액 표시: 억·만 단위', () => {
   assert.equal(roundMoney(123_456_789), 123_000_000);
 });
 
-test('몸값·주급은 능력에 따라 오르고 설계 문서(DIARY.md) 기준과 맞다', () => {
+test('몸값·주급은 능력에 따라 오르고 설계 기준과 맞다', () => {
   assert.ok(wageFor(85) > 3e8 && wageFor(85) < 5e8);
   assert.ok(wageFor(55) > 3e6 && wageFor(55) < 6e6);
   const p = Object.values(state.players).find((x) => x.clubId && x.contract);
