@@ -824,10 +824,10 @@ function eventsCard(state, club) {
   const rows = upcomingHomeFixtures(state).map((f) => {
     const b = s.events.booked[f.id];
     return `<tr><td>${formatShortDate(f.date)}</td><td>${esc(state.clubs[f.away].name)}</td>
-      <td>${b ? `<strong>${EVENTS[b.kind].name}</strong>` : '<span class="muted">-</span>'}</td>
+      <td class="nowrap">${b ? `<strong>${EVENTS[b.kind].name}</strong>` : '<span class="muted">-</span>'}</td>
       <td><button class="btn small" data-action="openEvent" data-id="${f.id}">${b ? '보기' : '행사 열기'}</button></td></tr>`;
   }).join('');
-  const hist = s.events.history.slice(0, 5).map((e) => `<tr><td>${formatShortDate(e.date)}</td><td>${EVENTS[e.kind].name}</td><td class="num">${won(e.cost)}</td><td class="num">${e.satisfaction >= 0 ? '+' : ''}${e.satisfaction}</td></tr>`).join('');
+  const hist = s.events.history.slice(0, 5).map((e) => `<tr><td>${formatShortDate(e.date)}</td><td class="nowrap">${EVENTS[e.kind].name}</td><td class="num">${won(e.cost)}</td><td class="num">${e.satisfaction >= 0 ? '+' : ''}${e.satisfaction}</td></tr>`).join('');
   return `
     <div class="card">
       <h3>경기장 행사</h3>
@@ -845,7 +845,7 @@ function eventDetail(state, club, fixtureId, msg) {
   const b = s.events.booked[f.id];
   const rows = EVENT_KEYS.map((k) => {
     const k2 = eventStrength(club, k);
-    return `<tr><td><strong>${EVENTS[k].name}</strong></td><td class="small">${fanDeltaText(EVENTS[k].fans)}</td>
+    return `<tr><td class="nowrap"><strong>${EVENTS[k].name}</strong></td><td class="small">${fanDeltaText(EVENTS[k].fans)}</td>
       <td class="num">+${Math.round((EVENTS[k].demand - 1) * k2 * 100)}%</td><td class="num">${won(eventCost(club, k))}</td>
       <td class="small ${k2 < 1 ? 'error' : 'muted'}">${k2 < 1 ? `효과 ${Math.round(k2 * 100)}%` : ''}</td>
       <td>${b ? '' : `<button class="btn small primary" data-action="bookEvent" data-id="${f.id}" data-kind="${k}">예약</button>`}</td></tr>`;
@@ -862,17 +862,17 @@ function eventDetail(state, club, fixtureId, msg) {
 // SNS·미디어 캠페인
 function mediaCard(state, club) {
   const m = mediaOf(club);
-  const running = m.running.map((c) => `<tr><td><strong>${CAMPAIGNS[c.kind].name}</strong></td><td>${formatShortDate(c.end)}까지</td><td class="num">+${c.added.toLocaleString()}명</td><td class="small muted">${c.players.map(esc).join(', ')}</td></tr>`).join('');
+  const running = m.running.map((c) => `<tr><td class="nowrap"><strong>${CAMPAIGNS[c.kind].name}</strong></td><td>${formatShortDate(c.end)}까지</td><td class="num">+${c.added.toLocaleString()}명</td><td class="small muted">${c.players.map(esc).join(', ')}</td></tr>`).join('');
   const rows = CAMPAIGN_KEYS.map((k) => {
     const def = CAMPAIGNS[k];
     const rep = repeatFactor(state, club, k);
     const reason = canStartCampaign(state, club, k);
-    return `<tr><td><strong>${def.name}</strong></td><td class="num">${def.days}일</td><td class="num">${def.overseas ? `+${Math.round(def.overseas * 100)}%` : '-'}</td>
+    return `<tr><td class="nowrap"><strong>${def.name}</strong></td><td class="num">${def.days}일</td><td class="num">${def.overseas ? `+${Math.round(def.overseas * 100)}%` : '-'}</td>
       <td class="small">${fanDeltaText(def.fans)}</td><td class="num">${def.players}명 −${def.fatigue}</td><td class="num">${won(campaignCost(club, k))}</td>
       <td class="small ${rep < 1 ? 'error' : ''}">${rep < 1 ? `효과 ${Math.round(rep * 100)}%` : ''}</td>
       <td>${reason ? '' : `<button class="btn small primary" data-action="startCampaign" data-kind="${k}">시작</button>`}</td></tr>`;
   }).join('');
-  const hist = m.history.slice(0, 5).map((c) => `<tr><td>${formatShortDate(c.end)}</td><td>${CAMPAIGNS[c.kind].name}</td><td class="num">+${c.gain.toLocaleString()}명</td><td class="num">${c.satisfaction >= 0 ? '+' : ''}${c.satisfaction}</td></tr>`).join('');
+  const hist = m.history.slice(0, 5).map((c) => `<tr><td>${formatShortDate(c.end)}</td><td class="nowrap">${CAMPAIGNS[c.kind].name}</td><td class="num">+${c.gain.toLocaleString()}명</td><td class="num">${c.satisfaction >= 0 ? '+' : ''}${c.satisfaction}</td></tr>`).join('');
   return `
     <div class="card">
       <h3>SNS·미디어 <span class="muted small">해외 팬 ${fansOf(club).overseas.toLocaleString()}명</span></h3>
@@ -887,7 +887,7 @@ function mediaCard(state, club) {
 function rentalCard(state, club) {
   const s = stadiumOf(club);
   const sys = s.pitchSystem;
-  const offers = s.rentals.offers.map((o) => `<tr><td><strong>${RENTALS[o.kind].name}</strong></td><td>${formatShortDate(o.date)}</td><td class="num">${won(o.fee)}</td>
+  const offers = s.rentals.offers.map((o) => `<tr><td class="nowrap"><strong>${RENTALS[o.kind].name}</strong></td><td>${formatShortDate(o.date)}</td><td class="num">${won(o.fee)}</td>
       <td class="num">${hasPitchSystem(state, club) ? 0 : RENTALS[o.kind].damage}</td><td class="small muted">${formatShortDate(o.expires)}까지</td>
       <td><button class="btn small primary" data-action="rentalAnswer" data-id="${o.id}" data-accept="1">수락</button> <button class="btn small" data-action="rentalAnswer" data-id="${o.id}" data-accept="">거절</button></td></tr>`).join('');
   const booked = s.rentals.booked.map((b) => `<li>${formatShortDate(b.date)} ${RENTALS[b.kind].name} · ${won(b.fee)}</li>`).join('');
@@ -959,7 +959,7 @@ function merchCard(state, club) {
     const status = it.incoming ? `<span class="muted small">${formatShortDate(it.incoming.date)} 도착 ${it.incoming.quantity.toLocaleString()}개</span>`
       : it.stock ? '' : (it.ordered || it.sold) ? '<span class="error small">품절</span>' : '<span class="muted small">주문 전</span>';
     return `<tr class="clickable" data-action="openMerch" data-item="${k}">
-      <td><strong>${ITEMS[k].name}</strong>${it.design ? ` <span class="muted small">${DESIGNS[it.design].name}</span>` : ''}</td>
+      <td class="nowrap"><strong>${ITEMS[k].name}</strong>${it.design ? ` <span class="muted small">${DESIGNS[it.design].name}</span>` : ''}</td>
       <td class="num">${won(it.price)}</td><td class="num">${it.stock.toLocaleString()} ${status}</td>
       <td class="num">${it.sold.toLocaleString()}</td><td class="num muted small">${fc[0].toLocaleString()}~${fc[1].toLocaleString()}</td></tr>`;
   }).join('');
@@ -979,7 +979,7 @@ function merchHistory(state, club) {
         <h3>굿즈 기록</h3>
         ${h.length ? h.map((row) => `<p><strong>${row.season}-${String(row.season + 1).slice(2)}</strong></p>
           <table class="table compact"><thead><tr><th>품목</th><th class="num">판매</th><th class="num">수입</th><th class="num">남은 재고</th></tr></thead><tbody>
-          ${Object.entries(row.items).map(([k, r]) => `<tr><td>${ITEMS[k].name}</td><td class="num">${r.sold.toLocaleString()}</td><td class="num">${won(r.revenue)}</td><td class="num">${r.leftover.toLocaleString()}</td></tr>`).join('')}
+          ${Object.entries(row.items).map(([k, r]) => `<tr><td class="nowrap">${ITEMS[k].name}</td><td class="num">${r.sold.toLocaleString()}</td><td class="num">${won(r.revenue)}</td><td class="num">${r.leftover.toLocaleString()}</td></tr>`).join('')}
           </tbody></table>`).join('') : '<p class="muted">시즌이 끝나면 품목별 판매가 기록됩니다.</p>'}
       </div>`;
 }
