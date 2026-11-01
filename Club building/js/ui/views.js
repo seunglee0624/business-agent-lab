@@ -1103,15 +1103,14 @@ function tourCard(state, club) {
   if (canChooseTour(state, club)) {
     const rows = TOUR_KEYS.map((r) => {
       const stars = tourStars(state, club, r);
-      return `<tr><td><button class="link" data-action="openTour" data-region="${r}"><strong>${TOURS[r].name}</strong></button></td><td class="num">${won(tourFee(club, r))}</td><td class="num">+${tourGain(state, club, r).toLocaleString()}명</td>
+      return `<tr><td class="nowrap"><button class="link" data-action="openTour" data-region="${r}"><strong>${TOURS[r].name}</strong></button></td><td class="num">${won(tourFee(club, r))}</td><td class="num">+${tourGain(state, club, r).toLocaleString()}명</td>
         <td class="num">${TOURS[r].fatigue}</td><td class="small">${stars.length ? stars.map((p) => esc(p.name)).join(', ') : '-'}</td>
         <td><button class="btn small primary" data-action="chooseTour" data-region="${r}">선택</button></td></tr>`;
     }).join('');
     return `
     <div class="card">
-      <h3>프리시즌 투어 <span class="muted small">7월 15일까지</span></h3>
+      <div class="card-head"><h3>프리시즌 투어 <span class="muted small">7월 15일까지</span></h3><button class="btn small" data-action="chooseTour" data-region="none">가지 않음</button></div>
       <table class="table compact"><thead><tr><th>지역</th><th class="num">초청료</th><th class="num">해외 팬</th><th class="num">피로</th><th>그 나라 주전</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table>
-      <button class="btn small" data-action="chooseTour" data-region="none">가지 않음</button>
       <p class="muted small">투어는 7월 31일까지 다녀옵니다. 멀리 갈수록 초청료와 해외 팬이 늘지만, 개막 전 체력이 떨어지고 부상 위험이 커집니다. 주전 선수의 나라로 가면 해외 팬이 더 늘어납니다.</p>
     </div>`;
   }

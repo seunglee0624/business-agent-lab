@@ -153,6 +153,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .table tr.zone-up td:first-child { box-shadow: inset 3px 0 var(--gain); }
 .table tr.zone-down td:first-child { box-shadow: inset 3px 0 var(--loss); }
 .num { text-align: right; white-space: nowrap; }
+.nowrap { white-space: nowrap; }
 th.num { text-align: right; }
 /* 열 묶음: 묶음 머리줄과, 묶음이 시작하는 열의 옅은 세로선 (선수단 표) */
 .table tr.groups th { color: var(--faint); font-weight: 500; padding-bottom: 2px; border-bottom: 0; }
