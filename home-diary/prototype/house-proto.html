@@ -1,0 +1,197 @@
+<title>탑뷰 집 프로토타입</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
+<style>
+/* layout: 좌측 집 격자, 우측 패널(선반/기록/상점). 폰에서는 세로로 쌓임 */
+:root{--bg:#f3ede3;--fg:#2d2620;--muted:#7a6d60;--floor:#e6d6bc;--floor-line:#d2bd9a;--wall-l:#d9c7a7;--wall-r:#ede0c6;--panel:#fffaf2;--line:#d9ccb8;--accent:#c4603a;--accent-fg:#fff;--sel:#7aa05a;
+  --display:"Jua","Gowun Dodum",system-ui,sans-serif;--body:"Gowun Dodum",system-ui,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1e1a16;--fg:#efe6d8;--muted:#a79a8a;--floor:#3b3128;--floor-line:#55473a;--wall-l:#2e2620;--wall-r:#3a3028;--panel:#2a241e;--line:#4a3f34;--accent:#e07a4f;--accent-fg:#1e1a16;--sel:#9cc27a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1e1a16;--fg:#efe6d8;--muted:#a79a8a;--floor:#3b3128;--floor-line:#55473a;--wall-l:#2e2620;--wall-r:#3a3028;--panel:#2a241e;--line:#4a3f34;--accent:#e07a4f;--accent-fg:#1e1a16;--sel:#9cc27a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-weight:400;font-size:1.6rem;margin:0}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.pts{font-family:var(--display);font-size:1.2rem;font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+button{font-family:var(--body);font-size:.95rem;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+@media (max-width:760px){main{grid-template-columns:1fr}}
+.house{min-width:0;overflow-x:auto}
+canvas{max-width:100%;height:auto;display:block;cursor:pointer;touch-action:manipulation}
+.hint{color:var(--muted);font-size:.9rem;margin:8px 0 0}
+aside{min-width:0;display:flex;flex-direction:column;gap:12px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+.box h2{font-family:var(--display);font-weight:400;font-size:1.1rem;margin:0 0 8px}
+.shelf{display:flex;flex-wrap:wrap;gap:6px}
+.shelf button{font-size:22px;padding:4px 8px;position:relative}
+.shelf button small{font-size:11px;display:block;color:var(--muted)}
+.shelf button.on small{color:inherit}
+textarea{width:100%;box-sizing:border-box;font-family:var(--body);font-size:.95rem;border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.log{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.log li{border-top:1px solid var(--line);padding-top:6px;font-size:.92rem}
+.log time{color:var(--muted);font-size:.8rem;display:block;font-variant-numeric:tabular-nums}
+.shop{display:flex;flex-direction:column;gap:6px}
+.shop div{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.price{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.9rem}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.toast{color:var(--sel);font-size:.9rem;min-height:1.2em}
+</style>
+
+<header>
+  <h1>🏠 <span id="title">나의 집</span></h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="pts">⭐ <span id="pts">0</span>P</div>
+</header>
+
+<main>
+  <section class="house">
+    <canvas id="grid" aria-label="집 아이소메트릭 뷰"></canvas>
+    <p class="hint" id="hint"></p>
+    <div class="row" style="margin-top:8px">
+      <button id="expand">집 넓히기 (200P)</button>
+      <span class="toast" id="toast"></span>
+    </div>
+  </section>
+
+  <aside>
+    <div class="box" id="shelfBox">
+      <h2>보유 가구</h2>
+      <div class="shelf" id="shelf"></div>
+      <p class="hint">가구를 고른 뒤 초록색 바닥 칸을 누르면 놓입니다. 놓인 가구를 누르면 그 가구에 기록을 남깁니다.</p>
+    </div>
+
+    <div class="box" id="logBox" hidden>
+      <h2 id="logTitle"></h2>
+      <div id="logForm">
+        <textarea id="logText" rows="3" placeholder=""></textarea>
+        <div class="row" style="margin-top:6px">
+          <button class="primary" id="save">기록하기 (+10P)</button>
+          <button id="pickup">가구 들기</button>
+        </div>
+      </div>
+      <ul class="log" id="logList"></ul>
+    </div>
+
+    <div class="box" id="shopBox">
+      <h2>가구 상점</h2>
+      <div class="shop" id="shop"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// 가구 종류 = 기록 카테고리. 새 가구를 사면 새 카테고리가 열린다.
+const TYPES = {
+  closet:{icon:'🚪',name:'옷장',q:'오늘 무엇을 입었나요?',price:0},
+  table: {icon:'🍽️',name:'식탁',q:'오늘 무엇을 먹었나요?',price:0},
+  desk:  {icon:'💻',name:'책상',q:'오늘 무엇을 공부·작업했나요?',price:0},
+  tv:    {icon:'📺',name:'TV',q:'오늘 무엇을 봤나요?',price:0},
+  bed:   {icon:'🛏️',name:'침대',q:'오늘 잠은 어땠나요?',price:80},
+  plant: {icon:'🪴',name:'화분',q:'오늘 기분은 어땠나요?',price:50},
+  book:  {icon:'📚',name:'책장',q:'오늘 무엇을 읽었나요?',price:120},
+  piano: {icon:'🎹',name:'피아노',q:'오늘 무엇을 연주·들었나요?',price:300},
+};
+const today = new Date().toISOString().slice(0,10);
+const me = {
+  title:'나의 집', cols:6, rows:5, pts:140, inv:['bed'],
+  placed:[{t:'closet',x:0,y:0},{t:'table',x:3,y:1},{t:'desk',x:5,y:0},{t:'tv',x:2,y:4}],
+  logs:{closet:[{d:'2026-11-02',s:'베이지 니트에 청바지. 날이 쌀쌀해짐'}],
+        table:[{d:'2026-11-02',s:'김치찌개 + 계란말이'},{d:'2026-11-01',s:'편의점 샌드위치…'}],
+        desk:[{d:'2026-11-02',s:'디지털마케팅 4장 복습'}], tv:[]},
+};
+const neighbors = [
+  {title:'민수네 집', cols:8, rows:6, pts:0, inv:[], placed:[{t:'closet',x:0,y:0},{t:'table',x:4,y:2},{t:'desk',x:7,y:0},{t:'tv',x:3,y:5},{t:'bed',x:0,y:5},{t:'plant',x:7,y:5},{t:'book',x:6,y:0}],
+   logs:{table:[{d:'2026-11-03',s:'학식 돈까스'}],desk:[{d:'2026-11-03',s:'팀플 발표자료 마무리'}],book:[{d:'2026-11-02',s:'『총 균 쇠』 3장'}]}},
+  {title:'지은이네 집', cols:5, rows:4, pts:0, inv:[], placed:[{t:'closet',x:4,y:0},{t:'table',x:1,y:1},{t:'tv',x:0,y:3},{t:'plant',x:4,y:3}],
+   logs:{closet:[{d:'2026-11-03',s:'검정 코트 첫 개시'}],tv:[{d:'2026-11-02',s:'흑백요리사 2화'}]}},
+];
+let house = me, sel = null, open = null;
+// 아이소메트릭: 화면 x=(x-y)*TW/2, y=(x+y)*TH/2. (0,0)이 뒤쪽 모서리, 두 벽이 거기서 만난다.
+const TW=72, TH=36, WALL=90, PAD=24, H={closet:52,table:22,desk:26,tv:30,bed:20,plant:34,book:56,piano:36};
+let ox=0, oy=0;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const iso = (x,y) => [ox+(x-y)*TW/2, oy+(x+y)*TH/2];
+const tileAt = (px,py) => { const a=(px-ox)/(TW/2), b=(py-oy)/(TH/2); return [Math.floor((a+b)/2), Math.floor((b-a)/2)]; };
+function silhouette(p){ const h=H[p.t]||30, i=.12, x=p.x+i,y=p.y+i,X=p.x+1-i,Y=p.y+1-i;
+  const A=iso(x,y),B=iso(X,y),C=iso(X,Y),D=iso(x,Y); return [[A[0],A[1]-h],[B[0],B[1]-h],B,C,D,[D[0],D[1]-h]]; }
+function inPoly([px,py],poly){ let ok=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j];
+  if((yi>py)!==(yj>py) && px < (xj-xi)*(py-yi)/(yj-yi)+xi) ok=!ok; } return ok; }
+function poly(c,pts,fill,stroke){ c.beginPath(); pts.forEach((p,i)=>i?c.lineTo(...p):c.moveTo(...p)); c.closePath(); c.fillStyle=fill; c.fill(); if(stroke){c.strokeStyle=stroke; c.lineWidth=1; c.stroke();} }
+function shade(hex,k){ const n=parseInt(hex.slice(1),16); const f=v=>Math.max(0,Math.min(255,Math.round(v*k))); return `rgb(${f(n>>16)},${f(n>>8&255)},${f(n&255)})`; }
+function drawHouse(){
+  const cv=$('grid'), c=cv.getContext('2d'), {cols,rows}=house;
+  cv.width=(cols+rows)*TW/2+PAD*2; cv.height=(cols+rows)*TH/2+WALL+PAD*2;
+  ox=PAD+rows*TW/2; oy=PAD+WALL;
+  const floor=css('--floor'), line=css('--floor-line'), wl=css('--wall-l'), wr=css('--wall-r'), sel_=css('--sel'), panel=css('--panel'), fg=css('--fg');
+  // 벽: 왼쪽 벽은 x=0 모서리, 오른쪽 벽은 y=0 모서리를 따라 위로 세운다
+  const up=([x,y])=>[x,y-WALL];
+  poly(c,[iso(0,0),iso(0,rows),up(iso(0,rows)),up(iso(0,0))],wl,line);
+  poly(c,[iso(0,0),iso(cols,0),up(iso(cols,0)),up(iso(0,0))],wr,line);
+  // 창문 (왼쪽 벽)
+  const w0=iso(0,rows*.25), w1=iso(0,rows*.6); poly(c,[[w0[0],w0[1]-WALL*.8],[w1[0],w1[1]-WALL*.8],[w1[0],w1[1]-WALL*.3],[w0[0],w0[1]-WALL*.3]],'#bfe3f2',line);
+  // 바닥 타일
+  for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+    const empty=!house.placed.some(p=>p.x==x&&p.y==y);
+    poly(c,[iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)], (sel!==null&&!readonly()&&empty)?sel_+'55':floor, line);
+  }
+  // 가구: 뒤(x+y 작음)부터 앞으로 그린다
+  c.font='22px system-ui'; c.textAlign='center'; c.textBaseline='middle';
+  [...house.placed].sort((a,b)=>(a.x+a.y)-(b.x+b.y)).forEach(p=>{
+    const h=H[p.t]||30, i=.12, x=p.x+i,y=p.y+i,X=p.x+1-i,Y=p.y+1-i, base='#c9a977';
+    const A=iso(x,y),B=iso(X,y),C=iso(X,Y),D=iso(x,Y), r=([a,b])=>[a,b-h];
+    poly(c,[r(D),r(C),C,D],shade(base,.78),line);   // 왼쪽 면
+    poly(c,[r(C),r(B),B,C],shade(base,.92),line);   // 오른쪽 면
+    poly(c,[r(A),r(B),r(C),r(D)], p===open?sel_:shade(base,1.12), line); // 윗면
+    const cx=(A[0]+C[0])/2, cy=(A[1]+C[1])/2-h; c.fillText(TYPES[p.t].icon,cx,cy);
+    const n=(house.logs[p.t]||[]).length; if(n){ c.beginPath(); c.arc(cx+18,cy-12,8,0,7); c.fillStyle=fg; c.fill(); c.fillStyle=panel; c.font='bold 10px system-ui'; c.fillText(n,cx+18,cy-12); c.font='22px system-ui'; }
+  });
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);   // sel: 선반에서 고른 가구, open: 기록 패널에 열린 배치 가구
+const $ = id => document.getElementById(id);
+const readonly = () => house !== me;
+
+function render(){
+  $('title').textContent = house.title;
+  $('pts').textContent = me.pts;
+  $('tabs').innerHTML = [me,...neighbors].map((h,i)=>`<button class="${h===house?'on':''}" data-i="${i}">${i?'🧑‍🤝‍🧑 ':''}${h.title}</button>`).join('');
+  drawHouse();
+  $('hint').textContent = readonly() ? '이웃 집은 구경만 할 수 있어요. 가구를 누르면 기록을 볼 수 있어요.' : `${house.cols}×${house.rows} 칸 · 가구 ${house.placed.length}개`;
+  $('expand').hidden = readonly(); $('shelfBox').hidden = readonly(); $('shopBox').hidden = readonly();
+  $('shelf').innerHTML = me.inv.length ? me.inv.map((t,i)=>`<button class="${sel===i?'on':''}" data-i="${i}">${TYPES[t].icon}<small>${TYPES[t].name}</small></button>`).join('') : '<span class="hint">비어 있음. 상점에서 사거나 놓인 가구를 들어 올리세요.</span>';
+  $('shop').innerHTML = Object.entries(TYPES).filter(([,v])=>v.price).map(([k,v])=>`<div><span>${v.icon} ${v.name} <span class="price">${v.price}P</span></span><button data-buy="${k}" ${me.pts<v.price?'disabled':''}>구매</button></div>`).join('');
+  renderLog();
+}
+function renderLog(){
+  const b = $('logBox'); b.hidden = !open; if(!open) return;
+  const T = TYPES[open.t];
+  $('logTitle').textContent = `${T.icon} ${T.name} · ${T.q}`;
+  $('logForm').hidden = readonly(); $('logText').placeholder = T.q;
+  const l = house.logs[open.t]||[];
+  $('logList').innerHTML = l.length ? l.map(e=>`<li><time>${e.d}</time>${e.s}</li>`).join('') : '<li class="hint">아직 기록이 없어요.</li>';
+}
+const toast = m => { $('toast').textContent=m; setTimeout(()=>$('toast').textContent='',1800); };
+
+$('tabs').onclick = e => { const b=e.target.closest('button'); if(!b) return; house=[me,...neighbors][b.dataset.i]; sel=null; open=null; render(); };
+$('shelf').onclick = e => { const b=e.target.closest('button'); if(!b) return; sel = sel==+b.dataset.i ? null : +b.dataset.i; open=null; render(); };
+$('grid').onclick = e => {
+  const r=e.currentTarget.getBoundingClientRect(), k=e.currentTarget.width/r.width;
+  const px=(e.clientX-r.left)*k, py=(e.clientY-r.top)*k;
+  // 앞에 그려진(화면상 앞쪽) 가구부터 상자 실루엣으로 판정
+  const hit=[...house.placed].sort((a,b)=>(b.x+b.y)-(a.x+a.y)).find(p=>inPoly([px,py],silhouette(p)));
+  if(hit){ open=hit; sel=null; render(); return; }
+  const [x,y]=tileAt(px,py);
+  if(x>=0&&y>=0&&x<house.cols&&y<house.rows&&sel!==null&&!readonly()){ me.placed.push({t:me.inv.splice(sel,1)[0],x,y}); sel=null; render(); }
+};
+$('save').onclick = () => {
+  const s=$('logText').value.trim(); if(!s) return;
+  (me.logs[open.t] ||= []).unshift({d:today,s}); me.pts+=10; $('logText').value=''; toast('+10P 기록 완료');
+  render();
+};
+$('pickup').onclick = () => { me.inv.push(open.t); me.placed=me.placed.filter(p=>p!==open); open=null; render(); };
+$('shop').onclick = e => { const b=e.target.closest('[data-buy]'); if(!b) return; const k=b.dataset.buy; me.pts-=TYPES[k].price; me.inv.push(k); toast(`${TYPES[k].name} 구매!`); render(); };
+$('expand').onclick = () => { if(me.pts<200) return toast('포인트가 부족해요 (200P 필요)'); me.pts-=200; me.cols+=1; me.rows+=1; toast('집이 넓어졌어요!'); render(); };
+render();
+</script>
