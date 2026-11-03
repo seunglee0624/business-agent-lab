@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: business-idea-no-details
+expected_outcome: |
+  Only the 'can't call it yet' line naming specific missing information.

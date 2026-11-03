@@ -1,0 +1,10 @@
+{
+  "enabledPlugins": {
+    "mattpocock-skills@claude-plugins-official": true,
+    "example-skills@anthropic-agent-skills": true,
+    "frontend-design@anthropic-plugin-directory": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "antislop@anti-slop": true,
+    "ponytail@ponytail": true
+  }
+}

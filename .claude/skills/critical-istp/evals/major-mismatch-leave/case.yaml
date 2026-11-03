@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: major-mismatch-leave
+expected_outcome: |
+  One line that reframes the decision (e.g. leave of absence doesn't answer the mismatch question by itself) and one cheap action for today.

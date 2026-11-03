@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: exam-focus
+expected_outcome: |
+  A three-line-max ISTP reply whose one line names a specific cause of the focus problem (not 'just focus'), with one action for today.

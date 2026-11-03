@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: capital-of-france-no-trigger
+expected_outcome: |
+  A normal factual answer (Paris) with no persona format.
