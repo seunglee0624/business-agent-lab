@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
+import type { Kind, Style } from "@/lib/room/kinds";
 import { logout } from "./actions";
-import styles from "./auth.module.css";
+import styles from "./home.module.css";
+import { RoomCanvas, type Placement } from "./room-canvas";
 
 export default function HomePage() {
   return (
@@ -13,24 +15,45 @@ export default function HomePage() {
   );
 }
 
-// shortcut: M0 확인용 화면. M1에서 방 캔버스로 바뀐다.
 async function MyHouse() {
   const supabase = await createClient();
-  const { data: profile } = await supabase.from("profiles").select("nickname, house_name, points").single();
+  const [profile, house, placements] = await Promise.all([
+    supabase.from("profiles").select("nickname, house_name, points").single(),
+    supabase.from("houses").select("size").single(),
+    supabase.from("placements").select("kind, catalog_id, x, y, catalog(style)"),
+  ]);
+
+  if (!profile.data || !house.data || !placements.data) {
+    return (
+      <form action={logout}>
+        <p role="alert" className={styles.error}>집을 불러오지 못했어요. 새로고침해 보고, 그래도 안 되면 다시 로그인해 주세요.</p>
+        <button className={styles.logout}>로그아웃</button>
+      </form>
+    );
+  }
+
+  const initial: Placement[] = placements.data.map((p) => ({
+    kind: p.kind as Kind,
+    catalogId: p.catalog_id,
+    style: (p.catalog as unknown as { style: Style }).style,
+    x: p.x,
+    y: p.y,
+  }));
 
   return (
-    <form action={logout} className={styles.form}>
-      {profile ? (
-        <>
-          <h1>{profile.house_name}</h1>
-          <p className={styles.hint}>
-            {profile.nickname} · {profile.points}P
+    <>
+      <header className={styles.header}>
+        <div>
+          <h1>{profile.data.house_name}</h1>
+          <p>
+            {profile.data.nickname} · {profile.data.points}P
           </p>
-        </>
-      ) : (
-        <p role="alert" className={styles.error}>프로필을 찾지 못했어요.</p>
-      )}
-      <button>로그아웃</button>
-    </form>
+        </div>
+        <form action={logout}>
+          <button className={styles.logout}>로그아웃</button>
+        </form>
+      </header>
+      <RoomCanvas size={house.data.size} initial={initial} />
+    </>
   );
 }

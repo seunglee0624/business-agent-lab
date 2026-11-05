@@ -6,6 +6,12 @@
   --accent: #a4532f;
   --on-accent: #ffffff;
   --danger: #b3261e;
+  --floor: #e6d6bc;
+  --floor-line: #d2bd9a;
+  --wall-l: #d9c7a7;
+  --wall-r: #ede0c6;
+  --window: #bfe3f2;
+  --sel: #4f7a34;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,6 +23,12 @@
     --accent: #f0a77e;
     --on-accent: #2a1a12;
     --danger: #ff8a80;
+    --floor: #3b3128;
+    --floor-line: #55473a;
+    --wall-l: #2e2620;
+    --wall-r: #3a3028;
+    --window: #35505c;
+    --sel: #9cc27a;
   }
 
   html {

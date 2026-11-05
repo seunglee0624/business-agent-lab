@@ -1,14 +1,8 @@
 "use server";
 
-import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
+import { emailOf, NICKNAME } from "@/lib/auth/nickname";
 import { createClient } from "@/lib/supabase/server";
-
-const NICKNAME = /^[가-힣A-Za-z0-9]{2,12}$/;
-
-// 한글은 이메일 주소에 쓸 수 없어서 닉네임의 해시를 내부 이메일로 쓴다. 가입 트리거가 같은 식으로 검증한다.
-const emailOf = (nickname: string) =>
-  `${createHash("sha256").update(nickname).digest("hex").slice(0, 32)}@home.local`;
 
 const fail = (path: string, code: string): never => redirect(`${path}?error=${code}`);
 
@@ -45,4 +39,15 @@ export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+const PLACE_ERRORS = ["tile_taken", "outside_room", "not_owned"] as const;
+
+export async function placeFurniture(catalogId: string, x: number, y: number) {
+  if (typeof catalogId !== "string" || !Number.isInteger(x) || !Number.isInteger(y)) return { error: "failed" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("place_furniture", { p_catalog_id: catalogId, p_x: x, p_y: y });
+  if (!error) return {};
+  return { error: PLACE_ERRORS.find((code) => error.message.includes(code)) ?? "failed" };
 }

@@ -120,7 +120,7 @@ Supabase Postgres. 모든 테이블에 RLS를 걸고, 이웃 여부는 `neighbor
 |---|---|---|
 | `profiles` | id(auth.users FK), nickname(unique), house_name, points, streak, last_record_date, invite_token | 가입 시 트리거로 생성 |
 | `houses` | profile_id, size(4~8), wallpaper, floor | 1인 1방 |
-| `catalog` | id, kind(8종), style(3종), price, height | 정적 시드 데이터 |
+| `catalog` | id(`<종류>-<스타일>`), kind(8종), style(3종), price | 정적 시드 데이터. 이름·아이콘·높이는 코드(`lib/room/kinds.ts`)에 둔다 |
 | `owned_furniture` | profile_id, catalog_id | 구매·지급 내역 |
 | `placements` | profile_id, kind, catalog_id, x, y | kind당 1행(unique) |
 | `records` | id, profile_id, kind, text, created_at | 가구 종류 단위 |
@@ -149,7 +149,7 @@ Supabase Postgres. 모든 테이블에 RLS를 걸고, 이웃 여부는 `neighbor
 1. business-agent-lab 저장소를 GitHub에 올려 둔다(이미 있으면 생략).
 2. Supabase 프로젝트 생성, 이메일 확인 끄기, URL·anon 키·service 키 복사.
 3. Vercel에 저장소 연결, Root Directory `home-diary`, 환경 변수 등록.
-4. 로컬에 Node(nvm)와 Supabase CLI 설치. DB 규칙 테스트용 로컬 Supabase를 띄우려면 Docker도 필요하다.
+4. 로컬에 Node(nvm) 설치. DB 규칙 테스트는 PGlite(Node 안에서 도는 Postgres)로 하므로 Docker와 Supabase CLI는 필요 없다. 마이그레이션은 Supabase 대시보드 SQL Editor에서 적용한다.
 
 ### 1단계. M0 뼈대와 로그인
 
@@ -160,7 +160,7 @@ Supabase Postgres. 모든 테이블에 RLS를 걸고, 이웃 여부는 `neighbor
 
 ### 2단계. M1 내 집 화면
 
-9. 프로토타입의 아이소메트릭 코드를 `lib/room/`으로 옮기고 좌표 변환·판정에 node 테스트.
+9. 프로토타입의 아이소메트릭 코드를 `lib/room/`으로 옮기고 좌표 변환·클릭 판정에 Vitest 테스트.
 10. `houses`·`catalog`·`owned_furniture`·`placements` 마이그레이션과 카탈로그 24개 시드.
 11. 가입 시 4×4 방 + 기본 가구 4종 자동 배치.
 12. 배치·이동을 서버 액션으로 저장. 새로고침 후 유지 확인.
@@ -216,15 +216,15 @@ Supabase Postgres. 모든 테이블에 RLS를 걸고, 이웃 여부는 `neighbor
 | 영역 | 방식 | 이유 |
 |---|---|---|
 | `lib/room/` 수학 (iso, tileAt, silhouette, inPoly) | TDD, Vitest | 왕복·경계 조건이 명확. 비용 거의 없음 |
-| 포인트 규칙 (하루 첫 기록 +10P, 연속 출석 초기화, 7의 배수 +50P, KST 자정 경계) | TDD, 로컬 Supabase SQL 테스트 | 돈 규칙. 틀리면 데이터가 망가진 뒤 발견됨 |
-| 구매·배치 규칙 (종류당 1개, 바로 구매 시 자동 배치·교체, 환불 없음, 잔액 부족) | TDD, 로컬 Supabase SQL 테스트 | 돈과 unique 제약 |
-| 우편함 묶음 (이웃당 하루 1통), 초대 링크 재발급 무효 | TDD, 로컬 Supabase SQL 테스트 | 중복·경계 조건 |
-| RLS (비이웃 열람 차단, points 직접 수정 차단) | 테스트 먼저, 로컬 Supabase SQL 테스트 | 보안. 8단계 28번이 이걸 돌리는 것 |
+| 포인트 규칙 (하루 첫 기록 +10P, 연속 출석 초기화, 7의 배수 +50P, KST 자정 경계) | TDD, PGlite DB 테스트 | 돈 규칙. 틀리면 데이터가 망가진 뒤 발견됨 |
+| 구매·배치 규칙 (종류당 1개, 바로 구매 시 자동 배치·교체, 환불 없음, 잔액 부족) | TDD, PGlite DB 테스트 | 돈과 unique 제약 |
+| 우편함 묶음 (이웃당 하루 1통), 초대 링크 재발급 무효 | TDD, PGlite DB 테스트 | 중복·경계 조건 |
+| RLS (비이웃 열람 차단, points 직접 수정 차단) | 테스트 먼저, PGlite DB 테스트 | 보안. 8단계 28번이 이걸 돌리는 것 |
 | 캔버스 그리기, 클릭 영역, 다크 모드 | 테스트 없음. 눈으로 확인 | 정답이 그림 |
 | 페이지, 로그인 흐름, 사진 업로드, 서명 URL | 테스트 없음. 배포본에서 직접 조작 | 외부 서비스 접착 코드. 흉내가 코드보다 커짐 |
 | `prototype/` | 테스트 없음 | 버릴 코드 |
 
-테스트 파일 위치: `lib/room/*.test.ts`, `supabase/tests/*.sql`. 마일스톤마다 그 마일스톤 규칙만 추가한다.
+테스트 파일 위치: `lib/room/*.test.ts`, `supabase/tests/*.test.ts`. DB 테스트는 `supabase/tests/db.ts`가 Supabase의 auth 스키마·역할만 흉내 내고 실제 마이그레이션 파일을 그대로 돌린다. 사용자 쿼리는 authenticated 역할로 실행해 RLS가 실제로 걸린다. 실행은 `npm test`. 마일스톤마다 그 마일스톤 규칙만 추가한다.
 
 ### 코드 구조
 
@@ -263,4 +263,11 @@ Supabase Postgres. 모든 테이블에 RLS를 걸고, 이웃 여부는 `neighbor
 - 닉네임 → 내부 이메일 매핑을 닉네임 그대로에서 SHA-256 해시로 변경. 일반 이메일 형식은 주소 앞부분에 한글을 허용하지 않기 때문.
 - 로그인·가입 화면은 서버 액션 폼으로 만들어 브라우저에서 Supabase를 직접 부르지 않는다.
 - Supabase 클라이언트 생성 전에 `connection()`을 불러 Cache Components의 미리 그리기 단계에서 `Date.now()` 오류가 나지 않게 함.
-- 로컬에서 가입(한글 닉네임) → 내 집 화면 → 로그아웃 → 재로그인, 틀린 비밀번호 안내까지 확인. Vercel 배포는 다음 단계.
+- 로컬에서 가입(한글 닉네임) → 내 집 화면 → 로그아웃 → 재로그인, 틀린 비밀번호 안내까지 확인.
+- Vercel 첫 배포(Root Directory `home-diary`, 환경 변수 2개). 배포본에서 새 닉네임 가입 → 내 집 화면 → 로그아웃 → 재로그인 확인. **M0 완료.**
+- M1 시작. 방 수학(`lib/room/geometry.ts`)을 TDD로 옮김: 방 배치 계산, 화면↔타일 변환, 클릭 판정(앞쪽 가구 우선).
+- DB 테스트를 Docker 대신 PGlite로 결정. `@types/node`를 실제 Node 버전에 맞춰 22로 올림(Vitest 5 요구).
+- M1 마이그레이션: `houses`·`catalog`(24개 시드)·`owned_furniture`·`placements`, 가입 시 4×4 방과 우드 기본 4종 자동 배치, M0 가입자 채우기, 가구 놓기 함수 `place_furniture`. 테스트 14개 통과.
+- 책장의 종류 코드는 `bookcase`(프로토타입의 `book`에서 변경).
+- 실제 DB에 M1 마이그레이션 적용, 기존 계정 채우기·방 화면·가구 옮기기·새로고침 후 유지 확인.
+- 방 화면 점검(antislop-ui): 키보드 조작 추가(방향키로 칸 이동, Enter로 집기·놓기, Esc로 취소). M5로 미뤘던 것을 앞당김. 놓을 수 있는 칸 표시를 옅은 색(대비 1.26:1)에서 진한 테두리로 바꿈. 라이트 모드 선택색 `#4f7a34`(바닥 대비 3.5:1). 첫 그림 전 캔버스 비율 고정. 불러오기 실패 문구에 다음 행동 추가.
