@@ -67,3 +67,10 @@ def test_page_render_is_fast(pdf100):
     for i in range(100):
         _render(doc.key, None, i, 1.5, 0)
     assert (time.perf_counter() - start) / 100 < 0.05
+
+
+def test_palette_comes_from_the_tokens():
+    from PySide6.QtGui import QPalette
+    p = theme.palette()  # every PALETTE entry names a real role and token, or this raises
+    assert p.color(QPalette.ColorRole.Window) == theme.color("color.bg_panel")
+    assert p.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text) == theme.color("color.text_disabled")

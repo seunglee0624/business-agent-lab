@@ -1,25 +1,40 @@
+import os
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox, QWidget
+from PySide6.QtWidgets import (QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
+                               QWidget)
 
 from app import shortcuts, theme
+from app.core import settings
 from app.core.document import Document
 from app.dialogs.password_dialog import ask_password
+from app.dialogs.properties_dialog import show_properties
+from app.icons import icon
 from app.viewer_state import VIEW_MODES, ViewerState
+from app.widgets.empty_state import EmptyState
 from app.widgets.page_view import PageView
+from app.widgets.search_bar import SearchBar
 from app.widgets.sidebar import Sidebar
+from app.widgets.status_bar import StatusBar
+from app.widgets.tab_bar import TabBar
 from app.widgets.toolbar import Toolbar
 
 APP_NAME = "PDF Viewer"
 
-MENUS = {  # None = separator
-    "파일(&F)": ["open", None, "quit"],
-    "편집(&E)": ["copy"],
+# need an open document: disabled on the empty screen so no button silently does nothing
+DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "open_search", "prev", "next", "zoom_in", "zoom_out", "fit_width",
+                    "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
+                    "toggle_presentation")
+
+MENUS = {  # None = separator, "recent" = the recent files submenu
+    "파일(&F)": ["open", "recent", "close_tab", None, "properties", None, "quit"],
+    "편집(&E)": ["copy", None, "open_search"],
     "보기(&V)": ["prev", "next", None, "zoom_in", "zoom_out", "fit_width", "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
-               "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_fullscreen", "toggle_presentation"],
+               "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_fullscreen", "toggle_presentation", None,
+               "next_tab", "prev_tab"],
 }
 
 
@@ -32,71 +47,113 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self._was_maximized = False
         self._actions = self._make_actions()
+        self._recent_menu = QMenu("최근 파일(&R)", self, toolTipsVisible=True)
+        self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
 
         for title, names in MENUS.items():
             menu = self.menuBar().addMenu(title)
             for name in names:
-                menu.addAction(self._actions[name]) if name else menu.addSeparator()
+                if name == "recent":
+                    menu.addMenu(self._recent_menu)
+                elif name:
+                    menu.addAction(self._actions[name])
+                else:
+                    menu.addSeparator()
         help_menu = self.menuBar().addMenu("도움말(&H)")
         help_menu.addAction("정보", lambda: QMessageBox.about(self, APP_NAME, f"{APP_NAME}\nPySide6 + PyMuPDF"))
 
         self._toolbar = Toolbar(self.state, self._actions)
         self.addToolBar(self._toolbar)
-        view = PageView(self.state)
-        self.setCentralWidget(view)
-        view.setFocus()  # otherwise the editable zoom box takes focus and eats the arrow keys
+        self.addToolBarBreak()
+        self._search_bar = SearchBar(self.state)
+        self.addToolBar(self._search_bar)
+        view = self._view = PageView(self.state)
+        view.setAcceptDrops(False)  # dropped files go to the window
+        view.viewport().setAcceptDrops(False)
+        self._empty = EmptyState(self._actions["open"])
+        self._empty.file_chosen.connect(self.open_file)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._empty)
+        self._stack.addWidget(view)
+        central = QWidget()
+        column = QVBoxLayout(central)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(TabBar(self.state))
+        column.addWidget(self._stack)
+        self.setCentralWidget(central)
+        self.setAcceptDrops(True)
+        self._status = StatusBar(self.state)
+        self.setStatusBar(self._status)
         self._sidebar = Sidebar(self.state)
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
         self._dock.setWidget(self._sidebar)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
         self._restore_settings()
+        self._search_bar.setVisible(False)  # after restoreState, which would bring back a saved visibility
 
+        self.state.tabs_changed.connect(self._sync_checks)
+        self.state.document_changed.connect(self._apply_document)  # first: the view must be shown to take focus
         self.state.document_changed.connect(self._update_title)
-        self.state.document_changed.connect(view.setFocus)
+        self.state.document_changed.connect(self._focus_main)
         self.state.fullscreen_changed.connect(self._apply_fullscreen)
         self.state.sidebar_changed.connect(self._apply_sidebar)
+        self.state.search_changed.connect(self._apply_search)
         self._apply_sidebar()
-        for signal in (self.state.layout_changed, self.state.tool_changed, self.state.fullscreen_changed,
-                       self.state.sidebar_changed):
+        self._apply_document()
+        for signal in (self.state.document_changed, self.state.layout_changed, self.state.tool_changed, self.state.fullscreen_changed,
+                       self.state.sidebar_changed, self.state.search_changed):
             signal.connect(self._sync_checks)
         self._sync_checks()
+        self._focus_main()
+
+    def _focus_main(self):
+        (self._view if self.state.document else self._empty).setFocus()
 
     def _make_actions(self):
         st = self.state
         actions = {}
 
-        def add(name, label, slot, short=None, checkable=False):
+        def add(name, label, slot, toolbar=False, checkable=False):
             action = QAction(label, self, checkable=checkable)
-            if short:
-                action.setIconText(short)  # toolbar text; the menu shows the full label
-                action.setToolTip(label)
+            keys = shortcuts.KEYS.get(name, [])
+            if toolbar:  # icon-only button: the tooltip carries the name and the shortcut
+                action.setIcon(icon(name))
+                action.setIconVisibleInMenu(False)  # an icon would hide the menu's check mark
+                key = QKeySequence(keys[0]).toString(QKeySequence.SequenceFormat.NativeText) if keys else ""
+                action.setToolTip(f"{label.rstrip('…')} ({key})" if key else label.rstrip("…"))
             action.triggered.connect(lambda checked=False: slot())
             action.triggered.connect(self._sync_checks)  # undo Qt's own check toggling if the state refused
-            action.setShortcuts([QKeySequence(key) for key in shortcuts.KEYS.get(name, [])])
+            action.setShortcuts([QKeySequence(key) for key in keys])
             self.addAction(action)  # keeps the shortcut alive while the menu bar is hidden (presentation)
             actions[name] = action
 
-        add("open", "열기…", self.choose_file, "열기")
+        add("open", "열기…", self.choose_file, True)
+        add("close_tab", "탭 닫기", st.close_tab)
+        add("properties", "문서 속성…", lambda: show_properties(self, st.document))
         add("quit", "종료", self.close)
         add("copy", "복사", st.copy)
-        add("prev", "이전 페이지", st.prev, "◀")
-        add("next", "다음 페이지", st.next, "▶")
-        add("zoom_in", "확대", st.zoom_in, "＋")
-        add("zoom_out", "축소", st.zoom_out, "－")
+        add("open_search", "찾기…", st.open_search)
+        add("prev", "이전 페이지", st.prev, True)
+        add("next", "다음 페이지", st.next, True)
+        add("zoom_in", "확대", st.zoom_in, True)
+        add("zoom_out", "축소", st.zoom_out, True)
         add("fit_width", "폭 맞춤", st.fit_width)
         add("fit_page", "페이지 맞춤", st.fit_page)
-        for mode, label, short in zip(VIEW_MODES, ("단일 페이지", "연속 스크롤", "두 페이지 펼침"), ("단일", "연속", "펼침")):
-            add(mode, label, lambda mode=mode: st.set_view_mode(mode), short, checkable=True)
+        for mode, label in zip(VIEW_MODES, ("단일 페이지", "연속 스크롤", "두 페이지 펼침")):
+            add(mode, label, lambda mode=mode: st.set_view_mode(mode), True, checkable=True)
         add("cover_alone", "펼침: 표지 단독", lambda: st.set_cover_alone(not st.cover_alone), checkable=True)
-        add("rotate_left", "왼쪽으로 회전", st.rotate_left, "↺")
-        add("rotate_right", "오른쪽으로 회전", st.rotate_right, "↻")
-        add("select_tool", "선택 도구", lambda: st.set_tool("select"), "선택", checkable=True)
-        add("hand_tool", "손 도구", lambda: st.set_tool("hand"), "손", checkable=True)
+        add("rotate_left", "왼쪽으로 회전", st.rotate_left, True)
+        add("rotate_right", "오른쪽으로 회전", st.rotate_right, True)
+        add("select_tool", "선택 도구", lambda: st.set_tool("select"), True, checkable=True)
+        add("hand_tool", "손 도구", lambda: st.set_tool("hand"), True, checkable=True)
         add("toggle_sidebar", "사이드바", st.toggle_sidebar, checkable=True)
         add("toggle_fullscreen", "전체 화면", st.toggle_fullscreen, checkable=True)
         add("toggle_presentation", "발표 모드", st.toggle_presentation, checkable=True)
-        add("exit_fullscreen", "전체 화면 끝내기", st.exit_fullscreen)
+        add("escape", "찾기 닫기 / 전체 화면 끝내기", st.escape)
+        add("next_tab", "다음 탭", st.next_tab)
+        add("prev_tab", "이전 탭", st.prev_tab)
         for group in (VIEW_MODES, ("select_tool", "hand_tool")):
             exclusive = QActionGroup(self)  # clicking the checked one keeps it checked
             for name in group:
@@ -113,7 +170,11 @@ class MainWindow(QMainWindow):
         a["toggle_sidebar"].setChecked(st.sidebar)
         a["toggle_fullscreen"].setChecked(st.fullscreen)
         a["toggle_presentation"].setChecked(st.presentation)
-        a["exit_fullscreen"].setEnabled(st.fullscreen)  # Esc stays free for other uses otherwise
+        a["escape"].setEnabled(st.fullscreen or st.search_open)  # Esc stays free for other uses otherwise
+        for name in DOCUMENT_ACTIONS:
+            a[name].setEnabled(st.document is not None)
+        for name in ("next_tab", "prev_tab"):
+            a[name].setEnabled(len(st.tabs) > 1)
 
     def _apply_fullscreen(self):
         if self.state.fullscreen and not self.isFullScreen():
@@ -123,7 +184,19 @@ class MainWindow(QMainWindow):
             self.showMaximized() if self._was_maximized else self.showNormal()
         self.menuBar().setVisible(not self.state.presentation)
         self._toolbar.setVisible(not self.state.presentation)
+        self._status.setVisible(not self.state.presentation)
         self._apply_sidebar()
+        self._apply_search()
+
+    def _apply_search(self):
+        shown = self.state.search_open and not self.state.presentation
+        focus = self.focusWidget()
+        if not shown and focus and self._search_bar.isAncestorOf(focus):
+            self._view.setFocus()  # hiding the focused box would leave the keys nowhere
+        self._search_bar.setVisible(shown)
+
+    def _apply_document(self):
+        self._stack.setCurrentWidget(self._view if self.state.document else self._empty)
 
     def _apply_sidebar(self):
         self._dock.setVisible(self.state.sidebar and not self.state.presentation)
@@ -134,10 +207,18 @@ class MainWindow(QMainWindow):
             self.open_file(path)
 
     def open_file(self, path):
+        index = self.state.find_tab(os.path.abspath(path))
+        if index is not None:  # already open: no second password prompt
+            self.state.switch_tab(index)
+            return
         try:
             doc = Document(path)
         except (OSError, RuntimeError) as error:  # missing file, or pymupdf.FileDataError for broken files
-            QMessageBox.warning(self, "열기 실패", f"{path}\n\n{error}")
+            reason = ("PDF를 열 수 없어요. 파일이 손상됐거나 PDF가 아닐 수 있어요." if os.path.exists(path) else
+                      "파일을 찾을 수 없어요. 옮겨졌거나 삭제됐을 수 있어요.")
+            QMessageBox.warning(self, "열기 실패", f"{reason}\n\n{path}\n{error}")
+            settings.remove_recent(os.path.abspath(path))
+            self._empty.reload()
             return
         retry = False
         while doc.is_locked:
@@ -148,21 +229,46 @@ class MainWindow(QMainWindow):
             retry = not doc.authenticate(password)
         self.state.open(doc)
 
+    def _fill_recent_menu(self):
+        self._recent_menu.clear()
+        for i, path in enumerate(settings.recent_files(), 1):
+            action = self._recent_menu.addAction(f"&{i % 10} {Path(path).name}", lambda path=path: self.open_file(path))
+            action.setToolTip(path)
+        if self._recent_menu.isEmpty():
+            self._recent_menu.addAction("(없음)").setEnabled(False)
+
+    @staticmethod
+    def _dropped_pdfs(event):
+        urls = event.mimeData().urls()
+        return [url.toLocalFile() for url in urls if url.isLocalFile() and url.toLocalFile().lower().endswith(".pdf")]
+
+    def dragEnterEvent(self, event):
+        if self._dropped_pdfs(event):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        paths = self._dropped_pdfs(event)
+        if paths:
+            event.acceptProposedAction()
+            # after the drop returns: a password or error dialog inside it would hold the file manager's drag
+            QTimer.singleShot(0, lambda: [self.open_file(path) for path in paths])
+
     def _restore_settings(self):
-        settings = QSettings()
-        if not self.restoreState(settings.value("window/state", b"")):  # first run: default width
+        geometry, dock_state, sidebar_shown, sidebar_tab = settings.window()
+        if not self.restoreGeometry(geometry):  # first run
+            self.resize(theme.token("size.window_width"), theme.token("size.window_height"))
+        if not self.restoreState(dock_state):
             self.resizeDocks([self._dock], [theme.token("size.sidebar_width")], Qt.Orientation.Horizontal)
-        self.state.set_sidebar(settings.value("sidebar/visible", True, type=bool))
-        self._sidebar.setCurrentIndex(settings.value("sidebar/tab", 0, type=int))
+        self.state.set_sidebar(sidebar_shown)
+        self._sidebar.setCurrentIndex(sidebar_tab)
 
     def closeEvent(self, event):
-        settings = QSettings()
-        settings.setValue("window/state", self.saveState())  # dock width
-        settings.setValue("sidebar/visible", self.state.sidebar)
-        settings.setValue("sidebar/tab", self._sidebar.currentIndex())
+        geometry = settings.window()[0] if self.isFullScreen() else self.saveGeometry()  # don't reopen fullscreen
+        settings.save_window(geometry, self.saveState(), self.state.sidebar, self._sidebar.currentIndex())
+        self.state.save_view()
         self.state.renderer.shutdown()
         super().closeEvent(event)
 
     def _update_title(self):
         doc = self.state.document
-        self.setWindowTitle(f"{Path(doc.path).name} — {APP_NAME}" if doc else APP_NAME)
+        self.setWindowTitle(f"{Path(doc.path).name} · {APP_NAME}" if doc else APP_NAME)

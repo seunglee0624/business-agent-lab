@@ -21,10 +21,11 @@ class Toolbar(QToolBar):
         self.addSeparator()
         self.addAction(actions["prev"])
         self._page = QSpinBox()
+        self._page.setAccessibleName("페이지 번호")
         self._page.setKeyboardTracking(False)  # go only on Enter / focus out, not per digit
         self._page.valueChanged.connect(lambda value: state.go_to(value - 1))
         self.addWidget(self._page)
-        self._total = QLabel()
+        self._total = QLabel(objectName="pageTotal")
         self.addWidget(self._total)
         self.addAction(actions["next"])
         self.addSeparator()
@@ -65,6 +66,7 @@ class Toolbar(QToolBar):
             self._page.setRange(min(1, count), count)
             self._page.setValue(self._state.current_page + 1 if count else 0)
         self._page.setEnabled(count > 0)
+        self._zoom.setEnabled(count > 0)
         self._total.setText(f"/ {count}")
         self._show_zoom()
 

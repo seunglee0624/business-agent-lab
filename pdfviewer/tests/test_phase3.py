@@ -124,7 +124,7 @@ def test_view_mode_switch_keeps_current_page(qtbot, window, pdf100):
     # Phase 3 completion: switching between the three view modes keeps the current page
     window.open_file(pdf100)
     window.state.go_to(10)
-    view = window.centralWidget()
+    view = window._view
     for mode in ("spread", "single", "continuous", "spread", "continuous"):
         window.state.set_view_mode(mode)
         assert window.state.current_page == 10, mode
@@ -134,7 +134,7 @@ def test_view_mode_switch_keeps_current_page(qtbot, window, pdf100):
 def test_drag_selects_and_copies_text(qtbot, window, text_pdf):
     # Phase 3 completion: dragging over text and copying gives that text
     window.open_file(text_pdf)
-    state, view = window.state, window.centralWidget()
+    state, view = window.state, window._view
     qtbot.waitUntil(lambda: state.renderer.info(0) is not None, timeout=15000)
     words = state.renderer.info(0)[0]
 
@@ -162,7 +162,7 @@ def test_drag_selects_and_copies_text(qtbot, window, text_pdf):
 
 def test_internal_link_click_jumps(qtbot, window, text_pdf):
     window.open_file(text_pdf)
-    state, view = window.state, window.centralWidget()
+    state, view = window.state, window._view
     qtbot.waitUntil(lambda: state.renderer.info(0) is not None, timeout=15000)
     (x0, y0, x1, y1), _, target = next(l for l in state.renderer.info(0)[1] if l[2] is not None)
     point = view.mapFromScene(view._page_transform(0).map(QPointF((x0 + x1) / 2, (y0 + y1) / 2)))
@@ -172,7 +172,7 @@ def test_internal_link_click_jumps(qtbot, window, text_pdf):
 
 def test_presentation_hides_ui_and_esc_exits(qtbot, window, pdf100):
     window.open_file(pdf100)
-    qtbot.keyClick(window.centralWidget(), Qt.Key.Key_F5)
+    qtbot.keyClick(window._view, Qt.Key.Key_F5)
     assert window.state.presentation and not window.menuBar().isVisible()
-    qtbot.keyClick(window.centralWidget(), Qt.Key.Key_Escape)  # menu bar hidden: shortcut must still work
+    qtbot.keyClick(window._view, Qt.Key.Key_Escape)  # menu bar hidden: shortcut must still work
     assert not window.state.fullscreen and window.menuBar().isVisible()

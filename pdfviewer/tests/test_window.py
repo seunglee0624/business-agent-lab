@@ -12,11 +12,11 @@ def test_open_and_page_with_arrow_keys(qtbot, pdf100):
     qtbot.waitUntil(window.isActiveWindow)  # window shortcuts fire only in the active window
     window.open_file(pdf100)
     assert window.windowTitle().startswith("hundred.pdf")
-    view = window.centralWidget()
+    view = window._view
     qtbot.waitUntil(lambda: not view._items[0][2].pixmap().isNull(), timeout=15000)  # worker render arrived
 
-    qtbot.keyClick(window.centralWidget(), Qt.Key.Key_Right)
-    qtbot.keyClick(window.centralWidget(), Qt.Key.Key_Right)
+    qtbot.keyClick(window._view, Qt.Key.Key_Right)
+    qtbot.keyClick(window._view, Qt.Key.Key_Right)
     assert window.state.current_page == 2
 
     toolbar = window.findChild(Toolbar)
@@ -40,3 +40,15 @@ def test_password_retry_then_open(qtbot, locked_pdf, monkeypatch):
     qtbot.addWidget(window)
     window.open_file(locked_pdf)
     assert window.state.page_count == 2
+
+
+def test_toolbar_buttons_are_icons_with_tooltips(qtbot):
+    from PySide6.QtWidgets import QToolBar
+    w = MainWindow()
+    qtbot.addWidget(w)
+    for bar in w.findChildren(QToolBar):
+        for action in bar.actions():
+            if action.isSeparator() or not action.text() or action.text() in ("Aa", "단어"):
+                continue  # widgets (page box, zoom box) and the text toggles
+            assert not action.icon().isNull() and action.toolTip(), action.text()
+    assert w._actions["zoom_in"].toolTip() == "확대 (Ctrl++)"

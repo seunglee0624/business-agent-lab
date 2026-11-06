@@ -20,14 +20,17 @@ class ThumbnailDelegate(QStyledItemDelegate):
         page = QRectF(cell.center().x() - w / 2, cell.top() + pad + (box - h) / 2, w, h)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.fillRect(page, theme.color("color.paper"))
+        painter.fillRect(page, theme.color("color.page"))
         image = model.image(row, option.widget.devicePixelRatioF())
         if image is not None:
             painter.drawImage(page, image)
+        else:  # still rendering: the number tells it apart from a blank page
+            painter.setPen(theme.color("color.text_disabled"))
+            painter.drawText(page, Qt.AlignmentFlag.AlignCenter, index.data())
         if option.state & QStyle.StateFlag.State_Selected:
             painter.setPen(QPen(theme.color("color.accent"), theme.token("size.current_frame")))
             painter.drawRect(page)
-        painter.setPen(theme.color("color.text"))
+        painter.setPen(theme.color("color.text_muted"))
         label = QRectF(cell.left(), cell.top() + pad + box, cell.width(), cell.bottom() - cell.top() - pad - box)
         painter.drawText(label, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, index.data())
         painter.restore()

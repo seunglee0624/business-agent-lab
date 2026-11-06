@@ -8,7 +8,7 @@ class Document:
     Pixels come from core/renderer.py, never from here (rendering on the UI side freezes it)."""
 
     def __init__(self, path):
-        self.path = str(path)
+        self.path = os.path.abspath(path)  # recent files and per-file settings key on it
         self._doc = pymupdf.open(self.path)
         self.password = None
         # identifies this file version for the render workers' own open copies
@@ -36,5 +36,25 @@ class Document:
             self._sizes[index] = (rect.width, rect.height)
         return self._sizes[index]
 
+    @property
+    def file_size(self):
+        return os.path.getsize(self.path)
+
+    def properties(self):
+        """Metadata for the properties dialog. Dates stay in PDF form ("D:20240131...")."""
+        meta = self._doc.metadata or {}
+        return {"title": meta.get("title"), "author": meta.get("author"), "created": meta.get("creationDate"),
+                "modified": meta.get("modDate"), "version": meta.get("format"), "encryption": meta.get("encryption"),
+                "page_size": self.page_size(0) if self.page_count else None}
+
     def close(self):
         self._doc.close()
+
+
+def format_size(size):
+    """1234567 -> "1.2 MB"."""
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"

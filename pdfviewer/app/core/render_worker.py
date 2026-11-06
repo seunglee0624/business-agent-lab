@@ -1,5 +1,7 @@
 """Code that runs inside render worker processes. Imports only pymupdf so a spawned worker starts fast.
 PyMuPDF keeps the GIL while it works, so anything slow happens here; a thread would freeze the UI."""
+import re
+
 import pymupdf
 
 _docs = {}  # Document.key -> open pymupdf document (each worker keeps its own)
@@ -48,3 +50,36 @@ def page_info(key, password, index):
 def outline(key, password):
     """Table of contents: [level, title, 1-based page or -1], as pymupdf get_toc(simple=True) gives it."""
     return _open(key, password).get_toc(simple=True)
+
+
+def search(key, password, first, last, query, case, whole):
+    """Matches of query on pages [first, last): [(page, rects, context)], rects in page.rect coordinates
+    (one per line the match covers). Spaces in the query match any whitespace, line breaks included."""
+    pattern = re.escape(query).replace(r"\ ", r"\s+")
+    if whole:
+        pattern = rf"(?<!\w){pattern}(?!\w)"
+    regex = re.compile(pattern, 0 if case else re.IGNORECASE)
+    doc, found = _open(key, password), []
+    for index in range(first, last):
+        page = doc[index]
+        if not regex.search(page.get_text()):  # cheap check before the per-character pass
+            continue
+        text, boxes = [], []  # one character each; boxes: (bbox, line number), None between lines
+        lines = (line for block in page.get_text("rawdict")["blocks"] for line in block.get("lines", []))
+        for number, line in enumerate(lines):
+            for span in line["spans"]:
+                for char in span["chars"]:
+                    text.append(char["c"])
+                    boxes.append((char["bbox"], number))
+            text.append(" ")
+            boxes.append(None)
+        text, m = "".join(text), page.rotation_matrix
+        for match in regex.finditer(text):
+            lines = {}
+            for box in boxes[match.start():match.end()]:
+                if box:
+                    lines.setdefault(box[1], pymupdf.Rect(box[0])).include_rect(box[0])
+            rects = [tuple(r * m) for r in lines.values()]
+            context = " ".join(text[max(0, match.start() - 30):match.end() + 30].split())
+            found.append((index, rects, context))
+    return found

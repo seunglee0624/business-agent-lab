@@ -1,21 +1,124 @@
-/* Double-brace token placeholders are replaced from tokens.json by app/theme.py */
+/* Double-brace token placeholders are replaced from tokens.json by app/theme.py.
+   Regions are told apart by background brightness (base -> panel -> elevated -> highlight), not by lines. */
 
 QWidget {
-    font-family: "{{font.family}}";
+    font-family: {{font.family}};
     font-size: {{font.size}}px;
+    font-weight: {{font.weight}};
 }
+
+/* ---- document area */
 
 QGraphicsView#pageView {
-    background: {{color.canvas}};
-    border: none;
+    background: {{color.bg_base}};
+    border: 2px solid transparent; /* coloured on focus; transparent keeps the layout still */
 }
 
-QToolBar#toolbar {
-    background: {{color.surface}};
+/* large keyboard targets get a quiet grey frame: green around the whole page would shout */
+QGraphicsView#pageView:focus,
+QTabWidget#sidebar QListView:focus,
+QTabWidget#sidebar QTreeView:focus,
+QWidget#emptyState QListView:focus {
+    border-color: {{color.outline}};
+}
+
+/* ---- toolbars: groups are 8px apart inside, 16px between (separators are gaps, not lines) */
+
+/* the margin is set by type, not #name: Qt reads it while the toolbar is still unnamed.
+   12px around a 32px row = the 56px bar of the spec */
+QToolBar {
+    spacing: {{spacing.md}}px;
+    padding: {{spacing.lg}}px;
+}
+
+QToolBar#toolbar,
+QToolBar#searchBar {
+    background: {{color.bg_panel}};
     color: {{color.text}};
-    spacing: {{spacing.sm}}px;
-    padding: {{spacing.sm}}px {{spacing.md}}px;
     border: none;
+    qproperty-iconSize: {{size.control_sm}}px {{size.control_sm}}px; /* icons.py centres the glyph in the button square */
+}
+
+QToolBar::separator {
+    width: 0px;
+    background: transparent;
+}
+
+/* round icon buttons: the icon itself turns white on hover and green + filled when checked */
+QToolBar QToolButton {
+    background: transparent;
+    color: {{color.text_muted}};
+    border: none;
+    border-radius: {{radius.pill_sm}}px;
+    padding: 0px;
+    min-width: {{size.control_sm}}px;
+    min-height: {{size.control_sm}}px;
+    max-width: {{size.control_sm}}px;
+    max-height: {{size.control_sm}}px;
+}
+
+QToolBar QToolButton:hover {
+    color: {{color.text}};
+}
+
+QToolBar QToolButton:checked {
+    color: {{color.accent}};
+}
+
+QToolBar QToolButton:pressed {
+    background: {{color.bg_highlight}};
+}
+
+QToolBar QToolButton:disabled {
+    color: {{color.text_disabled}};
+}
+
+/* ---- inputs: rounded boxes on the elevated background, outlined so an empty one is still visible */
+
+QLineEdit,
+QSpinBox,
+QComboBox {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+    padding: 0px {{spacing.lg}}px;
+    min-height: {{size.input_sm}}px; /* + the 1px border = control_sm */
+    max-height: {{size.input_sm}}px;
+    selection-background-color: {{color.outline}};
+    selection-color: {{color.text}};
+}
+
+QLineEdit:focus,
+QSpinBox:focus,
+QComboBox:focus {
+    border: 2px solid {{color.accent}};
+}
+
+/* the text box inside a spin box or editable combo box: the outer pill already draws the frame */
+QSpinBox QLineEdit,
+QComboBox QLineEdit {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    min-height: 0px;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: {{size.control_sm}}px;
+}
+
+QComboBox::down-arrow {
+    image: url({{icon:dropdown:color.text_muted}});
+    width: {{spacing.xl}}px;
+    height: {{spacing.xl}}px;
+}
+
+QComboBox QAbstractItemView {
+    background: {{color.bg_elevated}};
+    border: none;
+    selection-background-color: {{color.bg_highlight}};
 }
 
 QToolBar#toolbar QComboBox {
@@ -24,16 +127,304 @@ QToolBar#toolbar QComboBox {
 
 QToolBar#toolbar QSpinBox {
     min-width: {{size.page_input}}px;
+    max-width: {{size.page_input}}px; /* text width: + 2 x 12px padding + border = 56px, room for 4 digits */
+    qproperty-alignment: AlignCenter;
 }
 
-QTabWidget#sidebar QListView,
-QTabWidget#sidebar QTreeView,
-QTabWidget#sidebar QLabel {
-    background: {{color.surface}};
+/* page number and zoom ratio: the spec's mono style (Pretendard's digits are already fixed-width) */
+QToolBar#toolbar QSpinBox,
+QToolBar#toolbar QSpinBox QLineEdit,
+QToolBar#toolbar QComboBox,
+QToolBar#toolbar QComboBox QLineEdit,
+QLabel#pageTotal {
+    font-size: {{font.mono_size}}px;
+    font-weight: {{font.mono_weight}};
+}
+
+/* arrows hidden by zero width: NoButtons plus a styled frame squeezes the number box to 1px */
+QSpinBox::up-button,
+QSpinBox::down-button,
+QSpinBox::up-arrow,
+QSpinBox::down-arrow {
+    width: 0px;
+    border: none;
+    image: none;
+}
+
+QToolBar#searchBar QLineEdit {
+    min-width: {{size.search_input}}px;
+    max-width: {{size.search_max}}px;
+    min-height: {{size.input_md}}px; /* + the 1px border = control_md */
+    max-height: {{size.input_md}}px;
+    padding: 0px {{spacing.xl}}px;
+}
+
+QToolBar#searchBar QLabel {
+    color: {{color.text_muted}};
+    font-size: {{font.caption_size}}px;
+    font-weight: {{font.caption_weight}};
+}
+
+/* ---- buttons */
+
+QPushButton {
+    background: transparent;
     color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+    padding: 0px {{spacing.xl}}px;
+    min-height: {{size.control_sm}}px;
+}
+
+QPushButton:hover {
+    border-color: {{color.text}};
+}
+
+QPushButton:focus {
+    border: 2px solid {{color.accent}};
+}
+
+QPushButton#primary {
+    background: {{color.accent}};
+    color: {{color.on_accent}};
+    font-weight: {{font.heading_weight}};
+    border: 2px solid transparent; /* the green shows through; white on focus */
+    border-radius: {{radius.pill_lg}}px;
+    padding: 0px {{spacing.xxl}}px;
+    min-height: {{size.control_lg}}px;
+}
+
+QPushButton#primary:hover {
+    background: {{color.accent_hover}};
+}
+
+QPushButton#primary:pressed {
+    background: {{color.accent_pressed}};
+}
+
+QPushButton#primary:focus {
+    border-color: {{color.text}};
+}
+
+/* ---- document tabs and the sidebar's tabs share one look:
+   only the open one is filled and white; the rest are grey text on the bar */
+
+QTabBar#tabBar {
+    background: {{color.bg_panel}};
+    qproperty-drawBase: 0;
+}
+
+QTabBar#tabBar::tab,
+QTabWidget#sidebar > QTabBar::tab {
+    background: transparent;
+    color: {{color.text_muted}};
+    border: none;
+    border-radius: {{radius.md}}px;
+    min-height: {{size.control_sm}}px;
+    padding: 0px {{spacing.lg}}px;
+    margin: {{spacing.sm}}px 0px {{spacing.sm}}px {{spacing.md}}px;
+}
+
+QTabBar#tabBar::tab:hover,
+QTabWidget#sidebar > QTabBar::tab:hover {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+}
+
+QTabBar#tabBar::tab:selected,
+QTabWidget#sidebar > QTabBar::tab:selected {
+    background: {{color.bg_highlight}};
+    color: {{color.text}};
+    font-weight: {{font.heading_weight}};
+}
+
+QToolButton#tabClose {
+    background: transparent;
+    border: none;
+    padding: 0px;
+}
+
+/* ---- sidebar: tabs on top (styled with the document tabs above), then the lists */
+
+QTabWidget#sidebar::pane {
     border: none;
 }
 
+QTabWidget#sidebar > QTabBar {
+    qproperty-drawBase: 0;
+}
+
+QTabWidget#sidebar QListView,
+QTabWidget#sidebar QTreeView {
+    background: {{color.bg_panel}};
+    color: {{color.text}};
+    border: 2px solid transparent;
+}
+
 QTabWidget#sidebar QLabel {
+    background: {{color.bg_panel}};
+    border: none;
+    color: {{color.text_muted}};
     padding: {{spacing.md}}px;
+}
+
+QTabWidget#sidebar QTreeView {
+    qproperty-indentation: {{spacing.xl}};
+}
+
+QTreeView::item,
+QListView::item {
+    border-radius: {{radius.sm}}px;
+    padding: {{spacing.sm}}px;
+}
+
+QTreeView::item:hover,
+QListView::item:hover {
+    background: {{color.bg_elevated}};
+}
+
+QTreeView::item:selected,
+QListView::item:selected {
+    background: {{color.bg_highlight}};
+    color: {{color.accent}};
+}
+
+/* ---- empty state */
+
+QWidget#emptyState {
+    background: {{color.bg_base}};
+    color: {{color.text}};
+}
+
+QLabel#emptyTitle {
+    font-size: {{font.title_size}}px;
+    font-weight: {{font.title_weight}};
+    padding: {{spacing.md}}px;
+}
+
+QLabel#heading {
+    font-size: {{font.heading_size}}px;
+    font-weight: {{font.heading_weight}};
+    padding-top: {{spacing.xxl}}px;
+}
+
+QWidget#emptyState QListView {
+    background: {{color.bg_base}};
+    border: 2px solid transparent;
+    min-width: {{size.empty_list_width}}px;
+    max-height: {{size.empty_list_height}}px;
+}
+
+/* ---- status bar */
+
+QStatusBar#statusBar {
+    background: {{color.bg_panel}};
+    color: {{color.text_muted}};
+    font-size: {{font.caption_size}}px;
+}
+
+QStatusBar#statusBar::item {
+    border: none;
+}
+
+QStatusBar#statusBar QLabel {
+    color: {{color.text_muted}};
+    font-size: {{font.caption_size}}px;
+    font-weight: {{font.caption_weight}};
+    padding: 0px {{spacing.md}}px;
+}
+
+/* ---- menus and tooltips */
+
+QMenuBar {
+    background: {{color.bg_panel}};
+    color: {{color.text}};
+}
+
+QMenuBar::item {
+    padding: {{spacing.sm}}px {{spacing.md}}px;
+}
+
+QMenuBar::item:selected {
+    background: {{color.bg_elevated}};
+    border-radius: {{radius.sm}}px;
+}
+
+QMenu {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+    border: none;
+    padding: {{spacing.sm}}px;
+}
+
+QMenu::item {
+    padding: {{spacing.lg}}px {{spacing.xxl}}px {{spacing.lg}}px {{spacing.xl}}px; /* 40px rows */
+    min-width: {{size.menu_label}}px; /* the label column: Qt puts the shortcut column right after it */
+    border-radius: {{radius.sm}}px;
+}
+
+QMenu::item:selected {
+    background: {{color.bg_highlight}};
+}
+
+QMenu::item:disabled {
+    color: {{color.text_disabled}};
+}
+
+QMenu::separator {
+    height: 1px;
+    background: {{color.bg_highlight}};
+    margin: {{spacing.sm}}px {{spacing.md}}px;
+}
+
+QToolTip {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+    border: none;
+    padding: {{spacing.sm}}px {{spacing.md}}px;
+    font-size: {{font.caption_size}}px;
+}
+
+/* ---- scrollbars: a thin translucent pill, no arrows, no track */
+
+QScrollBar:vertical,
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+}
+
+QScrollBar:vertical {
+    width: {{size.scrollbar}}px;
+}
+
+QScrollBar:horizontal {
+    height: {{size.scrollbar}}px;
+}
+
+QScrollBar::handle {
+    background: {{color.scrollbar}};
+    border-radius: {{radius.sm}}px;
+    min-height: {{size.control_sm}}px;
+    min-width: {{size.control_sm}}px;
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line {
+    width: 0px;
+    height: 0px;
+}
+
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: transparent;
+}
+
+/* ---- dialogs */
+
+QDialog#propertiesDialog {
+    min-width: {{size.dialog_width}}px;
+}
+
+QLabel#fieldName {
+    color: {{color.text_muted}};
 }

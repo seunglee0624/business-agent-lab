@@ -1,17 +1,34 @@
+from dataclasses import dataclass
+
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 
 from app import theme
+from app.core import settings
 from app.core.renderer import Renderer
 
 VIEW_MODES = ("single", "continuous", "spread")
+MAX_SEARCH_RESULTS = 10000  # shortcut: a one-letter query stops here; page through results if users need more
 SAFE_URL_SCHEMES = {"http", "https", "mailto"}  # a PDF must not launch file:// or other handlers
+
+
+@dataclass
+class Tab:
+    """An open file and how it was left. The visible tab's live values are on ViewerState."""
+    document: object
+    page: int = 0
+    zoom_mode: str = "fit_width"
+    zoom: float = 1.0
+    view_mode: str = "continuous"
+    cover_alone: bool = True
+    rotation: int = 0
 
 
 class ViewerState(QObject):
     """Sole owner of viewer state. Widgets call methods here and listen to the signals."""
 
-    document_changed = Signal()
+    document_changed = Signal()  # also on a tab switch
+    tabs_changed = Signal()  # opened, closed, moved or switched
     page_changed = Signal(int)
     zoom_changed = Signal(float)
     layout_changed = Signal()  # view mode, cover option or rotation
@@ -19,13 +36,18 @@ class ViewerState(QObject):
     fullscreen_changed = Signal()  # fullscreen or presentation
     sidebar_changed = Signal()
     selection_changed = Signal()
+    search_opened = Signal()  # Ctrl+F: focus the search box
+    search_changed = Signal()  # bar shown/hidden, query, options, results or progress
+    search_current_changed = Signal()
 
     MIN_ZOOM, MAX_ZOOM = 0.1, 8.0
     ZOOM_STEP = 1.25
 
     def __init__(self):
         super().__init__()
-        self.document = None
+        self.document = None  # the current tab's
+        self.tabs = []
+        self.tab_index = None  # current tab
         self.current_page = 0
         self.zoom = 1.0
         self.zoom_mode = "fit_width"  # "custom" | "fit_width" | "fit_page"
@@ -37,27 +59,110 @@ class ViewerState(QObject):
         self.presentation = False
         self.sidebar = True  # shown (presentation hides it without changing this)
         self.selection = None  # (page, first word, last word), inclusive
+        self.search_open = False
+        self.search_query, self.search_case, self.search_whole = "", False, False
+        self.search_results = []  # [(page, rects in page.rect coordinates, context)], document order
+        self.search_searched = 0  # pages searched so far
+        self.search_index = None  # current result
+        self._search_anchor = 0  # page the search started from: the first current result is at or after it
         self._before_presentation = None
         self._viewport = (0, 0)  # space the pages may use, in logical px
         self.renderer = Renderer()
+        self.renderer.search_found.connect(self._on_search_found)
 
     @property
     def page_count(self):
         return self.document.page_count if self.document else 0
 
+    # ---- tabs
+
     def open(self, document):
-        if self.document:
-            self.document.close()
-        self.document = document
-        self.renderer.set_document(document)
-        self.current_page = 0
-        self.rotation = 0
+        """Open in a new last tab, where the file was left last time. A file already open gets its tab back."""
+        settings.add_recent(document.path)
+        index = self.find_tab(document.path)
+        if index is not None:
+            document.close()
+            self.switch_tab(index)
+            return
+        # a new file keeps the current view mode, and the zoom unless it has its own from last time
+        page, zoom_mode, zoom = settings.file_view(document.path) or (0, self.zoom_mode, self.zoom)
+        tab = Tab(document, page, zoom_mode, zoom, self.view_mode, self.cover_alone)
+        self._leave_tab()
+        self.tabs.append(tab)
+        self._show_tab(len(self.tabs) - 1)
+
+    def find_tab(self, path):
+        return next((i for i, tab in enumerate(self.tabs) if tab.document.path == path), None)
+
+    def switch_tab(self, index):
+        if index != self.tab_index and 0 <= index < len(self.tabs):
+            self._leave_tab()
+            self._show_tab(index)
+
+    def next_tab(self):
+        if self.tabs:
+            self.switch_tab((self.tab_index + 1) % len(self.tabs))
+
+    def prev_tab(self):
+        if self.tabs:
+            self.switch_tab((self.tab_index - 1) % len(self.tabs))
+
+    def close_tab(self, index=None):
+        """Close a tab (the current one by default); its neighbour, or the empty screen, takes its place."""
+        index = self.tab_index if index is None else index
+        if index is None or not 0 <= index < len(self.tabs):
+            return
+        if index == self.tab_index:
+            self._leave_tab()
+            tab = self.tabs.pop(index)
+            self.tab_index = None
+            self._show_tab(min(index, len(self.tabs) - 1) if self.tabs else None)
+        else:  # left earlier, so already saved
+            tab = self.tabs.pop(index)
+            self.tab_index -= index < self.tab_index
+            self.tabs_changed.emit()
+        tab.document.close()  # after the renderer moved on to the next document
+
+    def move_tab(self, source, target):
+        current = self.tabs[self.tab_index]
+        self.tabs.insert(target, self.tabs.pop(source))
+        self.tab_index = self.tabs.index(current)
+        self.tabs_changed.emit()
+
+    def save_view(self):
+        """Remember where the current file is, for this session's tab and for the next time it is opened.
+        Other tabs were saved when they were left."""
+        if self.tab_index is None:
+            return
+        tab = self.tabs[self.tab_index]
+        # presentation's single page and fit-page zoom are temporary: keep what it will return to
+        view_mode, zoom_mode, zoom = (self._before_presentation[:3] if self.presentation
+                                      else (self.view_mode, self.zoom_mode, self.zoom))
+        tab.page, tab.zoom_mode, tab.zoom = self.current_page, zoom_mode, zoom
+        tab.view_mode, tab.cover_alone, tab.rotation = view_mode, self.cover_alone, self.rotation
+        settings.save_file_view(tab.document.path, tab.page, tab.zoom_mode, tab.zoom)
+
+    def _leave_tab(self):
+        self._end_presentation()  # the next tab brings its own view mode
+        self.save_view()
+
+    def _show_tab(self, index):
+        self.tab_index = index
+        tab = self.tabs[index] if index is not None else None
+        self.document = tab.document if tab else None
+        self.renderer.set_document(self.document)
         self.selection = None
-        self.renderer.request_outline()
-        fit = self._fit_zoom()
-        if fit:
-            self.zoom = self._clamp(fit)
+        self.current_page, self.rotation = (max(0, min(tab.page, self.page_count - 1)), tab.rotation) if tab else (0, 0)
+        if tab:
+            self.zoom_mode, self.zoom = tab.zoom_mode, self._clamp(tab.zoom)
+            self.view_mode, self.cover_alone = tab.view_mode, tab.cover_alone
+            self.renderer.request_outline()
+            fit = self._fit_zoom()  # a fit mode refits to this window
+            if fit:
+                self.zoom = self._clamp(fit)
+        self.tabs_changed.emit()
         self.document_changed.emit()
+        self._restart_search()  # the open bar searches this document for the same query
 
     # ---- pages and layout
 
@@ -206,6 +311,13 @@ class ViewerState(QObject):
         self._apply_zoom("fit_page", self._fit_zoom("fit_page"))
         self.layout_changed.emit()
 
+    def escape(self):
+        """Esc: close the search bar first (presentation hides it, so there Esc ends presentation)."""
+        if self.search_open and not self.presentation:
+            self.close_search()
+        else:
+            self.exit_fullscreen()
+
     def exit_fullscreen(self):
         """Esc: one step back. Presentation returns to the window it started from (fullscreen or not)."""
         if self.presentation:
@@ -262,3 +374,66 @@ class ViewerState(QObject):
             self.go_to(target)
         elif uri and QUrl(uri).scheme().lower() in SAFE_URL_SCHEMES:
             QDesktopServices.openUrl(QUrl(uri))
+
+    # ---- search
+
+    @property
+    def search_done(self):
+        return self.search_searched >= self.page_count
+
+    def open_search(self):
+        if not self.search_open:
+            self.search_open = True
+            self._restart_search()
+        self.search_opened.emit()
+
+    def close_search(self):
+        if self.search_open:
+            self.search_open = False
+            self._restart_search()  # stops the search and clears the highlights; the query stays for next time
+
+    def set_search(self, query, case=False, whole=False):
+        if (query, case, whole) != (self.search_query, self.search_case, self.search_whole):
+            self.search_query, self.search_case, self.search_whole = query, case, whole
+            self._restart_search()
+
+    def _restart_search(self):
+        active = self.search_open and self.search_query.strip() and self.document
+        self.search_results, self.search_index, self.search_searched = [], None, 0
+        self._search_anchor = self.current_page
+        self.renderer.search(self.search_query if active else "", self.search_case, self.search_whole)
+        self.search_changed.emit()
+        self.search_current_changed.emit()
+
+    def _on_search_found(self, results, searched):
+        room = MAX_SEARCH_RESULTS - len(self.search_results)
+        self.search_results += results[:room]
+        self.search_searched = searched
+        if len(results) >= room:
+            self.renderer.search("", False, False)
+            self.search_searched = self.page_count  # done: capped
+        self.search_changed.emit()
+        if self.search_index is None:
+            first = next((i for i, r in enumerate(self.search_results) if r[0] >= self._search_anchor), None)
+            if first is None and self.search_done and self.search_results:
+                first = 0  # nothing after the anchor: wrap to the start
+            if first is not None:
+                self.set_search_index(first)
+
+    def set_search_index(self, index):
+        if self.search_results and index != self.search_index:
+            self.search_index = index % len(self.search_results)
+            self.go_to(self.search_results[self.search_index][0])
+            self.search_current_changed.emit()
+
+    def search_next(self):
+        self._step_search(1)
+
+    def search_prev(self):
+        self._step_search(-1)
+
+    def _step_search(self, step):
+        if self.search_index is not None:
+            self.set_search_index(self.search_index + step)
+        elif self.search_results:  # results so far, none after the anchor yet
+            self.set_search_index(0 if step > 0 else -1)

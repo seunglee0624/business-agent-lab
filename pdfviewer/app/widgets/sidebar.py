@@ -2,8 +2,9 @@ from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QLabel, QListView, QStackedWidget, QTabWidget, QTreeView
 
 from app.models.outline_model import PAGE_ROLE, OutlineModel
+from app.models.search_result_model import SearchResultModel
 from app.models.thumbnail_model import ThumbnailModel
-from app.widgets.page_view import RENDER_DEBOUNCE_MS
+from app.core.renderer import RENDER_DEBOUNCE_MS
 from app.widgets.thumbnail_delegate import ThumbnailDelegate
 
 
@@ -16,18 +17,23 @@ class Sidebar(QTabWidget):
         self.thumbnails = ThumbnailList(state)
         self.addTab(self.thumbnails, "썸네일")
         self.addTab(OutlinePanel(state), "목차")
+        self.search_results = SearchResultList(state)
+        self.addTab(self.search_results, "검색")
+        state.search_opened.connect(lambda: self.setCurrentWidget(self.search_results))
 
 
 class ThumbnailList(QListView):
     def __init__(self, state):
         super().__init__()
         self._state = state
+        self.setAccessibleName("썸네일")
         self.setModel(ThumbnailModel(state, self))
         self.setItemDelegate(ThumbnailDelegate(self))
         self.setUniformItemSizes(True)  # one square cell size: fast for thousands of pages
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._debounce = QTimer(self, singleShot=True, interval=RENDER_DEBOUNCE_MS, timeout=self._request)
-        self.verticalScrollBar().valueChanged.connect(self._debounce.start)
+        # not .connect(self._debounce.start): the scroll value would become the delay in ms
+        self.verticalScrollBar().valueChanged.connect(lambda: self._debounce.start())
         self.model().modelReset.connect(self._follow)
         self.selectionModel().currentRowChanged.connect(self._on_current)
         state.page_changed.connect(self._follow)
@@ -90,3 +96,24 @@ class OutlinePanel(QStackedWidget):
         page = index.data(PAGE_ROLE)
         if page and page > 0:
             self._state.go_to(page - 1)
+
+
+class SearchResultList(QListView):
+    def __init__(self, state):
+        super().__init__()
+        self._state = state
+        self.setModel(SearchResultModel(state, self))
+        self.setUniformItemSizes(True)
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.selectionModel().currentRowChanged.connect(self._on_current)
+        state.search_current_changed.connect(self._follow)
+
+    def _on_current(self, current, _previous):
+        if current.isValid():
+            self._state.set_search_index(current.row())
+
+    def _follow(self):
+        index = self._state.search_index
+        if index is not None and index < self.model().rowCount():
+            self.setCurrentIndex(self.model().index(index))  # its currentRowChanged → same index does nothing
+            self.scrollTo(self.currentIndex())

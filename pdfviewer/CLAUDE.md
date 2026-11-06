@@ -1,5 +1,7 @@
 # PDF Viewer — 프로젝트 규칙
 
+사용자의 진행 방식(계획 → 직접 확인 → 피드백 → 다음 단계)은 WORKFLOW.md 참고.
+
 ## 스택
 PySide6 + PyMuPDF. Python 3.11+. 테스트는 pytest-qt. 개발은 WSL, 가상환경은 `pdfviewer/.venv` (lab 루트 `.venv` 아님).
 

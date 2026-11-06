@@ -1,13 +1,13 @@
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QPainterPath, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
-                               QGraphicsScene, QGraphicsView)
+                               QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView)
 
 from app import theme
 from app.core.layout import layout
+from app.core.renderer import RENDER_DEBOUNCE_MS
 
 PREVIEW_ZOOM = 0.25  # quick low-res first pass when nothing of a page is cached yet
-RENDER_DEBOUNCE_MS = 80  # wait for scroll / wheel-zoom / resize bursts to settle before sharp renders
 PREFETCH = 2  # pages beyond the visible ones to render ahead
 
 
@@ -18,6 +18,7 @@ class PageView(QGraphicsView):
     def __init__(self, state):
         super().__init__()
         self.setObjectName("pageView")
+        self.setAccessibleName("문서 페이지")
         self._state = state
         self.setScene(QGraphicsScene(self))
         self.viewport().setMouseTracking(True)  # hover cursor over links and text
@@ -37,6 +38,8 @@ class PageView(QGraphicsView):
         state.zoom_changed.connect(self._on_zoom)
         state.page_changed.connect(self._on_page_changed)
         state.selection_changed.connect(self._draw_selection)
+        state.search_changed.connect(self._draw_search)
+        state.search_current_changed.connect(self._on_search_current)
         state.tool_changed.connect(self._apply_tool)
         state.fullscreen_changed.connect(self._apply_presentation)
         state.renderer.page_ready.connect(self._on_ready)
@@ -54,12 +57,24 @@ class PageView(QGraphicsView):
         self._selection.setBrush(theme.color("color.selection"))
         self._selection.setZValue(1)
         self.scene().addItem(self._selection)
+        self._hits, self._active_hit = QGraphicsPathItem(), QGraphicsPathItem()
+        for item, color in ((self._hits, "color.search_hit"), (self._active_hit, "color.search_hit_current")):
+            item.setPen(Qt.PenStyle.NoPen)
+            item.setBrush(theme.color(color))
+            item.setZValue(1)
+            self.scene().addItem(item)
         doc = self._state.document
-        for _ in range(doc.page_count if doc else 0):
+        for i in range(doc.page_count if doc else 0):
             shadow, paper, image = QGraphicsRectItem(), QGraphicsRectItem(), QGraphicsPixmapItem()
-            for rect, color in ((shadow, "color.shadow"), (paper, "color.paper")):
+            for rect, color in ((shadow, "color.page_shadow"), (paper, "color.page")):
                 rect.setPen(Qt.PenStyle.NoPen)
                 rect.setBrush(theme.color(color))
+            # page number on the paper until the render covers it, so loading doesn't look like a blank page
+            number = QGraphicsSimpleTextItem(str(i + 1), paper)
+            number.setBrush(theme.color("color.text_disabled"))
+            font = number.font()
+            font.setPixelSize(theme.token("font.title_size"))
+            number.setFont(font)
             image.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
             for item in (shadow, paper, image):
                 item.hide()
@@ -86,6 +101,8 @@ class PageView(QGraphicsView):
             shadow, paper, _ = self._items[i]
             shadow.setRect(rect.translated(offset, offset))
             paper.setRect(rect)
+            number = paper.childItems()[0]
+            number.setPos(rect.center() - number.boundingRect().center())
             shadow.show()
             paper.show()
         m = theme.token("spacing.page_margin")
@@ -93,6 +110,7 @@ class PageView(QGraphicsView):
         self.scene().setSceneRect(QRectF(-m, -m, width + 2 * m, height + 2 * m))
         self._adjusting = False
         self._draw_selection()
+        self._draw_search()
 
     def _hide(self, page):
         for item in self._items[page]:
@@ -255,6 +273,27 @@ class PageView(QGraphicsView):
             for x0, y0, x1, y1, *_ in info[0][sel[1]:sel[2] + 1]:
                 path.addRect(transform.mapRect(QRectF(x0, y0, x1 - x0, y1 - y0)))
         self._selection.setPath(path)
+
+    def _draw_search(self):
+        hits, active = QPainterPath(), QPainterPath()
+        st = self._state
+        for i, (page, rects, _) in enumerate(st.search_results):
+            if page in self._rects:
+                transform = self._page_transform(page)
+                for x0, y0, x1, y1 in rects:
+                    (active if i == st.search_index else hits).addRect(transform.mapRect(QRectF(x0, y0, x1 - x0, y1 - y0)))
+        self._hits.setPath(hits)
+        self._active_hit.setPath(active)
+
+    def _on_search_current(self):
+        self._draw_search()
+        hit = self._active_hit.path().boundingRect()
+        if not hit.isEmpty() and not self.mapToScene(self.viewport().rect()).boundingRect().contains(hit):
+            self._adjusting = True  # ViewerState already moved to this result's page
+            self.centerOn(hit.center())
+            self._adjusting = False
+            self._refresh()
+            self._request()
 
     def _page_point(self, page, view_pos):
         inverse, _ = self._page_transform(page).inverted()

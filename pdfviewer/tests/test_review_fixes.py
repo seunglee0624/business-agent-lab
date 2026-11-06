@@ -31,7 +31,7 @@ def test_typed_zoom_applies_on_enter(qtbot, window, pdf100):
 def test_paging_during_drag_does_not_crash(qtbot, window, pdf100):
     window.open_file(pdf100)
     window.state.set_view_mode("single")
-    view = window.centralWidget()
+    view = window._view
     start = view.mapFromScene(view._rects[0].center())
     qtbot.mousePress(view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     window.state.next()  # page 0 leaves the layout while the button is down
@@ -72,7 +72,7 @@ def test_layout_signal_comes_after_refit(pdf100):
 
 def test_high_zoom_skips_prefetch(qtbot, window, pdf100, monkeypatch):
     window.open_file(pdf100)
-    view, state = window.centralWidget(), window.state
+    view, state = window._view, window.state
     state.set_zoom(state.MAX_ZOOM)
     asked = []
     monkeypatch.setattr(state.renderer, "request", asked.extend)

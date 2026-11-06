@@ -15,10 +15,9 @@ def main():
     app.setApplicationName("pdfviewer")
     theme.apply(app)
     window = MainWindow()
-    window.resize(theme.token("size.window_width"), theme.token("size.window_height"))
     window.show()
-    if len(sys.argv) > 1:
-        window.open_file(sys.argv[1])
+    for path in sys.argv[1:]:  # one tab each
+        window.open_file(path)
     sys.exit(app.exec())
 
 
