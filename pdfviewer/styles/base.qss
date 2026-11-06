@@ -1,0 +1,39 @@
+/* Double-brace token placeholders are replaced from tokens.json by app/theme.py */
+
+QWidget {
+    font-family: "{{font.family}}";
+    font-size: {{font.size}}px;
+}
+
+QGraphicsView#pageView {
+    background: {{color.canvas}};
+    border: none;
+}
+
+QToolBar#toolbar {
+    background: {{color.surface}};
+    color: {{color.text}};
+    spacing: {{spacing.sm}}px;
+    padding: {{spacing.sm}}px {{spacing.md}}px;
+    border: none;
+}
+
+QToolBar#toolbar QComboBox {
+    min-width: {{size.zoom_combo}}px;
+}
+
+QToolBar#toolbar QSpinBox {
+    min-width: {{size.page_input}}px;
+}
+
+QTabWidget#sidebar QListView,
+QTabWidget#sidebar QTreeView,
+QTabWidget#sidebar QLabel {
+    background: {{color.surface}};
+    color: {{color.text}};
+    border: none;
+}
+
+QTabWidget#sidebar QLabel {
+    padding: {{spacing.md}}px;
+}
