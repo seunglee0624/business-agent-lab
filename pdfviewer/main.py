@@ -27,6 +27,7 @@ def main():
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     from app import theme
+    from app.icons import app_icon
     from app.main_window import MainWindow
 
     app = QApplication(sys.argv)
@@ -40,6 +41,7 @@ def main():
 
     sys.excepthook = excepthook
     theme.apply(app)
+    app.setWindowIcon(app_icon())
     window = MainWindow()
     window.show()
     for path in sys.argv[1:]:  # one tab each

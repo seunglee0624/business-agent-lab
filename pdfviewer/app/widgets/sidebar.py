@@ -21,7 +21,16 @@ class Sidebar(QTabWidget):
         self.addTab(self.search_results, "검색")
         for i, tip in enumerate(("페이지 썸네일", "문서 목차", "검색 결과")):
             self.setTabToolTip(i, tip)
+        self._state = state
         state.search_opened.connect(lambda: self.setCurrentWidget(self.search_results))
+        self.tabBarClicked.connect(self._on_tab_clicked)  # clicks only, not the tab restored at start-up
+
+    def _on_tab_clicked(self, index):
+        """The search tab opens the search box like Ctrl+F; the other tabs close it."""
+        if index != self.indexOf(self.search_results):
+            self._state.close_search()
+        elif self._state.document:
+            self._state.open_search()
 
 
 class OwnKeys:

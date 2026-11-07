@@ -105,6 +105,7 @@ class MainWindow(QMainWindow):
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
         self._dock.setWidget(self._sidebar)
+        self._sidebar.setMinimumWidth(1)  # not the tabs' width: the document may take the window up to its left edge
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
         self._restore_settings()
         self._search_bar.setVisible(False)  # after restoreState, which would bring back a saved visibility
@@ -291,6 +292,13 @@ class MainWindow(QMainWindow):
         self.state.save_view()
         self.state.renderer.shutdown()
         super().closeEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        x, dock, central = event.position().x(), self._dock.geometry(), self.centralWidget().geometry()
+        if self._dock.isVisible() and dock.right() < x < central.left():  # the sidebar's resize border
+            self.resizeDocks([self._dock], [theme.token("size.sidebar_width")], Qt.Orientation.Horizontal)
+        else:
+            super().mouseDoubleClickEvent(event)
 
     def _update_title(self):
         doc = self.state.document

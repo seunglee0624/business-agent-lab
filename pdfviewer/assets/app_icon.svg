@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- colors are tokens color.accent and color.on_accent; a file icon must carry fixed colors -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#1ed760"/>
+  <path d="M76 44 H152 L196 88 V204 a12 12 0 0 1 -12 12 H76 a12 12 0 0 1 -12 -12 V56 a12 12 0 0 1 12 -12 Z" fill="#000000"/>
+  <path d="M152 44 L196 88 H164 a12 12 0 0 1 -12 -12 Z" fill="#1ed760"/>
+  <rect x="88" y="116" width="84" height="12" rx="6" fill="#1ed760"/>
+  <rect x="88" y="144" width="84" height="12" rx="6" fill="#1ed760"/>
+  <rect x="88" y="172" width="56" height="12" rx="6" fill="#1ed760"/>
+</svg>

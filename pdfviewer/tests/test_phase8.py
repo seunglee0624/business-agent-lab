@@ -2,9 +2,10 @@ import logging
 import os
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 
 import main
+from app import theme
 from app.core import settings
 from app.dialogs.shortcuts_dialog import shortcut_rows
 from app.main_window import MainWindow, unopenable_reason
@@ -141,3 +142,33 @@ def test_log_file_written(tmp_path):
     finally:
         root.removeHandler(handler)
         handler.close()
+
+
+def test_sidebar_narrows_to_the_left_edge_and_double_click_restores_it(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.resize(1200, 800)
+    window.show()
+    window.resizeDocks([window._dock], [1], Qt.Orientation.Horizontal)
+    qtbot.waitUntil(lambda: window._dock.width() < 10)  # the document takes the window up to its left edge
+    y = window._dock.geometry().center().y()
+    x = (window._dock.geometry().right() + window.centralWidget().geometry().left()) // 2 + 1
+    qtbot.mouseDClick(window, Qt.MouseButton.LeftButton, pos=QPoint(x, y))
+    qtbot.waitUntil(lambda: window._dock.width() == theme.token("size.sidebar_width"))
+
+
+def test_search_tab_click_opens_the_search_box(qtbot, pdf100):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    tabs = window._sidebar
+    search = tabs.indexOf(tabs.search_results)
+    tabs.tabBarClicked.emit(search)  # empty screen: nothing to search
+    assert not window.state.search_open
+    window.open_file(pdf100)
+    tabs.tabBarClicked.emit(search)
+    assert window.state.search_open
+    tabs.tabBarClicked.emit(0)  # thumbnails
+    assert not window.state.search_open
+    tabs.tabBarClicked.emit(search)
+    tabs.tabBarClicked.emit(1)  # outline
+    assert not window.state.search_open

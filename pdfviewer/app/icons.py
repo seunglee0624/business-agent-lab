@@ -7,6 +7,7 @@ from PySide6.QtSvg import QSvgRenderer
 from app import theme
 
 ICONS = Path(__file__).resolve().parent.parent / "assets" / "icons"
+APP_ICON = ICONS.parent / "app_icon.svg"  # also the .exe icon (pdfviewer.spec)
 OFF = {QIcon.Mode.Normal: "color.text_muted", QIcon.Mode.Active: "color.text", QIcon.Mode.Disabled: "color.text_disabled"}
 ON = {QIcon.Mode.Normal: "color.accent", QIcon.Mode.Active: "color.accent", QIcon.Mode.Disabled: "color.text_disabled"}
 SCALES = (1, 1.5, 2)  # sharp on 100%, 150% and 200% displays
@@ -30,6 +31,10 @@ def _pixmap(svg, color, scale, dot):
     painter.end()
     pixmap.setDevicePixelRatio(scale)
     return pixmap
+
+
+def app_icon():
+    return QIcon(str(APP_ICON))
 
 
 def icon(name):

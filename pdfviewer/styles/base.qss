@@ -254,6 +254,16 @@ QTabWidget#sidebar > QTabBar {
     qproperty-drawBase: 0;
 }
 
+QTabWidget#sidebar > QTabBar::tab {
+    /* thirds of the default sidebar: (size.sidebar_width - 2 gaps of spacing.md) / 3 */
+    width: {{size.sidebar_tab}}px;
+    padding: 0px;
+}
+
+QTabWidget#sidebar > QTabBar::tab:first {
+    margin-left: 0px; /* line up with the list's left edge below */
+}
+
 QTabWidget#sidebar QListView,
 QTabWidget#sidebar QTreeView {
     background: {{color.bg_panel}};
@@ -355,10 +365,11 @@ QMenu {
     color: {{color.text}};
     border: none;
     padding: {{spacing.sm}}px;
+    font-size: {{font.menu_size}}px;
 }
 
 QMenu::item {
-    padding: {{spacing.lg}}px {{spacing.xxl}}px {{spacing.lg}}px {{spacing.xl}}px; /* 40px rows */
+    padding: {{spacing.sm}}px {{spacing.xl}}px {{spacing.sm}}px {{spacing.md}}px; /* compact rows */
     min-width: {{size.menu_label}}px; /* the label column: Qt puts the shortcut column right after it */
     border-radius: {{radius.sm}}px;
 }
