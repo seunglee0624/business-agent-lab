@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QLabel, QListView, QStackedWidget, QTabWidget, QTreeView
 
 from app.models.outline_model import PAGE_ROLE, OutlineModel
@@ -19,10 +19,28 @@ class Sidebar(QTabWidget):
         self.addTab(OutlinePanel(state), "목차")
         self.search_results = SearchResultList(state)
         self.addTab(self.search_results, "검색")
+        for i, tip in enumerate(("페이지 썸네일", "문서 목차", "검색 결과")):
+            self.setTabToolTip(i, tip)
         state.search_opened.connect(lambda: self.setCurrentWidget(self.search_results))
 
 
-class ThumbnailList(QListView):
+class OwnKeys:
+    """While a list has focus, its navigation keys move the list instead of firing the window's page shortcuts."""
+    OWN_KEYS = {Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown}
+
+    def event(self, event):
+        if (event.type() == QEvent.Type.ShortcutOverride and event.key() in self.OWN_KEYS
+                and event.modifiers() == Qt.KeyboardModifier.NoModifier):
+            event.accept()
+            return True
+        return super().event(event)
+
+
+class OutlineTree(OwnKeys, QTreeView):
+    OWN_KEYS = OwnKeys.OWN_KEYS | {Qt.Key.Key_Left, Qt.Key.Key_Right}  # collapse / expand a chapter
+
+
+class ThumbnailList(OwnKeys, QListView):
     def __init__(self, state):
         super().__init__()
         self._state = state
@@ -75,8 +93,9 @@ class OutlinePanel(QStackedWidget):
     def __init__(self, state):
         super().__init__()
         self._state = state
-        self._tree = QTreeView()
+        self._tree = OutlineTree()
         self._tree.setHeaderHidden(True)
+        self._tree.setAccessibleName("목차")
         self._tree.setModel(OutlineModel(state, self))  # created first, so it reloads before _update runs
         self._tree.clicked.connect(self._go)
         self._tree.activated.connect(self._go)
@@ -98,10 +117,11 @@ class OutlinePanel(QStackedWidget):
             self._state.go_to(page - 1)
 
 
-class SearchResultList(QListView):
+class SearchResultList(OwnKeys, QListView):
     def __init__(self, state):
         super().__init__()
         self._state = state
+        self.setAccessibleName("검색 결과")
         self.setModel(SearchResultModel(state, self))
         self.setUniformItemSizes(True)
         self.setTextElideMode(Qt.TextElideMode.ElideRight)

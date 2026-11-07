@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from app.core import settings
 from app.core.document import Document
 from app.dialogs.password_dialog import ask_password
 from app.dialogs.properties_dialog import show_properties
+from app.dialogs.shortcuts_dialog import show_shortcuts
 from app.icons import icon
 from app.viewer_state import VIEW_MODES, ViewerState
 from app.widgets.empty_state import EmptyState
@@ -22,20 +24,34 @@ from app.widgets.tab_bar import TabBar
 from app.widgets.toolbar import Toolbar
 
 APP_NAME = "PDF Viewer"
+log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "open_search", "prev", "next", "zoom_in", "zoom_out", "fit_width",
-                    "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
+DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "open_search", "prev", "next", "first_page", "last_page",
+                    "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
     "파일(&F)": ["open", "recent", "close_tab", None, "properties", None, "quit"],
     "편집(&E)": ["copy", None, "open_search"],
-    "보기(&V)": ["prev", "next", None, "zoom_in", "zoom_out", "fit_width", "fit_page", None,
+    "보기(&V)": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
+               "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
                "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_fullscreen", "toggle_presentation", None,
                "next_tab", "prev_tab"],
+    "도움말(&H)": ["shortcut_help"],
 }
+
+
+def unopenable_reason(path):
+    """Why a file failed to open: (message, drop it from recent files)."""
+    if not os.path.exists(path):
+        return "파일을 찾을 수 없어요. 옮겨졌거나 삭제됐을 수 있어요.", True
+    try:
+        open(path, "rb").close()
+    except OSError:  # no read permission, or locked by another program: it may open later, so keep it listed
+        return "파일을 읽을 권한이 없어요. 접근이 막혀 있거나 다른 프로그램이 쓰고 있을 수 있어요.", False
+    return "PDF를 열 수 없어요. 파일이 손상됐거나 PDF가 아닐 수 있어요.", True
 
 
 class MainWindow(QMainWindow):
@@ -59,7 +75,7 @@ class MainWindow(QMainWindow):
                     menu.addAction(self._actions[name])
                 else:
                     menu.addSeparator()
-        help_menu = self.menuBar().addMenu("도움말(&H)")
+        help_menu = menu  # the last of MENUS
         help_menu.addAction("정보", lambda: QMessageBox.about(self, APP_NAME, f"{APP_NAME}\nPySide6 + PyMuPDF"))
 
         self._toolbar = Toolbar(self.state, self._actions)
@@ -118,11 +134,11 @@ class MainWindow(QMainWindow):
         def add(name, label, slot, toolbar=False, checkable=False):
             action = QAction(label, self, checkable=checkable)
             keys = shortcuts.KEYS.get(name, [])
-            if toolbar:  # icon-only button: the tooltip carries the name and the shortcut
+            if toolbar:
                 action.setIcon(icon(name))
                 action.setIconVisibleInMenu(False)  # an icon would hide the menu's check mark
-                key = QKeySequence(keys[0]).toString(QKeySequence.SequenceFormat.NativeText) if keys else ""
-                action.setToolTip(f"{label.rstrip('…')} ({key})" if key else label.rstrip("…"))
+            key = QKeySequence(keys[0]).toString(QKeySequence.SequenceFormat.NativeText) if keys else ""
+            action.setToolTip(f"{label.rstrip('…')} ({key})" if key else label.rstrip("…"))  # icon buttons show only this
             action.triggered.connect(lambda checked=False: slot())
             action.triggered.connect(self._sync_checks)  # undo Qt's own check toggling if the state refused
             action.setShortcuts([QKeySequence(key) for key in keys])
@@ -137,8 +153,13 @@ class MainWindow(QMainWindow):
         add("open_search", "찾기…", st.open_search)
         add("prev", "이전 페이지", st.prev, True)
         add("next", "다음 페이지", st.next, True)
+        add("first_page", "첫 페이지", st.first_page)
+        add("last_page", "마지막 페이지", st.last_page)
+        add("page_up", "한 화면 위로", st.page_up)
+        add("page_down", "한 화면 아래로", st.page_down)
         add("zoom_in", "확대", st.zoom_in, True)
         add("zoom_out", "축소", st.zoom_out, True)
+        add("actual_size", "실제 크기", st.actual_size)
         add("fit_width", "폭 맞춤", st.fit_width)
         add("fit_page", "페이지 맞춤", st.fit_page)
         for mode, label in zip(VIEW_MODES, ("단일 페이지", "연속 스크롤", "두 페이지 펼침")):
@@ -154,6 +175,7 @@ class MainWindow(QMainWindow):
         add("escape", "찾기 닫기 / 전체 화면 끝내기", st.escape)
         add("next_tab", "다음 탭", st.next_tab)
         add("prev_tab", "이전 탭", st.prev_tab)
+        add("shortcut_help", "단축키 목록…", lambda: show_shortcuts(self, actions))
         for group in (VIEW_MODES, ("select_tool", "hand_tool")):
             exclusive = QActionGroup(self)  # clicking the checked one keeps it checked
             for name in group:
@@ -213,12 +235,13 @@ class MainWindow(QMainWindow):
             return
         try:
             doc = Document(path)
-        except (OSError, RuntimeError) as error:  # missing file, or pymupdf.FileDataError for broken files
-            reason = ("PDF를 열 수 없어요. 파일이 손상됐거나 PDF가 아닐 수 있어요." if os.path.exists(path) else
-                      "파일을 찾을 수 없어요. 옮겨졌거나 삭제됐을 수 있어요.")
+        except (OSError, RuntimeError) as error:  # pymupdf.FileDataError also covers unreadable files
+            log.warning("cannot open %s", path, exc_info=True)
+            reason, forget = unopenable_reason(path)
             QMessageBox.warning(self, "열기 실패", f"{reason}\n\n{path}\n{error}")
-            settings.remove_recent(os.path.abspath(path))
-            self._empty.reload()
+            if forget:
+                settings.remove_recent(os.path.abspath(path))
+                self._empty.reload()
             return
         retry = False
         while doc.is_locked:

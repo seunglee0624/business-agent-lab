@@ -17,6 +17,9 @@ class StatusBar(QStatusBar):
         self.addWidget(self._file)
         for label in (self._renders, self._page, self._zoom):
             self.addPermanentWidget(label)
+        self._renders.setToolTip("렌더링을 기다리는 페이지 수")
+        self._page.setToolTip("현재 페이지 / 전체 페이지")
+        self._zoom.setToolTip("확대 비율")
         state.document_changed.connect(self._refresh)
         state.page_changed.connect(self._refresh)
         state.zoom_changed.connect(self._refresh)
@@ -31,6 +34,7 @@ class StatusBar(QStatusBar):
         except OSError:  # deleted or moved since it was opened
             size = ""
         self._file.setText(f"{Path(doc.path).name}{size}" if doc else "")
+        self._file.setToolTip(doc.path if doc else "")
         self._page.setText(f"{st.current_page + 1} / {st.page_count}쪽" if doc else "")
         self._zoom.setText(f"{round(st.zoom * 100)}%" if doc else "")
 

@@ -37,6 +37,7 @@ class PageView(QGraphicsView):
         state.layout_changed.connect(self._on_layout_changed)
         state.zoom_changed.connect(self._on_zoom)
         state.page_changed.connect(self._on_page_changed)
+        state.scroll_requested.connect(self._scroll_screen)
         state.selection_changed.connect(self._draw_selection)
         state.search_changed.connect(self._draw_search)
         state.search_current_changed.connect(self._on_search_current)
@@ -170,6 +171,18 @@ class PageView(QGraphicsView):
                 self._following_scroll = False
         self._refresh()
         self._debounce.start()
+
+    def _scroll_screen(self, direction):
+        """PgDn/PgUp: one screen down/up; at the end of the shown row (single/spread) turn the page."""
+        bar = self.verticalScrollBar()
+        at_edge = bar.value() == (bar.maximum() if direction > 0 else bar.minimum())
+        if at_edge and self._state.view_mode != "continuous":
+            page = self._state.current_page
+            (self._state.next if direction > 0 else self._state.prev)()
+            if direction < 0 and self._state.current_page != page:
+                self._set_scroll_top(bar.maximum())  # reading backwards: land on the previous page's end
+        else:
+            bar.setValue(bar.value() + direction * bar.pageStep())  # continuous: _on_scroll follows the page
 
     # ---- state signals
 

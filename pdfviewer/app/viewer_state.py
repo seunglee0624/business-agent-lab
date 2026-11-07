@@ -30,6 +30,7 @@ class ViewerState(QObject):
     document_changed = Signal()  # also on a tab switch
     tabs_changed = Signal()  # opened, closed, moved or switched
     page_changed = Signal(int)
+    scroll_requested = Signal(int)  # PgDn +1 / PgUp -1 screen: only the view knows how tall a screen is
     zoom_changed = Signal(float)
     layout_changed = Signal()  # view mode, cover option or rotation
     tool_changed = Signal()
@@ -207,6 +208,20 @@ class ViewerState(QObject):
         if row > 0:
             self.go_to(self.rows()[row - 1][0])
 
+    def first_page(self):
+        self.go_to(0)
+
+    def last_page(self):
+        self.go_to(self.page_count - 1)
+
+    def page_down(self):
+        if self.document:
+            self.scroll_requested.emit(1)
+
+    def page_up(self):
+        if self.document:
+            self.scroll_requested.emit(-1)
+
     def set_view_mode(self, mode):
         assert mode in VIEW_MODES
         if mode != self.view_mode:
@@ -240,6 +255,9 @@ class ViewerState(QObject):
 
     def zoom_out(self):
         self.set_zoom(self.zoom / self.ZOOM_STEP)
+
+    def actual_size(self):
+        self.set_zoom(1.0)
 
     def fit_width(self):
         self._apply_zoom("fit_width", self._fit_zoom("fit_width"))
