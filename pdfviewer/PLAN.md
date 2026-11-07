@@ -175,18 +175,18 @@ settings.py            [models: 썸네일·목차·검색결과 데이터]  → 
 - [x] **여기서 "원하는 느낌"을 반영한 실제 디자인 작업** (레이아웃 밀도, 폰트, 포인트 색, 둥근 정도)
 
 ### Phase 8 — 단축키 · 접근성 · 마무리
-- [ ] `shortcuts.py` 표: ←→ PgUp/PgDn Home/End, Ctrl+± / Ctrl+0, Ctrl+F, Ctrl+O, Ctrl+W, Ctrl+Tab, F11, Esc, R(회전)
-- [ ] 단축키 안내 다이얼로그(`?`)
-- [ ] 툴팁 전부 채우기
-- [ ] 에러 처리: 손상 파일, 없는 경로, 권한 거부 → 사용자 메시지
-- [ ] 로깅(`logging`, 파일 출력)
+- [x] `shortcuts.py` 표: ←→ PgUp/PgDn Home/End, Ctrl+± / Ctrl+0, Ctrl+F, Ctrl+O, Ctrl+W, Ctrl+Tab, F11, Esc, R(회전) (PgUp/PgDn은 연속 보기에서 한 화면 스크롤, Ctrl+0은 100%)
+- [x] 단축키 안내 다이얼로그(`?`, F1, 도움말 메뉴) — 단축키 표에서 자동 생성
+- [x] 툴팁 전부 채우기 (모든 액션 "이름 (단축키)", 입력 상자·사이드바 탭·상태바)
+- [x] 에러 처리: 손상 파일, 없는 경로, 권한 거부 → 사용자 메시지 (권한 거부는 최근 파일에 남김)
+- [x] 로깅(`logging`, 파일 출력): `%APPDATA%\pdfviewer\pdfviewer\pdfviewer.log`, 1MB × 3, 처리 안 된 예외 포함
 
 ### Phase 9 — 테스트 · 패키징 · 연결 프로그램 등록
-- [ ] `tests/`: document.py(열기·검색·목차), renderer 캐시 동작, 위젯 스모크 테스트(pytest-qt)
-- [ ] PyInstaller spec: `--windowed`, 아이콘, `styles/`·`assets/` 포함
-- [ ] 실행 파일에서 `argv[1]`로 파일 열기 확인
-- [ ] Windows "연결 프로그램"에 `.exe` 등록 테스트 (더블클릭으로 열림)
-- [ ] README: 설치·빌드·단축키
+- [x] `tests/`: document.py(열기·검색·목차), renderer 캐시 동작, 위젯 스모크 테스트(pytest-qt)
+- [x] PyInstaller spec: `--windowed`, 아이콘, `styles/`·`assets/` 포함 (`pdfviewer.spec`, 폴더형 빌드, WSL에서 `build_win.sh`)
+- [x] 실행 파일에서 `argv[1]`로 파일 열기 확인
+- [x] Windows "연결 프로그램"에 `.exe` 등록 테스트 (더블클릭으로 열림)
+- [x] README: 설치·빌드·단축키
 
 ---
 
