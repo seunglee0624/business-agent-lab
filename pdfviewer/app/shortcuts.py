@@ -22,6 +22,7 @@ KEYS = {
     "actual_size": ["Ctrl+0"],
     "rotate_right": ["R"],
     "toggle_sidebar": ["F4"],
+    "toggle_chat": ["Ctrl+Shift+L"],
     "toggle_fullscreen": ["F11"],
     "toggle_presentation": ["F5"],
     "escape": ["Esc"],

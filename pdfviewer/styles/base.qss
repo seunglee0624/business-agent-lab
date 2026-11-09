@@ -457,3 +457,60 @@ QLabel#fieldName {
 QLineEdit[conflict="true"] {
     color: {{color.danger}};
 }
+
+/* ---- AI chat panel (right dock) */
+
+QWidget#chatPanel {
+    background: {{color.bg_panel}};
+    color: {{color.text}};
+}
+
+QTextBrowser#chatLog {
+    background: {{color.bg_panel}};
+    color: {{color.text}};
+    border: none;
+}
+
+QPlainTextEdit#chatInput {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+    padding: {{spacing.sm}}px;
+    max-height: {{size.chat_input}}px;
+}
+
+QPlainTextEdit#chatInput:focus {
+    border-color: {{color.accent}};
+}
+
+QPlainTextEdit#chatInput:disabled {
+    color: {{color.text_disabled}};
+    border-color: {{color.bg_highlight}};
+}
+
+QLabel#chatNotice {
+    color: {{color.text_muted}};
+    font-size: {{font.caption_size}}px;
+    font-weight: {{font.caption_weight}};
+}
+
+QToolButton#chatButton {
+    background: transparent;
+    color: {{color.text_muted}};
+    border: none;
+    border-radius: {{radius.pill_sm}}px;
+    min-width: {{size.control_sm}}px;
+    min-height: {{size.control_sm}}px;
+    max-width: {{size.control_sm}}px;
+    max-height: {{size.control_sm}}px;
+}
+
+QToolButton#chatButton:hover {
+    color: {{color.text}};
+    background: {{color.bg_elevated}};
+}
+
+QToolButton#chatButton:disabled {
+    color: {{color.text_disabled}};
+}

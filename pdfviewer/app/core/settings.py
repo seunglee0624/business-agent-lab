@@ -69,3 +69,20 @@ def shortcut_overrides():
 
 def save_shortcut_overrides(overrides):
     _save("shortcuts/overrides", overrides)
+
+
+def llm_config():
+    """The AI model and how it answers. effort low: quick replies for a reading aid (the model defaults to high).
+    max_tokens covers thinking too, so it is kept well above a typical answer."""
+    s = QSettings()
+    return {"model": s.value("llm/model", "claude-sonnet-5-5"), "effort": s.value("llm/effort", "low"),
+            "max_tokens": s.value("llm/max_tokens", 4096, type=int)}
+
+
+def chat_panel():
+    """Whether the AI chat panel was open."""
+    return QSettings().value("chat/visible", False, type=bool)
+
+
+def save_chat_panel(shown):
+    QSettings().setValue("chat/visible", shown)

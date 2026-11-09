@@ -47,6 +47,11 @@ def page_info(key, password, index):
     return words, links
 
 
+def page_text(key, password, index):
+    """Plain text of a page, top-to-bottom (see page_info for why sorted)."""
+    return _open(key, password)[index].get_text(sort=True)
+
+
 def outline(key, password):
     """Table of contents: [level, title, 1-based page or -1], as pymupdf get_toc(simple=True) gives it."""
     return _open(key, password).get_toc(simple=True)

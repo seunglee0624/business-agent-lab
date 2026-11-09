@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QDockWidget, QFileDialog, QMainWindow, QMenu, QMe
                                QWidget)
 
 from app import shortcuts, theme
+from app.chat_state import ChatState
 from app.core import settings
 from app.core.document import Document
 from app.dialogs.password_dialog import ask_password
@@ -15,6 +16,7 @@ from app.dialogs.properties_dialog import show_properties
 from app.dialogs.shortcuts_dialog import shortcuts_dialog
 from app.icons import icon
 from app.viewer_state import VIEW_MODES, ViewerState
+from app.widgets.chat_panel import ChatPanel
 from app.widgets.empty_state import EmptyState
 from app.widgets.page_view import PageView
 from app.widgets.search_bar import SearchBar
@@ -37,7 +39,7 @@ MENUS = {  # None = separator, "recent" = the recent files submenu
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
                "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
-               "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_fullscreen", "toggle_presentation", None,
+               "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_chat", "toggle_fullscreen", "toggle_presentation", None,
                "next_tab", "prev_tab"],
     "도움말": ["shortcut_help"],
 }
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.state = ViewerState()
+        self.chat = ChatState(self.state)
         self.setWindowTitle(APP_NAME)
         self._was_maximized = False
         self._actions = self._make_actions()
@@ -110,6 +113,12 @@ class MainWindow(QMainWindow):
         self._dock.setWidget(self._sidebar)
         self._sidebar.setMinimumWidth(1)  # not the tabs' width: the document may take the window up to its left edge
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
+        self._chat_panel = ChatPanel(self.chat)
+        self._chat_panel.leave.connect(self._focus_main)
+        self._chat_dock = QDockWidget(objectName="chat_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self._chat_dock.setTitleBarWidget(QWidget())
+        self._chat_dock.setWidget(self._chat_panel)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._chat_dock)
         self._restore_settings()
         self._search_bar.setVisible(False)  # after restoreState, which would bring back a saved visibility
 
@@ -120,8 +129,11 @@ class MainWindow(QMainWindow):
         self.state.document_changed.connect(self._focus_main)
         self.state.fullscreen_changed.connect(self._apply_fullscreen)
         self.state.sidebar_changed.connect(self._apply_sidebar)
+        self.chat.panel_changed.connect(self._apply_chat)
+        self.chat.panel_changed.connect(self._sync_checks)
         self.state.search_changed.connect(self._apply_search)
         self._apply_sidebar()
+        self._apply_chat(focus=False)
         self._apply_document()
         for signal in (self.state.document_changed, self.state.layout_changed, self.state.tool_changed, self.state.fullscreen_changed,
                        self.state.sidebar_changed, self.state.search_changed):
@@ -176,6 +188,7 @@ class MainWindow(QMainWindow):
         add("select_tool", "선택 도구", lambda: st.set_tool("select"), True, checkable=True)
         add("hand_tool", "손 도구", lambda: st.set_tool("hand"), True, checkable=True)
         add("toggle_sidebar", "사이드바", st.toggle_sidebar, checkable=True)
+        add("toggle_chat", "AI 채팅", self.chat.toggle_panel, checkable=True)
         add("toggle_fullscreen", "전체 화면", st.toggle_fullscreen, checkable=True)
         add("toggle_presentation", "발표 모드", st.toggle_presentation, checkable=True)
         add("escape", "찾기 닫기 / 전체 화면 끝내기", st.escape)
@@ -210,6 +223,7 @@ class MainWindow(QMainWindow):
         a["select_tool"].setChecked(st.tool == "select")
         a["hand_tool"].setChecked(st.tool == "hand")
         a["toggle_sidebar"].setChecked(st.sidebar)
+        a["toggle_chat"].setChecked(self.chat.panel)
         a["toggle_fullscreen"].setChecked(st.fullscreen)
         a["toggle_presentation"].setChecked(st.presentation)
         a["escape"].setEnabled(st.fullscreen or st.search_open)  # Esc stays free for other uses otherwise
@@ -228,6 +242,7 @@ class MainWindow(QMainWindow):
         self._toolbar.setVisible(not self.state.presentation)
         self._status.setVisible(not self.state.presentation)
         self._apply_sidebar()
+        self._apply_chat(focus=False)
         self._apply_search()
 
     def _apply_search(self):
@@ -242,6 +257,15 @@ class MainWindow(QMainWindow):
 
     def _apply_sidebar(self):
         self._dock.setVisible(self.state.sidebar and not self.state.presentation)
+
+    def _apply_chat(self, focus=True):
+        shown = self.chat.panel and not self.state.presentation
+        focus_widget = self.focusWidget()
+        if not shown and focus_widget and self._chat_panel.isAncestorOf(focus_widget):
+            self._focus_main()  # hiding the focused box would leave the keys nowhere
+        self._chat_dock.setVisible(shown)
+        if shown and focus:  # opened with Ctrl+Shift+L: ready to type
+            self._chat_panel.focus_input()
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "PDF 열기", "", "PDF (*.pdf);;모든 파일 (*)")
