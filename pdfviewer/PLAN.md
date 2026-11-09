@@ -40,13 +40,28 @@ pdfviewer/
 │  │  ├─ layout.py          # 보기 모드별 페이지 배치 계산
 │  │  ├─ renderer.py        # 렌더·검색 요청 관리 + LRU 캐시 (워커 프로세스 풀)
 │  │  ├─ render_worker.py   # 워커 프로세스 안에서 도는 PyMuPDF 렌더·검색·목차
-│  │  └─ settings.py        # QSettings 래퍼
+│  │  ├─ settings.py        # QSettings 래퍼 (단축키 사용자 지정 포함)
+│  │  ├─ llm/               # ── AI 채팅 백엔드 (Phase 10). Qt 는 worker.py 만(QtCore)
+│  │  │  ├─ base.py         # LLMBackend 추상 클래스, LLMError
+│  │  │  ├─ anthropic_api.py# 기본. `anthropic` 패키지, 스트리밍, 프롬프트 캐싱
+│  │  │  ├─ openai_compat.py# OpenAI 호환 엔드포인트 (Gemini·Groq·OpenRouter·Ollama 등)
+│  │  │  ├─ worker.py       # 백엔드 호출을 QThread 에서 돌리고 시그널로 청크 전달
+│  │  │  └─ prompts.py      # 시스템 프롬프트·빠른 질문 템플릿 로드 (app/llm_prompts.json)
+│  │  └─ annotations/       # ── 기록·메모 (Phase 11). 순수 파이썬
+│  │     ├─ store.py        # AnnotationStore: notes/<doc_id>.json 읽기·쓰기 (원자적 저장)
+│  │     └─ export.py       # 마크다운 내보내기
 │  ├─ viewer_state.py       # ── ViewModel: 현재 페이지·줌·보기 모드·검색 결과 등 "상태"의 유일한 소유자.
 │  │                        #    위젯은 여기의 메서드만 호출하고, 여기의 시그널만 구독한다.
+│  ├─ chat_state.py         # ── 채팅 ViewModel (Phase 10): 문서별 대화 기록, 컨텍스트 범위, 진행 상태
+│  ├─ annotation_state.py   # ── 메모 ViewModel (Phase 11): 하이라이트·메모·북마크·문서노트·대화기록 소유
 │  ├─ models/               # ── Qt Model/View 데이터 모델 (그리는 방식과 분리)
 │  │  ├─ thumbnail_model.py # QAbstractListModel
 │  │  ├─ outline_model.py   # QAbstractItemModel (목차 트리)
-│  │  └─ search_result_model.py
+│  │  ├─ search_result_model.py
+│  │  ├─ chat_model.py      # 대화 메시지 목록 (Phase 10)
+│  │  ├─ highlight_model.py # (Phase 11)
+│  │  ├─ note_model.py      # (Phase 11)
+│  │  └─ bookmark_model.py  # (Phase 11)
 │  ├─ widgets/              # ── View: 그리기와 입력 전달만. 상태 소유 금지
 │  │  ├─ toolbar.py         # 상단 툴바
 │  │  ├─ page_view.py       # 중앙 문서 영역 (QGraphicsView 기반, 연속/단일/펼침)
@@ -55,10 +70,16 @@ pdfviewer/
 │  │  ├─ search_bar.py      # 검색 바
 │  │  ├─ status_bar.py      # 하단 상태바
 │  │  ├─ empty_state.py     # 파일 없을 때 화면
-│  │  └─ tab_bar.py         # 다중 파일 탭
+│  │  ├─ tab_bar.py         # 다중 파일 탭
+│  │  ├─ chat_panel.py      # 오른쪽 AI 채팅 패널 (Phase 10)
+│  │  ├─ chat_message_delegate.py  # 말풍선 그리기 (모델과 분리)
+│  │  └─ notes_delegate.py  # 메모 탭 항목 그리기 (Phase 11)
 │  ├─ dialogs/
 │  │  ├─ password_dialog.py
-│  │  └─ properties_dialog.py
+│  │  ├─ properties_dialog.py
+│  │  ├─ shortcuts_dialog.py      # 단축키 목록 + 직접 지정 (Phase 9.5)
+│  │  ├─ llm_settings_dialog.py   # 백엔드·API 키·모델 설정 (Phase 10)
+│  │  └─ export_dialog.py         # 내보내기 옵션 (Phase 11)
 │  ├─ shortcuts.py          # 단축키 테이블 한 곳에서 관리 → viewer_state 메서드에 매핑
 │  ├─ icons.py              # icon("zoom_in") 식 이름 참조 → assets/icons/ 세트 교체 용이
 │  └─ theme.py              # QSS 로드, 토큰 치환, 폰트 등록, 토큰 값(간격 등) 코드에서 조회
@@ -197,6 +218,195 @@ settings.py            [models: 썸네일·목차·검색결과 데이터]  → 
 - [x] 배율 칸은 입력 불가, 클릭하면 목록이 열림
 - [x] 툴바 확대 묶음(—)을 문서 영역 시작선(첫 탭) 위에 맞춤, 사이드바 폭을 따라감 (빈 화면 포함)
 - [x] '파일 열기' 버튼: 알약 대신 배율 칸과 같은 둥근 사각형
+
+### Phase 9.5 — 단축키 직접 지정
+**목표**: 사용자가 단축키를 바꿀 수 있게. Phase 10·11 의 새 단축키는 `shortcuts.KEYS` 에 줄만 추가하면 자동으로 지정 대상이 된다 (그래서 Phase 10 전에 한다).
+**결정 (2026-11-09)**: `KEYS` 는 기본값으로 두고, 사용자가 바꾼 키만 `settings.py` 에 저장해 실행 때 기본값 위에 덮어쓴다.
+
+- [ ] `settings.py`: `shortcut_overrides()` / `save_shortcut_overrides(dict)` — `{액션 이름: [키, …]}`, 바꾼 액션만 저장 (빈 목록 = 키 없음)
+- [ ] `shortcuts.py`: `keys(name)` = 사용자 지정이 있으면 그것, 없으면 `KEYS` 기본값. `main_window` 의 액션 생성이 `KEYS.get` 대신 이걸 사용. 충돌 검사 `conflict(name, key) -> 다른 액션 이름 | None`
+- [ ] 바꿀 수 없는 키: `escape`(Esc), `copy`(Ctrl+C), 메뉴 열기(`MENU_KEYS`의 Alt+F/E/V/H). 대화상자에 회색으로 표시만
+- [ ] `dialogs/shortcuts_dialog.py` 를 편집 가능하게: 행 클릭 → `QKeySequenceEdit` 로 새 키 입력, 행마다 "기본값으로", 하단 "전체 초기화"
+  - 키가 겹치면 안내 창 없이, 겹치는 두 줄의 키 글씨를 **빨간색**(새 토큰 `color.danger`)으로 표시. 마우스를 올리면 "‘○○’와 겹침" 툴팁
+  - 저장은 그대로 된다. Qt 는 같은 키가 두 액션에 걸리면 둘 다 실행하지 않으므로, 빨간 동안은 두 기능 모두 그 키로 동작하지 않음. 한쪽을 바꾸면 빨간색이 풀리고 다시 동작
+  - 고정 키(`Esc`·`Ctrl+C`·메뉴 키)와 겹치면 고정 키 줄은 바꿀 수 없으므로 내가 바꾼 줄만 빨간색
+- [ ] 바꾸면 재시작 없이 즉시 적용: 액션 `setShortcuts` 다시 호출 + 툴팁 "이름 (단축키)" 갱신
+- [ ] `tests/`: 기본값·사용자 지정 병합, 충돌 검사, 초기화, 고정 키는 바꿀 수 없음
+- [ ] README 단축키 절에 "도움말 → 단축키 목록에서 변경" 추가
+
+**완료 조건**
+1. 단축키 목록에서 "다음 페이지"를 `J` 로 바꾸면 즉시 `J` 로 넘어가고, 툴팁에도 `J` 로 표시
+2. 재시작 후에도 유지, "기본값으로" 누르면 원래 키로 돌아감
+3. `Ctrl+O` 를 다른 액션에 지정하면 그 줄과 "열기" 줄의 키가 빨간색이 되고, 한쪽을 다른 키로 바꾸면 빨간색이 풀림
+
+### Phase 10 — AI 채팅 패널 (PDF 보면서 AI에게 질문)
+**목표**: 오른쪽 패널에서 지금 보고 있는 PDF 내용을 컨텍스트로 AI와 대화. **API 키 방식**(약관상 가장 깨끗). 기본은 Anthropic API, 설정만 바꾸면 무료 제공자·로컬 모델도 사용.
+**뷰어의 존재 이유**: PDF를 보면서 동시에 궁금한 점을 바로 물어보는 것. 이 Phase가 핵심 기능이다.
+
+**결정 (2026-11-09)**: Claude Code 구독 로그인(`claude -p`) 방식은 약관 회색 지대라 **채택하지 않음**. API 키로 간다.
+
+**10-0. 준비**
+- [ ] Anthropic Console 에서 API 키 발급, 소액 충전($5 정도), **월 지출 한도 설정**(예: $7 ≈ 1만 원)
+- [ ] 키 저장 위치: 1차는 환경변수 `ANTHROPIC_API_KEY`. 2차로 설정 UI 에서 입력 → `QSettings` 저장(평문. 로컬 개인용이라 허용, README 에 명시). 키를 **git 에 절대 커밋하지 않음**(`.gitignore`, `.env`)
+- [ ] `anthropic` 패키지 `requirements.txt` 추가. 최신 `anthropic`(1.x)은 `httpx` 가 아니라 `httpx2` 기반 → 설치된 버전 확인 후, OpenAI 호환 백엔드도 같은 HTTP 라이브러리를 써서 의존성을 늘리지 않음
+- [ ] 모델 기본값: `llm.model = claude-sonnet-5-5` (품질, 입력 $2 / 출력 $10 per 1M), 가벼운 작업용 대안 `claude-haiku-5-5` ($0.10 / $0.50)
+- [ ] **effort 기본값 `low`** (`output_config={"effort": "low"}`): Sonnet 5.5 는 생각 단계(thinking)를 끌 수 없고 기본 effort 가 `high` 라 첫 글자까지 느리고 출력비가 늘어남. 설정에서 바꿀 수 있게
+
+**10-1. 백엔드 (core/llm/)**
+- [ ] `base.py`: `LLMBackend` 추상 클래스 (순수 파이썬, Qt 모름)
+  - `stream(system: str, messages: list[dict]) -> Iterator[str]` (텍스트 델타 yield)
+  - `is_available() -> bool`, `name`, `model`
+  - 예외는 `LLMError(message, kind)` 로 통일: `auth` / `rate_limit` / `network` / `context_too_long` / `refused` / `other`
+- [ ] `anthropic_api.py`: `AnthropicBackend`
+  - `anthropic.Anthropic(api_key=...)`, `messages.stream(...)` 으로 텍스트 델타 yield (thinking 블록은 무시)
+  - **프롬프트 캐싱**: 요청 최상위 `cache_control={"type":"ephemeral"}` (자동 캐싱). 캐시는 요청 앞부분이 이전 요청과 똑같을 때만 맞으므로 메시지 구성은 10-2 의 append-only 규칙을 따른다
+  - `max_tokens` 설정값(기본 1024), 시스템 프롬프트는 `prompts.py` 에서
+  - 에러 매핑: `AuthenticationError`→auth, `RateLimitError`→rate_limit, `APIConnectionError`→network, 400 중 토큰 초과→context_too_long, `stop_reason == "refusal"`→refused
+- [ ] `openai_compat.py`: `OpenAICompatBackend(base_url, api_key, model)`
+  - `POST {base_url}/chat/completions` with `stream: true`, SSE 파싱 → 델타 yield
+  - 설정 예시(README 에 기록, 값은 사용 시점에 각 제공자 문서로 확인):
+    - Gemini: `https://generativelanguage.googleapis.com/v1beta/openai`
+    - Groq: `https://api.groq.com/openai/v1`
+    - OpenRouter: `https://openrouter.ai/api/v1`
+    - Ollama(로컬): `http://localhost:11434/v1`, api_key 임의 문자열
+  - 프롬프트 캐싱은 제공자마다 달라 미지원(그냥 전송)
+- [ ] `worker.py`: `LLMWorker(QThread)` — 백엔드 `stream()` 을 돌리며 `chunk(str)`, `finished(str)`, `failed(str kind, str message)` 시그널 emit. `cancel()` 은 플래그 세우고 이터레이터 중단. **QtCore 만 import**
+  - API 호출은 네트워크 I/O 라 스레드로 충분 (PyMuPDF 와 달리 GIL 문제 없음). 렌더 워커 프로세스와는 별개
+- [ ] `prompts.py` + `app/llm_prompts.json`: 시스템 프롬프트("PDF 읽기 도우미. 제공된 발췌 범위 안에서 답하고 근거 페이지를 p.N 형식으로 표기. 발췌에 없는 내용은 모른다고 말할 것"), 빠른 질문 템플릿
+- [ ] 백엔드 선택은 설정 `llm.backend = "anthropic" | "openai_compat"`, 기본 `anthropic`. 팩토리 함수 `make_backend(settings)` — `chat_state` 는 이 함수만 부르고 백엔드 이름 문자열을 직접 다루지 않음
+
+**10-2. 상태 (chat_state.py)**
+- [ ] 문서(탭)별 대화 기록 분리. 탭 전환 시 `viewer_state.document_changed`(탭 전환에도 발생) 받아 해당 기록으로 교체
+- [ ] 컨텍스트 범위 enum: `SELECTION` / `CURRENT_PAGE` / `VISIBLE_PAGES` / `WHOLE_DOC`
+  - 텍스트 추출은 기존 워커 경로 재사용: `renderer.py` 에 `request_text(page_range)` 추가 → `render_worker.py` 에서 `page.get_text()` (UI 프로세스에서 PyMuPDF 호출 금지 규칙 유지)
+  - 추출 텍스트는 문서별로 캐시(같은 페이지 재추출 방지)
+  - `WHOLE_DOC` 은 글자 수 상한(기본 60,000자, 설정 가능) 초과 시 경고 + 앞부분만 전송. 예상 비용을 "약 N원" 으로 표시(토큰≈글자수/2 추정, 모델 단가는 설정 파일)
+  - 선택 텍스트는 `viewer_state.selection` (`(페이지, 첫 단어, 마지막 단어)`)에서 가져옴
+- [ ] 메시지 구성 (**append-only**: 이미 보낸 턴은 고치지 않아야 캐시가 맞음)
+  - `[system 고정] + (WHOLE_DOC 이면 문서 전체 블록 — 고정, 캐시 대상) + 이전 턴들 + 이번 질문`
+  - `WHOLE_DOC` 외의 범위는 **그 턴의 질문 앞에** 발췌를 붙인다. 페이지가 바뀌어도 이전 턴은 그대로라 캐시 유지
+  - 최근 N턴(기본 10) 초과 시 앞쪽을 잘라 비용 상한. 자르는 요청은 캐시 미스(허용)
+- [ ] 메서드: `send(user_text)`, `cancel()`, `clear()`, `set_scope(scope)`, `ask_about_selection(text)`, `set_backend(name)`
+- [ ] 시그널: `scope_changed`, `busy_changed(bool)`, `error(kind, message)`, `page_reference_clicked(int)` (답변 속 p.N 클릭 → `viewer_state.go_to`)
+- [ ] `models/chat_model.py`: 메시지 목록 `QAbstractListModel` (role, text, streaming 여부, 사용 토큰·비용 메타). 스트리밍 중엔 마지막 행만 `dataChanged`
+
+**10-3. 화면 (widgets/chat_panel.py)**
+- [ ] 오른쪽 접이식 패널 (왼쪽 사이드바와 대칭 구조, 너비 드래그, 상태는 `settings.py` 에 저장)
+- [ ] 상단: 컨텍스트 범위 콤보 + "p.12 · 1,240자 · 약 3원" 표시 + 모델 표시 + 대화 초기화 + 백엔드 상태 점(키 있음/없음)
+- [ ] 메시지 목록: `QListView` + `chat_message_delegate.py`. 말풍선 색은 새 토큰 `color.chat_user`, `color.chat_assistant`, 텍스트는 `color.text`. 마크다운은 1차는 코드블록·굵게·목록 정도만 처리(QTextDocument), 완전한 렌더는 후순위
+- [ ] 스트리밍: `chunk` 받을 때마다 마지막 말풍선 갱신, 자동 스크롤(사용자가 위로 올렸으면 멈춤)
+- [ ] 하단: 입력창(Enter 전송, Shift+Enter 줄바꿈), 전송 ↔ 중지 버튼 토글, 빠른 질문 칩("이 페이지 요약", "선택 부분 쉽게 설명", "핵심 용어 정리")
+- [ ] page_view 에 **우클릭 메뉴 새로 추가** (지금은 없음): "복사", "AI에게 질문" → `chat_state.ask_about_selection` (page_view 가 chat_panel 을 참조하지 않음. `chat_state` 경유)
+- [ ] 답변 속 `p.12` 패턴을 링크로 → 클릭 시 해당 페이지 이동
+- [ ] API 키 없음 / 인증 실패 / 한도 초과 / 네트워크 오류 / 답변 거절 → 패널 본문에 종류별 안내 카드(원인 + 해결 방법 + 설정 열기 버튼). 나머지 뷰어 기능은 영향 없음
+- [ ] 설정 다이얼로그 `dialogs/llm_settings_dialog.py`: 백엔드 선택, API 키 입력(마스킹), 모델, effort, base_url(OpenAI 호환일 때), 전체 문서 상한, "연결 테스트" 버튼
+- [ ] 아이콘은 `icons.icon("chat")`, `icons.icon("send")`, `icons.icon("stop")`, `icons.icon("settings")` (Phosphor 세트에서 추가)
+
+**10-4. 단축키·설정·테스트**
+- [ ] `shortcuts.py`: `Ctrl+Shift+L` 패널 토글, `Ctrl+Shift+K` 선택 텍스트로 질문 (Phase 9.5 덕분에 사용자가 바꿀 수 있음)
+- [ ] 입력창 `Esc` → 포커스를 문서로. 전역 `escape` 액션(전체화면 해제 등)과 겹치므로 입력창이 `ShortcutOverride` 로 먼저 받음
+- [ ] `settings.py`: 패널 열림/너비, 마지막 컨텍스트 범위, 백엔드·모델·effort·base_url, API 키, 전체 문서 상한
+- [ ] `tests/`: SSE/스트림 파서(가짜 응답으로), `chat_state` 의 범위별 컨텍스트 조립·append-only·턴 자르기, 비용 추정, 키 없음 상태의 패널 스모크. **실제 API 호출 테스트는 없음**(비용·네트워크)
+- [ ] 단축키 안내 다이얼로그·README 에 채팅 기능·키 설정 방법·제공자별 base_url 추가
+
+**비용 메모**
+- Sonnet 5.5 기준 페이지 단위 질문 1회 ≈ $0.005(약 7원)는 thinking 토큰을 뺀 값. effort `low` 여도 조금 더 나올 수 있음. Haiku 5.5 는 단가가 Sonnet 의 1/20
+- 비용은 거의 전부 `WHOLE_DOC` 에서 나옴 → 상한·비용 표시·프롬프트 캐싱이 통제 장치. 캐싱은 같은 범위로 반복해 물을 때(특히 `WHOLE_DOC`) 효과가 큼
+- 콘솔 월 지출 한도를 반드시 걸어둘 것
+
+**완료 조건**
+1. PDF 열고 한 문단 드래그 → 우클릭 "AI에게 질문" → 패널이 열리고 답변이 **스트리밍**으로 표시
+2. 응답 중에 페이지 스크롤·줌이 평소처럼 부드러움 (워커 스레드 확인)
+3. 답변의 `p.N` 클릭 → 해당 페이지로 이동
+4. `ANTHROPIC_API_KEY` 를 빼고 실행 → 안내 카드가 뜨고 뷰어 나머지 기능 정상
+5. 설정에서 `openai_compat` + Ollama(또는 무료 제공자) 로 바꿔도 같은 패널이 그대로 동작
+6. `grep -rn "anthropic\|httpx\|openai" app/widgets/ app/chat_state.py` 결과 없음 (위젯·상태가 백엔드를 직접 안 건드림)
+7. `git grep -i "sk-ant"` 결과 없음 (키 커밋 안 됨)
+8. `WHOLE_DOC` 로 같은 문서에 두 번 질문 → 두 번째 응답의 `usage.cache_read_input_tokens` 가 0 보다 큼 (로그로 확인)
+
+### Phase 11 — 기록·메모 (하이라이트 · 메모 · 북마크 · 대화 저장 · 내보내기)
+**목표**: PDF를 읽으면서 남긴 것(하이라이트, 메모, 북마크, AI 대화)을 **PDF 파일은 건드리지 않고** 뷰어 전용 sidecar 파일에 저장·복원. 시험 전에 마크다운으로 뽑아 정리본 재료로 쓸 수 있게.
+**원칙**: 읽기 전용 뷰어 유지 — PDF 원본은 절대 수정하지 않는다. 모든 기록은 앱 데이터 폴더의 별도 JSON.
+
+**결정 (2026-11-09)**: 범위는 학습용 풀세트. 저장 위치는 앱 데이터 폴더의 `notes/<doc_id>.json` — 로그와 같은 `QStandardPaths.AppDataLocation` 기준(Windows 에서는 `%APPDATA%\pdfviewer\pdfviewer\notes\`, WSL 개발 중에는 `~/.local/share/...`). 손글씨·도형은 제외. 하이라이트는 **한 페이지 안에서만** (지금 선택이 한 페이지 단위라서).
+
+**11-0. 데이터 설계 (core/annotations/)**
+- [ ] `doc_id` 결정: 파일 내용 해시(SHA-256 앞 16자리). 파일명·경로가 바뀌어도 같은 PDF면 같은 메모. 해시는 PyMuPDF 작업이 아니라서 `QThread` 에서 계산(UI 멈춤 방지, 렌더 워커까지 갈 필요 없음). 첫 열기 때 1회, 이후 `settings` 에 `경로→doc_id` 캐시(파일 크기·수정시각이 같을 때만 재사용)
+- [ ] `store.py`: `AnnotationStore` (순수 파이썬)
+  - 파일 1개 = 문서 1개: `notes/<doc_id>.json`
+  - 스키마 `{"v":1, "doc_id", "source_path"(마지막 본 경로, 참고용), "title", "highlights":[], "notes":[], "bookmarks":[], "doc_note":"", "chat":[]}`
+  - `Highlight {id, page, quads:[[x0,y0,x1,y1],…], text, color_key("yellow"|"green"|"blue"|"pink"), comment, created, updated}` — 좌표는 기존 단어·검색 좌표와 같은 **`page.rect` 좌표**(페이지 자체 /Rotate 적용, 앱 회전·줌 미적용)
+  - `Note {id, page, text, created, updated, source: "user"|"ai", anchor_highlight_id?}` — 페이지 메모. AI 답변 저장 시 `source="ai"`
+  - `Bookmark {id, page, label, created}`
+  - `doc_note`: 문서 전체 마크다운 노트 1개
+  - `chat`: Phase 10 대화 기록 `[{role, text, scope, page, created}]` (문서별)
+  - 저장은 **디바운스(500ms) + 원자적 쓰기**(임시 파일 → rename). 손상 방지
+  - 로드 실패(깨진 JSON) → `.bak` 로 옮기고 빈 상태로 시작 + 상태바 경고
+- [ ] `export.py`: 마크다운 내보내기 (아래 11-5)
+- [ ] `store.py` 는 Qt 모름. 시그널은 `annotation_state.py` 가 담당
+
+**11-1. 상태 (annotation_state.py)**
+- [ ] 문서(탭)별 `AnnotationStore` 보유. `viewer_state.document_changed` 받아 로드/교체
+- [ ] 메서드: `add_highlight(page, quads, text, color_key)`, `set_highlight_comment(id, text)`, `set_highlight_color(id, color_key)`, `remove_highlight(id)`, `add_note(page, text, source)`, `update_note`, `remove_note`, `toggle_bookmark(page)`, `set_doc_note(text)`, `save_chat(messages)`, `load_chat()`
+- [ ] 시그널: `highlights_changed(page)`, `notes_changed`, `bookmarks_changed`, `doc_note_changed`, `saved`, `load_failed(message)`
+- [ ] 하이라이트 좌표는 `page.rect` 좌표로 저장. 화면 좌표 변환은 `page_view` 가 검색 하이라이트와 같은 기존 경로(`_page_transform`)로 처리 (저장 데이터가 줌·회전·보기 모드에 독립적이어야 함)
+- [ ] Undo/Redo: `QUndoStack` 으로 추가·삭제·수정 되돌리기
+- [ ] `models/`: `highlight_model.py`, `note_model.py`, `bookmark_model.py` — 사이드바 목록용 `QAbstractListModel`. 정렬은 페이지 순
+
+**11-2. 화면 — 문서 영역 (widgets/page_view.py 확장)**
+- [ ] 하이라이트 오버레이 렌더: 해당 페이지 `quads` 를 반투명 색으로. 색은 새 토큰 `color.hl_yellow`·`hl_green`·`hl_blue`·`hl_pink` (기존 `selection`·`search_hit` 와 구분되게)
+- [ ] 텍스트 선택 팝오버 **새로 추가** (지금은 없음): 복사 / AI에게 질문 / **색 4개 점** / **메모** → 색 클릭 시 즉시 하이라이트, 메모 클릭 시 하이라이트 + 코멘트 입력 팝업
+- [ ] 하이라이트 클릭 → 작은 팝오버: 색 변경, 코멘트 편집, AI에게 질문(이 구간 컨텍스트), 삭제
+- [ ] 하이라이트 hover 시 코멘트 툴팁
+- [ ] 페이지 모서리 북마크 리본 표시(북마크된 페이지). 클릭으로 토글
+- [ ] 페이지 우클릭 메뉴(Phase 10 에서 만든 것)에 "이 페이지에 메모", "북마크 토글" 추가
+- [ ] 코멘트 입력은 인라인 팝업(`QTextEdit`, Ctrl+Enter 저장, Esc 취소). 색·간격은 토큰
+
+**11-3. 화면 — 사이드바 "메모" 탭 (widgets/sidebar.py 확장 + notes_delegate.py)**
+- [ ] 기존 썸네일/목차/검색 옆에 **메모** 탭 추가 (아이콘 `icons.icon("note")`)
+- [ ] 상단 필터 칩: 전체 / 하이라이트 / 메모 / 북마크 / AI 저장
+- [ ] 목록: 페이지 순. 항목 = 색 띠 + 인용 텍스트(2줄 말줄임) + 코멘트 + "p.N". 클릭 → 해당 위치로 이동 + 하이라이트 깜빡임
+- [ ] 항목 우클릭: 편집, 색 변경, 삭제, "AI에게 질문"
+- [ ] 하단: 문서 노트 열기 버튼, 내보내기 버튼, 항목 개수
+- [ ] **문서 노트** 는 사이드바 안 접이식 `QPlainTextEdit`(마크다운 원문 편집, 미리보기 없음 — 1차). 자동 저장
+
+**11-4. AI 연동 (Phase 10 과 연결)**
+- [ ] AI 말풍선에 **"메모로 저장"** 버튼 → `annotation_state.add_note(page=질문 당시 페이지, text=답변, source="ai")`. 선택 영역 컨텍스트였다면 `anchor_highlight_id` 로 해당 하이라이트에 연결(없으면 하이라이트 자동 생성)
+- [ ] 대화 기록 저장: `chat_state` 가 메시지 추가될 때마다 `annotation_state.save_chat`. 문서 다시 열면 복원. "대화 초기화"는 저장본도 지움(확인 다이얼로그)
+- [ ] 하이라이트 팝오버·메모 목록의 "AI에게 질문" → `chat_state.ask_about_selection(하이라이트 text)`
+- [ ] 빠른 질문에 **"내 하이라이트 전체 요약"** 추가: 이 문서의 모든 하이라이트 텍스트를 컨텍스트로(글자 수 상한 적용)
+- [ ] 위젯 간 직접 참조 금지 유지: `chat_panel` ↔ `annotation_state`, `page_view` ↔ `annotation_state` 모두 상태 객체 경유
+
+**11-5. 내보내기 (core/annotations/export.py)**
+- [ ] 마크다운: `# <문서 제목>` → `## 문서 노트` → `## 북마크` → `## 하이라이트·메모`(페이지별 `### p.N`, 인용 블록 `> 텍스트` + 코멘트, AI 메모는 `**AI**` 표시) → `## AI 대화`(선택)
+- [ ] 내보내기 다이얼로그: 포함 항목 체크(하이라이트/메모/북마크/문서 노트/AI 대화), 색별 필터, 저장 위치 선택. 기본 파일명 `<PDF이름>_notes.md`
+- [ ] 클립보드로 복사 옵션 (바로 정리본에 붙여넣기용)
+- [ ] (후순위) JSON 원본 내보내기/가져오기 — 다른 PC로 옮길 때
+
+**11-6. 단축키·설정·테스트**
+- [ ] `shortcuts.py` (지금 있는 키와 겹치지 않게 정함 — `Ctrl+D` 는 문서 속성이라 북마크에 안 씀):
+  - `H` 선택 영역 하이라이트(기본색), `M` 페이지 메모, `B` 북마크 토글 — 회전 `R` 처럼 한 글자 키로 통일
+  - `Ctrl+Shift+N` 메모 탭, `Ctrl+E` 내보내기
+  - `Ctrl+Z` 실행취소, `Ctrl+Shift+Z`·`Ctrl+Y` 다시실행
+- [ ] `settings.py`: 기본 하이라이트 색, 메모 탭 필터 상태, 마지막 내보내기 위치, 대화 기록 저장 여부(끄기 가능)
+- [ ] 상태바: 저장 상태 표시("저장됨" / "저장 중…" / "저장 실패")
+- [ ] `tests/`: `store.py` 저장·로드·스키마 마이그레이션(v1→v2 자리), 원자적 쓰기, 깨진 파일 복구, `doc_id` 해시 일관성, 좌표 변환 왕복(`page.rect`↔화면, 회전 포함), 마크다운 export 스냅샷, Undo/Redo
+- [ ] README·단축키 안내에 메모 기능과 `notes/` 폴더 위치 추가
+
+**데이터 안전 메모**
+- `notes/` 폴더는 사용자가 백업하기 쉽게 README 에 위치 명시
+- 저장 실패 시 데이터 손실 없게: 메모리 상태 유지 + 상태바 경고 + 재시도
+- PDF 내용이 바뀌면(같은 이름 다른 파일) `doc_id` 가 달라져 메모가 안 보임 → 상태바에 "이 파일에 메모 없음. 비슷한 이름의 메모 N개 있음" 안내 + 수동 연결 메뉴(후순위)
+
+**완료 조건**
+1. 텍스트 드래그 → 팝오버에서 색 클릭 → 즉시 하이라이트. 뷰어 껐다 켜도, PDF 파일을 다른 폴더로 옮겨도 유지
+2. 줌·회전·보기 모드 바꿔도 하이라이트 위치 정확
+3. 하이라이트에 코멘트 달고 메모 탭에서 클릭 → 해당 위치로 이동
+4. AI 답변 "메모로 저장" → 메모 탭에 AI 표시로 나타남. 대화 기록이 재시작 후 복원됨
+5. Ctrl+Z 로 하이라이트 삭제 되돌리기 동작
+6. 내보내기 → 마크다운 파일 열어서 페이지 순으로 정리되어 있음
+7. 원본 PDF 의 해시·수정시각이 변하지 않음 (`sha256sum` 전후 비교)
+8. `grep -rn "json\|open(" app/widgets/` 에서 메모 파일 직접 읽는 코드 없음 (전부 `store.py` 경유)
 
 ---
 
