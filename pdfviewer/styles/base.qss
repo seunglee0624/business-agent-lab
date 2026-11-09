@@ -514,3 +514,38 @@ QToolButton#chatButton:hover {
 QToolButton#chatButton:disabled {
     color: {{color.text_disabled}};
 }
+
+QLabel#chatInfo {
+    color: {{color.text_muted}};
+    font-size: {{font.caption_size}}px;
+    font-weight: {{font.caption_weight}};
+}
+
+/* quick questions: small pills under the conversation */
+QPushButton#chip {
+    border-radius: {{radius.pill_sm}}px;
+    padding: 0px {{spacing.lg}}px;
+    font-size: {{font.caption_size}}px;
+}
+
+/* scope buttons: one row of grey pills, the chosen one white (filter-chip style) */
+QPushButton#scope {
+    background: {{color.bg_elevated}};
+    border: 2px solid transparent;
+    border-radius: {{radius.pill_sm}}px;
+    padding: 0px {{spacing.lg}}px;
+}
+
+QPushButton#scope:hover {
+    background: {{color.bg_highlight}};
+}
+
+QPushButton#scope:focus {
+    border-color: {{color.accent}};
+}
+
+QPushButton#scope:checked {
+    background: {{color.text}};
+    color: {{color.on_accent}};
+    font-weight: {{font.heading_weight}};
+}

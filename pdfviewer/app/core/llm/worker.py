@@ -3,7 +3,7 @@ import threading
 
 from PySide6.QtCore import QObject, Signal
 
-from app.core.llm.base import LLMError
+from app.core.llm.base import LLMError, Usage
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class LLMWorker(QObject):
     Daemon: a request still waiting for the network never holds up quitting the app."""
 
     chunk = Signal(str)
-    done = Signal(str)  # the whole answer, or what arrived before cancel()
+    done = Signal(str, object)  # the whole answer (or what arrived before cancel()), Usage or None
     failed = Signal(str, str)  # LLMError kind, message
 
     def __init__(self, backend, system, messages):
@@ -30,12 +30,15 @@ class LLMWorker(QObject):
         self._cancelled = True
 
     def _run(self):
-        parts = []
+        parts, usage = [], None
         stream = self._backend.stream(self._system, self._messages)
         try:
             for piece in stream:
                 if self._cancelled:
                     break
+                if isinstance(piece, Usage):
+                    usage = piece
+                    continue
                 parts.append(piece)
                 self.chunk.emit(piece)
         except LLMError as error:
@@ -47,4 +50,4 @@ class LLMWorker(QObject):
             return
         finally:
             stream.close()
-        self.done.emit("".join(parts))
+        self.done.emit("".join(parts), usage)

@@ -1,6 +1,15 @@
 """What every AI backend offers. Pure Python: the chat state and the widgets only ever see this."""
 
+from typing import NamedTuple
+
 KINDS = ("auth", "rate_limit", "network", "context_too_long", "refused", "other")
+
+
+class Usage(NamedTuple):
+    """Tokens one answer used. input counts all of it, cached included."""
+    input: int
+    cached: int
+    output: int
 
 
 class LLMError(Exception):
@@ -20,6 +29,6 @@ class LLMBackend:
         raise NotImplementedError
 
     def stream(self, system, messages):
-        """Yield the answer's text as it arrives. messages: [{"role": "user" | "assistant", "content": str}].
-        Raises LLMError."""
+        """Yield the answer's text as it arrives, then a Usage if the backend knows it.
+        messages: [{"role": "user" | "assistant", "content": str}]. Raises LLMError."""
         raise NotImplementedError

@@ -1,0 +1,67 @@
+from PySide6.QtCore import QSize
+from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QLineEdit, QPushButton,
+                               QToolButton, QVBoxLayout, QWidget)
+
+from app import theme
+from app.core import settings
+from app.icons import icon
+
+
+def quick_questions_dialog(parent, questions, scopes):
+    """Edit the chat's quick-question buttons: name, question and scope per row.
+    Returns the new list, or None when cancelled. Rows without a name or a question are dropped."""
+    dialog = QDialog(parent, windowTitle="빠른 질문 편집", objectName="quickQuestionsDialog")
+    grid_widget = QWidget()
+    grid = QGridLayout(grid_widget)
+    rows = []  # (name edit, question edit, scope combo)
+
+    def fill(items):
+        while grid.count():
+            grid.takeAt(0).widget().deleteLater()
+        rows.clear()
+        for header, column in (("버튼 이름", 0), ("질문", 1), ("범위", 2)):
+            grid.addWidget(QLabel(header, objectName="fieldName"), 0, column)
+        for row, item in enumerate(items, start=1):
+            name = QLineEdit(item["label"], placeholderText="버튼 이름", accessibleName=f"{row}번 버튼 이름")
+            text = QLineEdit(item["text"], placeholderText="AI에게 보낼 질문", accessibleName=f"{row}번 질문")
+            text.setMinimumWidth(theme.token("size.dialog_width") // 2)
+            scope = QComboBox(accessibleName=f"{row}번 범위")
+            scope.addItem("지금 범위", "")
+            for key, label in scopes.items():
+                scope.addItem(label, key)
+            scope.setCurrentIndex(max(0, scope.findData(item.get("scope", ""))))
+            remove = QToolButton(objectName="clearKey", toolTip="이 줄 지우기", autoRaise=True)
+            remove.setAccessibleName(f"{row}번 지우기")
+            remove.setIcon(icon("close"))
+            size = theme.token("size.control_sm") // 2
+            remove.setIconSize(QSize(size, size))
+            remove.clicked.connect(lambda checked=False, i=row - 1: fill([r for j, r in enumerate(current()) if j != i]))
+            for column, widget in enumerate((name, text, scope, remove)):
+                grid.addWidget(widget, row, column)
+            rows.append((name, text, scope))
+        grid.setColumnStretch(1, 1)
+
+    def current(keep_empty=True):
+        items = [{"label": name.text().strip(), "text": text.text().strip(), "scope": scope.currentData()}
+                 for name, text, scope in rows]
+        return items if keep_empty else [item for item in items if item["label"] and item["text"]]
+
+    fill(questions)
+    tools = QDialogButtonBox()
+    tools.addButton("추가", QDialogButtonBox.ButtonRole.ActionRole).clicked.connect(
+        lambda: (fill([*current(), {"label": "", "text": "", "scope": ""}]), rows[-1][0].setFocus()))
+    tools.addButton("기본값으로", QDialogButtonBox.ButtonRole.ResetRole).clicked.connect(
+        lambda: fill(settings.DEFAULT_QUICK_QUESTIONS))
+    buttons = QDialogButtonBox()
+    save = buttons.addButton("저장", QDialogButtonBox.ButtonRole.AcceptRole)  # standard buttons would be English
+    save.setObjectName("primary")
+    buttons.addButton("취소", QDialogButtonBox.ButtonRole.RejectRole)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(QLabel("패널 아래 버튼을 누르면 이 질문을 바로 보냅니다. 범위를 정하면 그 범위로 바꿔서 보냅니다.",
+                            objectName="fieldName", wordWrap=True))
+    layout.addWidget(grid_widget)
+    layout.addWidget(tools)
+    layout.addWidget(buttons)
+    return current(keep_empty=False) if dialog.exec() == QDialog.DialogCode.Accepted else None

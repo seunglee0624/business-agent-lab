@@ -29,13 +29,13 @@ APP_NAME = "PDF Viewer"
 log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "open_search", "prev", "next", "first_page", "last_page",
+DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "open_search", "prev", "next", "first_page", "last_page",
                     "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
     "파일": ["open", "recent", "close_tab", None, "properties", None, "quit"],
-    "편집": ["copy", None, "open_search"],
+    "편집": ["copy", "ask_ai", None, "open_search"],
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
                "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
@@ -90,6 +90,8 @@ class MainWindow(QMainWindow):
         view = self._view = PageView(self.state)
         view.setAcceptDrops(False)  # dropped files go to the window
         view.viewport().setAcceptDrops(False)
+        view.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)  # right-click: these actions
+        view.addActions([self._actions["copy"], self._actions["ask_ai"]])
         self._empty = EmptyState(self._actions["open"])
         self._empty.file_chosen.connect(self.open_file)
         self._stack = QStackedWidget()
@@ -115,6 +117,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
         self._chat_panel = ChatPanel(self.chat)
         self._chat_panel.leave.connect(self._focus_main)
+        self.chat.input_requested.connect(self._chat_panel.focus_input)
         self._chat_dock = QDockWidget(objectName="chat_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._chat_dock.setTitleBarWidget(QWidget())
         self._chat_dock.setWidget(self._chat_panel)
@@ -168,6 +171,7 @@ class MainWindow(QMainWindow):
         add("properties", "문서 속성…", lambda: show_properties(self, st.document))
         add("quit", "종료", self.close)
         add("copy", "복사", st.copy)
+        add("ask_ai", "AI에게 질문", self.chat.ask_about_selection)
         add("open_search", "찾기…", st.open_search)
         add("prev", "이전 페이지", st.prev, True)
         add("next", "다음 페이지", st.next, True)

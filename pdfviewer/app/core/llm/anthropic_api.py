@@ -1,7 +1,7 @@
 import logging
 import os
 
-from app.core.llm.base import LLMBackend, LLMError
+from app.core.llm.base import LLMBackend, LLMError, Usage
 
 log = logging.getLogger(__name__)
 
@@ -58,3 +58,5 @@ class AnthropicBackend(LLMBackend):
                  usage.output_tokens, final.stop_reason)
         if final.stop_reason == "refusal":
             raise LLMError("이 질문에는 답할 수 없다는 응답을 받았습니다.", "refused")
+        cached = usage.cache_read_input_tokens or 0
+        yield Usage(usage.input_tokens + cached + (usage.cache_creation_input_tokens or 0), cached, usage.output_tokens)

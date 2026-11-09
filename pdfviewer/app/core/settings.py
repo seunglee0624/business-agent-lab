@@ -76,7 +76,8 @@ def llm_config():
     max_tokens covers thinking too, so it is kept well above a typical answer."""
     s = QSettings()
     return {"model": s.value("llm/model", "claude-sonnet-5-5"), "effort": s.value("llm/effort", "low"),
-            "max_tokens": s.value("llm/max_tokens", 4096, type=int)}
+            "max_tokens": s.value("llm/max_tokens", 4096, type=int),
+            "document_limit": s.value("llm/document_limit", 60000, type=int)}  # characters of a whole document
 
 
 def chat_panel():
@@ -86,3 +87,29 @@ def chat_panel():
 
 def save_chat_panel(shown):
     QSettings().setValue("chat/visible", shown)
+
+
+def chat_scope():
+    return QSettings().value("chat/scope", "page")
+
+
+def save_chat_scope(scope):
+    QSettings().setValue("chat/scope", scope)
+
+
+DEFAULT_QUICK_QUESTIONS = [  # scope "": whatever scope is chosen at the time
+    {"label": "페이지 요약", "text": "이 페이지의 핵심을 3~5줄로 요약해줘.", "scope": "page"},
+    {"label": "쉽게 설명", "text": "선택한 부분을 쉽게 풀어서 설명해줘.", "scope": "selection"},
+    {"label": "용어 정리", "text": "여기에 나오는 핵심 용어를 뜻과 함께 정리해줘.", "scope": ""},
+]
+
+
+def quick_questions():
+    """[{"label", "text", "scope"}]: the chat panel's one-click questions, as the user edited them."""
+    if not QSettings().contains("chat/quick_questions"):  # checked apart: an emptied list stays empty
+        return [dict(q) for q in DEFAULT_QUICK_QUESTIONS]
+    return _load("chat/quick_questions", [])
+
+
+def save_quick_questions(questions):
+    _save("chat/quick_questions", questions)

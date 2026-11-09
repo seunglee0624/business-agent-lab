@@ -52,6 +52,19 @@ def page_text(key, password, index):
     return _open(key, password)[index].get_text(sort=True)
 
 
+def document_text(key, password, limit):
+    """Page texts from the first page on, until their total reaches limit characters: the last page is cut
+    there and the rest are left out. Returns ([text per page], page count)."""
+    doc, texts, total = _open(key, password), [], 0
+    for page in doc:
+        if total >= limit:
+            break
+        text = page.get_text(sort=True)[:limit - total]
+        texts.append(text)
+        total += len(text)
+    return texts, doc.page_count
+
+
 def outline(key, password):
     """Table of contents: [level, title, 1-based page or -1], as pymupdf get_toc(simple=True) gives it."""
     return _open(key, password).get_toc(simple=True)

@@ -7,7 +7,7 @@ from concurrent.futures.process import BrokenProcessPool
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QImage
 
-from app.core.render_worker import outline, page_info, page_text, render, search
+from app.core.render_worker import document_text, outline, page_info, page_text, render, search
 
 log = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ CACHE_LIMIT = 200 * 1024 * 1024
 WORKERS = 2
 SEARCH_CHUNK = 20  # pages per search job
 RENDER_DEBOUNCE_MS = 80  # views wait for scroll / wheel-zoom / resize bursts to settle before requesting renders
-JOBS = {"info": page_info, "outline": outline, "search": search, "text": page_text}  # non-image job keys: (name, *args); image keys are render args
+JOBS = {"info": page_info, "outline": outline, "search": search, "text": page_text, "document_text": document_text}  # non-image job keys: (name, *args); image keys are render args
 
 
 class Renderer(QObject):
@@ -28,6 +28,7 @@ class Renderer(QObject):
     search_found = Signal(object, int)  # [(page, rects, context)] of the next pages, pages searched so far
     renders_changed = Signal(int)  # page images queued or rendering (status bar)
     text_ready = Signal(int)  # page index whose plain text arrived (for the AI chat)
+    document_text_ready = Signal()
     _finished = Signal(object, object, object, object)  # future, key, doc key, pool
 
     def __init__(self, cache_limit=CACHE_LIMIT):
@@ -38,6 +39,7 @@ class Renderer(QObject):
         self._bytes = 0
         self._info = {}  # index -> (words, links)
         self._text = {}  # index -> plain text in reading order
+        self._document_text = {}  # character limit -> ([page texts], page count)
         self.outline = None  # [level, title, 1-based page or -1], once loaded
         self._pending = {}  # image key or ("info", index) -> Future
         self._retried = set()  # keys already resubmitted once after a worker crash
@@ -59,6 +61,7 @@ class Renderer(QObject):
         self._bytes = 0
         self._info.clear()
         self._text.clear()
+        self._document_text.clear()
         self.outline = None
         self._retried.clear()
         self._search_future = None
@@ -111,6 +114,15 @@ class Renderer(QObject):
     def request_text(self, index):
         if self._doc is not None and index not in self._text and ("text", index) not in self._pending:
             self._start(("text", index))
+
+    def document_text(self, limit):
+        """([page texts from page 1], page count) up to limit characters in all, or None until ready."""
+        return self._document_text.get(limit)
+
+    def request_document_text(self, limit):
+        key = ("document_text", limit)
+        if self._doc is not None and limit not in self._document_text and key not in self._pending:
+            self._start(key)
 
     def request_outline(self):
         if self._doc is not None and self.outline is None and ("outline",) not in self._pending:
@@ -173,7 +185,7 @@ class Renderer(QObject):
             return
         if error is not None:
             log.warning("job %s failed: %r", key, error)
-            if not wanted_search and key[0] != "text":
+            if not wanted_search and key[0] not in ("text", "document_text"):
                 return
         if not current:
             return
@@ -189,6 +201,10 @@ class Renderer(QObject):
         if key[0] == "text":  # a failed page counts as one without text: the question still goes out
             self._text[key[1]] = "" if error else future.result()
             self.text_ready.emit(key[1])
+            return
+        if key[0] == "document_text":
+            self._document_text[key[1]] = ([], self._doc.page_count) if error else future.result()
+            self.document_text_ready.emit()
             return
         if key[0] == "outline":
             self.outline = future.result()

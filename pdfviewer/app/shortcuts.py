@@ -10,6 +10,7 @@ KEYS = {
     "properties": ["Ctrl+D"],
     "quit": ["Ctrl+Q"],
     "copy": ["Ctrl+C"],
+    "ask_ai": ["Ctrl+Shift+K"],
     "open_search": ["Ctrl+F"],
     "prev": ["Left"],
     "next": ["Right"],

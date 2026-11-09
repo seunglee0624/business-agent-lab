@@ -12,14 +12,49 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # 처음 �
 .venv/bin/pytest -q                                                   # 테스트
 ```
 
-WSLg에서 창이 뜨지만 클릭이 안 먹으면 X11 방식으로 실행한다.
+파일 끌어다 놓기는 WSLg에서 동작하지 않는다. Windows 빌드에서 확인한다.
+
+### WSL에서 겪은 문제 (2026-11-09, Ubuntu 26.04 + WSLg)
+
+**AI 채팅 키.** 키는 코드·git 에 넣지 않고 `~/.anthropic_key` 한 파일에 둔다. 앱은 켜질 때 한 번만 읽으므로 같은 터미널에서 불러온 뒤 실행한다.
+
+```bash
+nano ~/.anthropic_key            # export ANTHROPIC_API_KEY=sk-ant-...  한 줄
+chmod 600 ~/.anthropic_key
+source ~/.anthropic_key && .venv/bin/python main.py 파일.pdf
+```
+
+- 패널에 "ANTHROPIC_API_KEY…" 안내가 뜨면 그 터미널에서 `source` 를 안 한 것이다.
+- 경로는 Windows `C:\…` 가 아니라 `/mnt/c/…`, 띄어쓰기가 있으면 따옴표로 감싼다. 실행은 `pdfviewer/` 폴더에서.
+
+**한글 입력.** WSL 앱에는 Windows 한글 입력기가 전달되지 않는다. ibus 를 설치하고, 실행하는 터미널마다 환경변수를 넣는다.
+
+```bash
+sudo apt install -y ibus ibus-hangul      # 처음 한 번
+export QT_IM_MODULE=ibus XMODIFIERS=@im=ibus GTK_IM_MODULE=ibus
+ibus-daemon -drx && ibus engine hangul    # setxkbmap 경고는 무시해도 된다
+```
+
+- 앱 안에서 **Shift+Space** 로 한/영 전환 (Windows 한/영 키는 앱까지 오지 않는다. 엔진이 영문 모드로 시작한다).
+- 새 터미널에서 `export` 를 빠뜨리면 다시 한글이 안 된다.
+- 조합 중 Enter(마지막 글자 빠짐·두 번 전송)는 확인 결과 문제없음.
+
+**목록·메뉴가 닫히지 않음.** 기본(Wayland) 방식으로 켜면 배율 목록 같은 팝업이 항목을 골라도 닫히지 않는다. 시도한 것:
+
+| 실행 방식 | 커서 | 목록 닫힘 |
+|---|---|---|
+| 기본 (Wayland) | 보임 | 안 닫힘 |
+| 한글 설정(ibus) 뺌 | 보임 | 안 닫힘 |
+| `QT_WAYLAND_SHELL_INTEGRATION=wl-shell` | 보임 | 안 닫힘 |
+| `QT_QPA_PLATFORM=xcb` (X11, 아래 라이브러리 필요) | **안 보임** (`XCURSOR_THEME=Adwaita` 도 효과 없음) | 확인 못 함 |
 
 ```bash
 sudo apt install -y libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xkb1
-QT_QPA_PLATFORM=xcb .venv/bin/python main.py
 ```
 
-파일 끌어다 놓기는 WSLg에서 동작하지 않는다. Windows 빌드에서 확인한다.
+- 그래서 AI 채팅의 범위 고르기는 목록 대신 버튼 세 개로 바꿨다(팝업이 없어 어디서나 동작).
+- 코드 문제가 아니다: Phase 9 커밋(`47d1656`)을 그대로 실행해도 똑같이 안 닫힌다. WSLg 환경 문제.
+- 목록·메뉴·우클릭 메뉴 동작은 Windows 빌드에서 확인한다.
 
 ## Windows 빌드
 
