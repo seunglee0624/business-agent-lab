@@ -20,6 +20,7 @@ class ChatState(QObject):
     panel_changed = Signal()
     context_changed = Signal()  # what the next question would carry may differ: call context_info()
     quick_changed = Signal()
+    backend_changed = Signal()  # the AI settings were saved
     input_requested = Signal()  # "AI에게 질문": the question box should take the keys
 
     def __init__(self, viewer, backend=None):
@@ -80,6 +81,18 @@ class ChatState(QObject):
         self.quick_questions = questions
         settings.save_quick_questions(questions)
         self.quick_changed.emit()
+
+    @property
+    def config(self):
+        return settings.llm_config()
+
+    def apply_config(self, config):
+        """New AI settings from the settings dialog: saved, and used from the next question on."""
+        settings.save_llm_config(config)
+        self.backend = make_backend(config)
+        self.document_limit = config["document_limit"]
+        self.backend_changed.emit()
+        self.context_changed.emit()
 
     def ask_quick(self, question):
         """A quick-question button: its own scope if it has one, else the current one."""

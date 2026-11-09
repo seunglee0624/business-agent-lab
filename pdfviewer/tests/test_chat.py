@@ -297,7 +297,7 @@ def test_error_card_says_what_to_do(qtbot, window):
     window.chat.changed.emit()
     log = window._chat_panel._log
     qtbot.waitUntil(lambda: "요청 한도" in log.toPlainText())
-    assert "월 사용 한도" in log.toPlainText()
+    assert "사용 한도를 확인" in log.toPlainText() and "AI 설정 열기" in log.toPlainText()
 
 
 def test_usage_line_under_the_answer(qtbot, window):

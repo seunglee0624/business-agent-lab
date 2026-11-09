@@ -100,9 +100,26 @@ Windows에 Python 3이 설치돼 있어야 한다(`py` 런처). WSL에서:
 
 첫 화면의 최근 문서는 줄에 마우스를 올리면 나오는 ×로 목록에서 지운다(파일은 지워지지 않는다). 키보드로는 Tab으로 목록에 들어가 Delete.
 
+## AI 채팅
+
+오른쪽 패널(Ctrl+Shift+L)에서 지금 페이지·선택한 부분·문서 전체에 대해 묻는다. 답변의 `p.N` 을 누르면 그 페이지로 간다.
+패널 위 톱니바퀴(또는 오류 카드의 "AI 설정 열기")에서 백엔드·키·모델을 바꾼다. 저장하면 다음 질문부터 바로 적용된다(재시작 필요 없음).
+
+- **Anthropic**: 키 칸을 비워 두면 환경변수 `ANTHROPIC_API_KEY` 를 쓴다. 생각 정도는 낮음이 기본.
+- **OpenAI 호환**: 주소·키·모델을 넣는다. 버튼으로 주소를 채울 수 있다(값은 각 제공자 문서로 다시 확인).
+
+| 제공자 | 주소(base_url) | 키 |
+|---|---|---|
+| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | Google AI Studio 에서 무료 발급 |
+| Groq | `https://api.groq.com/openai/v1` | 필요 |
+| OpenRouter | `https://openrouter.ai/api/v1` | 필요 |
+| Ollama (내 PC) | `http://localhost:11434/v1` | 비워 둠 |
+
+모델 이름은 제공자 문서의 이름을 그대로 쓴다. "연결 테스트" 로 저장 전에 확인한다. OpenAI 호환 쪽은 프롬프트 캐싱·토큰 표시가 제공자마다 다르다.
+
 ## 설정과 로그
 
-- 설정(창 크기, 최근 파일, 파일별 페이지·확대, 바꾼 단축키): Windows 레지스트리 `HKCU\Software\pdfviewer\pdfviewer`
+- 설정(창 크기, 최근 파일, 파일별 페이지·확대, 바꾼 단축키, AI 설정): Windows 레지스트리 `HKCU\Software\pdfviewer\pdfviewer`. AI 설정 창에 넣은 API 키도 여기에 **암호화 없이** 저장된다(개인 PC 용).
 - 로그: `%APPDATA%\pdfviewer\pdfviewer\pdfviewer.log` (1MB씩 최대 3개). 오류가 나면 이 파일을 확인한다.
 
 ## 구조

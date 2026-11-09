@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QLayout, QPlai
 
 from app import theme
 from app.chat_state import SCOPES
+from app.dialogs.llm_settings_dialog import llm_settings_dialog
 from app.dialogs.quick_questions_dialog import quick_questions_dialog
 from app.icons import icon
 
@@ -14,14 +15,15 @@ RENDER_MS = 50  # an answer streams in many small pieces: redraw at most this of
 PAGE_REF = re.compile(r"(?<![\w\[/])p\.\s?(\d+)(?:\s?[–-]\s?\d+)?")  # p.12, p. 12, p.3–5 (links to the first page)
 
 HINTS = {  # what to do about each kind of error
-    "auth": "환경변수 ANTHROPIC_API_KEY 에 콘솔에서 발급한 키가 정확히 들어 있는지 확인하고 앱을 다시 시작하세요.",
-    "rate_limit": "계속되면 Anthropic 콘솔에서 잔액과 월 사용 한도를 확인하세요.",
-    "network": "인터넷 연결을 확인하고 다시 보내세요.",
+    "auth": "AI 설정의 API 키가 맞는지 확인하세요. 비워 뒀다면 ANTHROPIC_API_KEY 환경변수를 씁니다.",
+    "rate_limit": "계속되면 제공자 콘솔에서 잔액과 사용 한도를 확인하세요.",
+    "network": "인터넷 연결(Ollama 라면 서버가 켜져 있는지)과 AI 설정의 주소를 확인하고 다시 보내세요.",
     "context_too_long": "범위를 '현재 페이지'나 '선택한 부분'으로 줄이거나, 대화를 지우고 다시 물어보세요.",
     "refused": "질문을 바꿔 다시 물어보세요.",
     "no_selection": "페이지에서 글자를 드래그해 선택한 뒤 다시 물어보세요.",
-    "other": "잠시 뒤 다시 보내세요. 계속되면 로그 파일을 확인하세요.",
+    "other": "잠시 뒤 다시 보내세요. 계속되면 AI 설정의 모델 이름과 로그 파일을 확인하세요.",
 }
+SETTINGS_HINTS = {"auth", "rate_limit", "network", "other"}  # error cards that end with a "AI 설정 열기" link
 
 
 def _tokens(n):
@@ -124,10 +126,12 @@ class ChatPanel(QWidget):
             top.addWidget(button)
         top.addStretch(1)
         top.addWidget(self._button("clear_chat", "대화 지우기", chat.clear))
+        top.addWidget(self._button("settings", "AI 설정", self._open_settings))
         self._info = QLabel(objectName="chatInfo", wordWrap=True)
 
-        self._notice = QLabel("AI 채팅을 쓰려면 ANTHROPIC_API_KEY 환경변수에 API 키를 넣고 앱을 다시 시작하세요.",
-                              objectName="chatNotice", wordWrap=True)
+        self._notice = QLabel('AI 채팅을 쓰려면 <a href="settings:">AI 설정</a>에서 API 키를 넣으세요 '
+                              "(또는 ANTHROPIC_API_KEY 환경변수).", objectName="chatNotice", wordWrap=True)
+        self._notice.linkActivated.connect(self._open_settings)
         self._log = QTextBrowser(objectName="chatLog", openLinks=False,
                                  placeholderText="지금 보는 페이지나 선택한 부분에 대해 물어보세요.")
         palette = self._log.palette()
@@ -164,10 +168,10 @@ class ChatPanel(QWidget):
         chat.scope_changed.connect(self._apply_scope)
         chat.context_changed.connect(self._show_info)
         chat.quick_changed.connect(self._fill_quick)
-        self._available = chat.backend.is_available()
-        self._notice.setVisible(not self._available)
-        self._input.setEnabled(self._available)
+        chat.backend_changed.connect(self._apply_backend)
+        self._available = False
         self._fill_quick()
+        self._apply_backend()
         self._apply_scope()
         self._apply_busy()
         self._render()
@@ -202,8 +206,21 @@ class ChatPanel(QWidget):
     def _send_or_stop(self):
         self._chat.cancel() if self._chat.busy else self._send()
 
+    def _open_settings(self):
+        config = llm_settings_dialog(self, self._chat.config)
+        if config is not None:
+            self._chat.apply_config(config)
+
+    def _apply_backend(self):
+        self._available = self._chat.backend.is_available()
+        self._notice.setVisible(not self._available)
+        self._input.setEnabled(self._available)
+        self._apply_busy()
+
     def _open_link(self, url):
-        if url.scheme() == "page":
+        if url.scheme() == "settings":
+            self._open_settings()
+        elif url.scheme() == "page":
             self._chat.open_page(int(url.path()))
         elif url.scheme() in ("http", "https"):
             QDesktopServices.openUrl(url)
@@ -254,6 +271,10 @@ class ChatPanel(QWidget):
         plain, muted, danger = QTextCharFormat(), QTextCharFormat(), QTextCharFormat()
         muted.setForeground(theme.color("color.text_muted"))
         danger.setForeground(theme.color("color.danger"))
+        link = QTextCharFormat()
+        link.setAnchor(True)
+        link.setAnchorHref("settings:")
+        link.setForeground(theme.color("color.accent"))
         for message in self._chat.messages:
             role, text = message["role"], message["text"]
             if role == "note":
@@ -272,6 +293,9 @@ class ChatPanel(QWidget):
                 if message.get("kind") in HINTS:
                     cursor.insertBlock()
                     cursor.insertText(HINTS[message["kind"]], muted)
+                if message.get("kind") in SETTINGS_HINTS:
+                    cursor.insertBlock()
+                    cursor.insertText("AI 설정 열기", link)
             else:
                 frame.setBackground(theme.color("color.chat_user" if role == "user" else "color.chat_assistant"))
                 cursor.insertFrame(frame)

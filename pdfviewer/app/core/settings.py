@@ -71,13 +71,29 @@ def save_shortcut_overrides(overrides):
     _save("shortcuts/overrides", overrides)
 
 
+LLM_DEFAULTS = {
+    "backend": "anthropic",  # or "openai_compat"
+    "anthropic_model": "claude-sonnet-5-5",
+    "anthropic_effort": "low",  # quick replies for a reading aid (the model defaults to high)
+    "anthropic_key": "",  # empty: the ANTHROPIC_API_KEY environment variable
+    "openai_base_url": "",
+    "openai_model": "",
+    "openai_key": "",  # some servers (Ollama) need none
+    "max_tokens": 4096,  # covers thinking too, so well above a typical answer
+    "document_limit": 60000,  # characters of a whole document sent at most
+}
+
+
 def llm_config():
-    """The AI model and how it answers. effort low: quick replies for a reading aid (the model defaults to high).
-    max_tokens covers thinking too, so it is kept well above a typical answer."""
+    """The AI backend and how it answers. API keys are stored in plain text (a local, personal app; see README)."""
     s = QSettings()
-    return {"model": s.value("llm/model", "claude-sonnet-5-5"), "effort": s.value("llm/effort", "low"),
-            "max_tokens": s.value("llm/max_tokens", 4096, type=int),
-            "document_limit": s.value("llm/document_limit", 60000, type=int)}  # characters of a whole document
+    return {key: s.value(f"llm/{key}", default, type=type(default)) for key, default in LLM_DEFAULTS.items()}
+
+
+def save_llm_config(config):
+    s = QSettings()
+    for key in LLM_DEFAULTS:
+        s.setValue(f"llm/{key}", config[key])
 
 
 def chat_panel():

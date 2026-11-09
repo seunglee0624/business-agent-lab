@@ -23,8 +23,11 @@ def quick_questions_dialog(parent, questions, scopes):
             grid.addWidget(QLabel(header, objectName="fieldName"), 0, column)
         for row, item in enumerate(items, start=1):
             name = QLineEdit(item["label"], placeholderText="버튼 이름", accessibleName=f"{row}번 버튼 이름")
+            name.setCursorPosition(0)
+            name.setMinimumWidth(theme.token("size.menu_label"))
             text = QLineEdit(item["text"], placeholderText="AI에게 보낼 질문", accessibleName=f"{row}번 질문")
-            text.setMinimumWidth(theme.token("size.dialog_width") // 2)
+            text.setCursorPosition(0)  # show the start, not the end
+            text.setMinimumWidth(theme.token("size.dialog_width"))  # long enough to read a whole question
             scope = QComboBox(accessibleName=f"{row}번 범위")
             scope.addItem("지금 범위", "")
             for key, label in scopes.items():
