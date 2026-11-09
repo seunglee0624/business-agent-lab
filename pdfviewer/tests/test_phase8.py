@@ -3,11 +3,12 @@ import os
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
+from PySide6.QtWidgets import QKeySequenceEdit
 
 import main
 from app import theme
 from app.core import settings
-from app.dialogs.shortcuts_dialog import shortcut_rows
+from app.dialogs.shortcuts_dialog import shortcuts_dialog
 from app.main_window import MainWindow, unopenable_reason
 
 
@@ -90,11 +91,13 @@ def test_sidebar_lists_keep_their_navigation_keys(qtbot, outline_pdf):
     assert thumbs.currentIndex().row() == 4 and window.state.current_page == 4  # a thumbnail pick turns the page
 
 
-def test_shortcut_list_follows_the_key_table(window):
-    rows = dict(shortcut_rows(window._actions))
-    assert rows["첫 페이지"] == "Home"
-    assert rows["단축키 목록"] == "?, F1"
-    assert "Ctrl+0" in rows["실제 크기"]
+def test_shortcut_list_follows_the_key_table(qtbot, window):
+    dialog = shortcuts_dialog(window, window._actions, window._keys_changed)
+    qtbot.addWidget(dialog)
+    edits = {edit.accessibleName(): edit.keySequence().toString() for edit in dialog.findChildren(QKeySequenceEdit)}
+    assert edits["첫 페이지 단축키"] == "Home"
+    assert edits["단축키 목록 단축키"] == "?, F1"
+    assert edits["실제 크기 단축키"] == "Ctrl+0"
     assert window._actions["shortcut_help"] in window.menuBar().actions()[-1].menu().actions()
 
 

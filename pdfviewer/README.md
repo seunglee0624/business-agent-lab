@@ -43,7 +43,7 @@ Windows에 Python 3이 설치돼 있어야 한다(`py` 런처). WSL에서:
 
 ## 단축키
 
-앱 안에서 `?` 또는 `F1`(도움말 → 단축키 목록)로도 볼 수 있다. 정의는 `app/shortcuts.py`.
+앱 안에서 `?` 또는 `F1`(도움말 → 단축키 목록)로도 볼 수 있다. 아래는 기본값이고, 단축키 목록에서 키 칸을 누르고 새 키를 누르면 바로 바뀐다(Esc는 입력 취소, × 지우기, "기본값으로", "전체 초기화"). 다른 기능과 겹친 키는 빨간색으로 표시되고, 겹친 동안은 두 기능 모두 그 키로 동작하지 않는다. Esc·Ctrl+C·메뉴 키(Alt+F 등)는 바꿀 수 없다. 기본값 정의는 `app/shortcuts.py`.
 
 | 동작 | 키 |
 |------|-----|
@@ -67,7 +67,7 @@ Windows에 Python 3이 설치돼 있어야 한다(`py` 런처). WSL에서:
 
 ## 설정과 로그
 
-- 설정(창 크기, 최근 파일, 파일별 페이지·확대): Windows 레지스트리 `HKCU\Software\pdfviewer\pdfviewer`
+- 설정(창 크기, 최근 파일, 파일별 페이지·확대, 바꾼 단축키): Windows 레지스트리 `HKCU\Software\pdfviewer\pdfviewer`
 - 로그: `%APPDATA%\pdfviewer\pdfviewer\pdfviewer.log` (1MB씩 최대 3개). 오류가 나면 이 파일을 확인한다.
 
 ## 구조

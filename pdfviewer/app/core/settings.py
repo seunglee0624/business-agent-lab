@@ -60,3 +60,12 @@ def save_window(geometry, dock_state, sidebar_shown, sidebar_tab):
     s.setValue("window/state", dock_state)
     s.setValue("sidebar/visible", sidebar_shown)
     s.setValue("sidebar/tab", sidebar_tab)
+
+
+def shortcut_overrides():
+    """{action name: [keys]} for the actions whose keys the user changed; [] means no key."""
+    return _load("shortcuts/overrides", {})
+
+
+def save_shortcut_overrides(overrides):
+    _save("shortcuts/overrides", overrides)

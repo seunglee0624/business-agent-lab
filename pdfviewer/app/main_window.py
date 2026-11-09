@@ -12,7 +12,7 @@ from app.core import settings
 from app.core.document import Document
 from app.dialogs.password_dialog import ask_password
 from app.dialogs.properties_dialog import show_properties
-from app.dialogs.shortcuts_dialog import show_shortcuts
+from app.dialogs.shortcuts_dialog import shortcuts_dialog
 from app.icons import icon
 from app.viewer_state import VIEW_MODES, ViewerState
 from app.widgets.empty_state import EmptyState
@@ -142,17 +142,14 @@ class MainWindow(QMainWindow):
 
         def add(name, label, slot, toolbar=False, checkable=False):
             action = QAction(label, self, checkable=checkable)
-            keys = shortcuts.KEYS.get(name, [])
             if toolbar:
                 action.setIcon(icon(name))
                 action.setIconVisibleInMenu(False)  # an icon would hide the menu's check mark
-            key = QKeySequence(keys[0]).toString(QKeySequence.SequenceFormat.NativeText) if keys else ""
-            action.setToolTip(f"{label.rstrip('…')} ({key})" if key else label.rstrip("…"))  # icon buttons show only this
             action.triggered.connect(lambda checked=False: slot())
             action.triggered.connect(self._sync_checks)  # undo Qt's own check toggling if the state refused
-            action.setShortcuts([QKeySequence(key) for key in keys])
             self.addAction(action)  # keeps the shortcut alive while the menu bar is hidden (presentation)
             actions[name] = action
+            self._apply_keys(name, action)
 
         add("open", "열기…", self.choose_file, True)
         add("close_tab", "탭 닫기", st.close_tab)
@@ -184,12 +181,26 @@ class MainWindow(QMainWindow):
         add("escape", "찾기 닫기 / 전체 화면 끝내기", st.escape)
         add("next_tab", "다음 탭", st.next_tab)
         add("prev_tab", "이전 탭", st.prev_tab)
-        add("shortcut_help", "단축키 목록…", lambda: show_shortcuts(self, actions))
+        add("shortcut_help", "단축키 목록…", lambda: shortcuts_dialog(self, actions, self._keys_changed).exec())
         for group in (VIEW_MODES, ("select_tool", "hand_tool")):
             exclusive = QActionGroup(self)  # clicking the checked one keeps it checked
             for name in group:
                 exclusive.addAction(actions[name])
         return actions
+
+    @staticmethod
+    def _apply_keys(name, action):
+        keys = [QKeySequence(key) for key in shortcuts.keys(name)]
+        action.setShortcuts(keys)
+        label = action.text().rstrip("…")
+        native = QKeySequence.SequenceFormat.NativeText
+        action.setToolTip(f"{label} ({keys[0].toString(native)})" if keys else label)  # icon buttons show only this
+
+    def _keys_changed(self):
+        """The user changed keys in the shortcut list: take them at once, tooltips included."""
+        for name, action in self._actions.items():
+            self._apply_keys(name, action)
+        self._tab_bar.update_key_tips()
 
     def _sync_checks(self):
         st, a = self.state, self._actions

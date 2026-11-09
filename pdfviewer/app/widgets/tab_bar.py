@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QSignalBlocker, QSize, Qt
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QTabBar, QToolButton
 
 from app import shortcuts, theme
@@ -43,7 +44,7 @@ class TabBar(QTabBar):
 
     def _close_button(self, name):
         """A themed x in place of the style's own close button; it still goes through tabCloseRequested."""
-        button = QToolButton(objectName="tabClose", toolTip=f"탭 닫기 ({shortcuts.KEYS['close_tab'][0]})", autoRaise=True)
+        button = QToolButton(objectName="tabClose", toolTip=self._close_tip(), autoRaise=True)
         button.setAccessibleName(f"탭 닫기: {name}")
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Ctrl+W closes from the keyboard; an extra Tab stop per tab is noise
         button.setIcon(icon("close"))
@@ -52,6 +53,16 @@ class TabBar(QTabBar):
         button.clicked.connect(lambda: self.tabCloseRequested.emit(next(
             i for i in range(self.count()) if self.tabButton(i, QTabBar.ButtonPosition.RightSide) is button)))
         return button
+
+    @staticmethod
+    def _close_tip():
+        keys = shortcuts.keys("close_tab")
+        return f"탭 닫기 ({QKeySequence(keys[0]).toString(QKeySequence.SequenceFormat.NativeText)})" if keys else "탭 닫기"
+
+    def update_key_tips(self):
+        """The close key changed in the shortcut list."""
+        for i in range(self.count()):
+            self.tabButton(i, QTabBar.ButtonPosition.RightSide).setToolTip(self._close_tip())
 
     def mouseReleaseEvent(self, event):
         index = self.tabAt(event.position().toPoint())

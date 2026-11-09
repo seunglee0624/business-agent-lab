@@ -183,6 +183,11 @@ QPushButton:focus {
     border: 2px solid {{color.accent}};
 }
 
+QPushButton:disabled {
+    color: {{color.text_disabled}};
+    border-color: {{color.bg_highlight}};
+}
+
 QPushButton#primary {
     background: {{color.accent}};
     color: {{color.on_accent}};
@@ -237,7 +242,8 @@ QTabWidget#sidebar > QTabBar::tab:selected {
     font-weight: {{font.heading_weight}};
 }
 
-QToolButton#tabClose {
+QToolButton#tabClose,
+QToolButton#clearKey {
     background: transparent;
     border: none;
     padding: 0px;
@@ -445,4 +451,9 @@ QDialog#propertiesDialog {
 
 QLabel#fieldName {
     color: {{color.text_muted}};
+}
+
+/* a key two actions share: Qt runs neither, so it is shown as broken */
+QLineEdit[conflict="true"] {
+    color: {{color.danger}};
 }
