@@ -172,3 +172,125 @@ def test_search_tab_click_opens_the_search_box(qtbot, pdf100):
     tabs.tabBarClicked.emit(search)
     tabs.tabBarClicked.emit(1)  # outline
     assert not window.state.search_open
+
+
+def test_alt_keys_open_the_plain_titled_menus(qtbot, window):
+    titles = [action.text() for action in window.menuBar().actions()]
+    assert titles == ["파일", "편집", "보기", "도움말"]  # no "(F)" in the bar
+    qtbot.keyClick(window, Qt.Key.Key_V, Qt.KeyboardModifier.AltModifier)
+    assert window.menuBar().activeAction().text() == "보기"
+    window.menuBar().activeAction().menu().close()
+
+
+@pytest.fixture
+def empty(qtbot):
+    # one path far wider than the list: its row must still end at the list's edge, x included
+    paths = [os.path.abspath(f"recent{i}.pdf") for i in range(3)]
+    paths[1] = os.path.abspath(os.path.join(*["a very long folder name"] * 8, "recent1.pdf"))
+    for path in settings.recent_files():
+        settings.remove_recent(path)
+    for path in reversed(paths):
+        settings.add_recent(path)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.resize(1200, 800)
+    window.show()
+    chosen = []
+    window._empty.file_chosen.disconnect()
+    window._empty.file_chosen.connect(chosen.append)
+    yield window._empty, paths, chosen
+    for path in settings.recent_files():
+        settings.remove_recent(path)
+
+
+def test_recent_x_removes_without_opening(qtbot, empty):
+    screen, paths, chosen = empty
+    view = screen._list
+    from app.widgets.empty_state import close_area
+    row = view.visualRect(view.model().index(1, 0))
+    assert row.right() < view.viewport().width()
+    x = close_area(row).center()
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=x)
+    qtbot.mouseDClick(view.viewport(), Qt.MouseButton.LeftButton, pos=x)  # a quick second click on the row that moved up
+    assert paths[1] not in settings.recent_files() and chosen == []  # nothing opened
+    assert not view.hasFocus()  # no focus frame around the list after a mouse click
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.visualRect(view.model().index(0, 0)).center())
+    assert chosen == [paths[0]]
+
+
+def test_recent_delete_key(qtbot, empty):
+    screen, paths, chosen = empty
+    view = screen._list
+    view.setFocus()
+    view.setCurrentIndex(view.model().index(0, 0))
+    qtbot.keyClick(view, Qt.Key.Key_Delete)
+    assert settings.recent_files() == paths[1:] and view.currentIndex().row() == 0  # Delete again takes the next one
+    qtbot.keyClick(view, Qt.Key.Key_Delete)
+    qtbot.keyClick(view, Qt.Key.Key_Delete)
+    assert settings.recent_files() == [] and not view.isVisible() and chosen == []
+
+
+def test_landscape_thumbnails_get_short_cells(qtbot, tmp_path):
+    import pymupdf
+    path = str(tmp_path / "deck.pdf")
+    doc = pymupdf.open()
+    for _ in range(3):
+        doc.new_page(width=800, height=450)  # 16:9 slides
+    doc.save(path)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.open_file(path)
+    thumbs = window._sidebar.widget(0)
+    box, pad = theme.token("size.thumbnail"), theme.token("spacing.md")
+    cell = thumbs.visualRect(thumbs.model().index(0)).height()
+    assert cell == round(box * 450 / 800) + 2 * pad + thumbs.fontMetrics().height()  # not a square box
+
+
+def test_ctrl_wheel_zooms_around_the_mouse(qtbot, window):
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication
+    view, st = window._view, window.state
+    st.set_zoom(1.5)
+    view.verticalScrollBar().setValue(view.verticalScrollBar().value() + 300)
+    mouse = QPoint(view.viewport().width() // 4, view.viewport().height() // 3)
+
+    def page_spot():  # where on the page the mouse points, as fractions of the page
+        point = view.mapToScene(mouse)
+        rect = next(r for r in view._rects.values() if r.contains(point))
+        return (point.x() - rect.left()) / rect.width(), (point.y() - rect.top()) / rect.height()
+
+    spot = page_spot()
+    wheel = QWheelEvent(QPointF(mouse), QPointF(view.viewport().mapToGlobal(mouse)), QPoint(), QPoint(0, 240),
+                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.ControlModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    QApplication.sendEvent(view.viewport(), wheel)
+    assert st.zoom > 1.5
+    assert page_spot() == pytest.approx(spot, abs=0.005)
+
+
+def test_zoom_group_starts_above_the_document_tab(qtbot, window):
+    def lines_up():
+        button = window._toolbar.widgetForAction(window._actions["zoom_out"])
+        tab = window._tab_bar
+        return button.mapTo(window, QPoint()).x() == tab.mapTo(window, tab.tabRect(0).topLeft()).x()
+
+    window.resize(1200, 800)
+    window.resizeDocks([window._dock], [400], Qt.Orientation.Horizontal)
+    qtbot.waitUntil(lines_up)
+    window.resizeDocks([window._dock], [320], Qt.Orientation.Horizontal)  # follows the sidebar edge
+    qtbot.waitUntil(lines_up)
+    window._toolbar.align_zoom(0)  # back to the usual place
+    qtbot.wait(50)  # laid out without the lead
+    window._align_toolbar()
+    window._align_toolbar()  # twice before the toolbar re-lays out (as at startup): must not add the lead twice
+    qtbot.waitUntil(lines_up)
+
+
+def test_recent_box_hugs_its_rows(qtbot, empty):
+    screen, paths, _ = empty
+    view = screen._list
+    rows = sum(view.sizeHintForRow(r) for r in range(view.model().rowCount()))
+    qtbot.waitUntil(lambda: view.viewport().height() >= rows)
+    assert view.viewport().height() - rows < view.sizeHintForRow(0)  # no empty space below the last file
+    screen._remove(paths[0])
+    qtbot.waitUntil(lambda: view.viewport().height() < rows)  # shrinks with the list

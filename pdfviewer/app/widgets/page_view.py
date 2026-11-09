@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QPainterPath, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView)
@@ -28,6 +28,7 @@ class PageView(QGraphicsView):
         self._press = None  # (view pos, page, page point) while the left button is down
         self._dragged = False
         self._adjusting = False  # scroll changes made by code, not by the user
+        self._zoom_anchor = None  # viewport point a Ctrl+wheel zoom keeps in place (else the view's centre)
         self._following_scroll = False  # current page changes because the user scrolled
         self._selection = None
         self._debounce = QTimer(self, singleShot=True, interval=RENDER_DEBOUNCE_MS, timeout=self._request)
@@ -202,13 +203,21 @@ class PageView(QGraphicsView):
         self._request()
 
     def _on_zoom(self):
-        # keep the same spot of the current page at the top of the view
-        page, rect = self._state.current_page, self._rects.get(self._state.current_page)
-        frac = (self.mapToScene(0, 0).y() - rect.top()) / rect.height() if rect else None
+        # the spot of the page under the anchor stays under it: the mouse for Ctrl+wheel, else the view's centre
+        anchor = (self._zoom_anchor or QPointF(self.viewport().rect().center())).toPoint()
+        before = self.mapToScene(anchor)
+        page = next((i for i, r in self._rects.items() if r.contains(before)), self._state.current_page)
+        rect = self._rects.get(page)
+        spot = ((before.x() - rect.left()) / rect.width(), (before.y() - rect.top()) / rect.height()) if rect else None
         self._relayout()
         rect = self._rects.get(page)
-        if frac is not None and rect is not None:
-            self._set_scroll_top(rect.top() + frac * rect.height())
+        if spot is not None and rect is not None:
+            now = self.mapToScene(anchor)
+            self._adjusting = True
+            for bar, shift in ((self.horizontalScrollBar(), rect.left() + spot[0] * rect.width() - now.x()),
+                               (self.verticalScrollBar(), rect.top() + spot[1] * rect.height() - now.y())):
+                bar.setValue(bar.value() + round(shift))
+            self._adjusting = False
         self._refresh()  # old images scaled until the sharp ones arrive
         self._debounce.start()
 
@@ -402,7 +411,9 @@ class PageView(QGraphicsView):
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self._zoom_anchor = event.position()
             self._state.set_zoom(self._state.zoom * 1.1 ** (event.angleDelta().y() / 120))
+            self._zoom_anchor = None
             event.accept()
         else:
             super().wheelEvent(event)

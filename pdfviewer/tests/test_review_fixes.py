@@ -19,13 +19,16 @@ def window(qtbot):
     return w
 
 
-def test_typed_zoom_applies_on_enter(qtbot, window, pdf100):
+def test_zoom_box_takes_no_typing_and_opens_on_click(qtbot, window, pdf100):
     window.open_file(pdf100)
     box = window.findChild(Toolbar)._zoom
-    box.lineEdit().clear()
     qtbot.keyClicks(box.lineEdit(), "130")
-    qtbot.keyClick(box.lineEdit(), Qt.Key.Key_Return)
-    assert window.state.zoom == pytest.approx(1.3) and box.currentText() == "130%"
+    assert box.currentText() == "폭 맞춤" and window.state.zoom_mode == "fit_width"
+    qtbot.mouseClick(box.lineEdit(), Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(box.view().isVisible)
+    box.hidePopup()
+    box.textActivated.emit("150%")  # picked from the list
+    assert window.state.zoom == pytest.approx(1.5) and box.currentText() == "150%"
 
 
 def test_paging_during_drag_does_not_crash(qtbot, window, pdf100):

@@ -54,12 +54,16 @@ Windows에 Python 3이 설치돼 있어야 한다(`py` 런처). WSL에서:
 | 첫·마지막 페이지 | Home / End |
 | 한 화면 위·아래 | PgUp / PgDn |
 | 확대 / 축소 / 실제 크기 | Ctrl++ (Ctrl+=) / Ctrl+- / Ctrl+0 |
+| 마우스 위치 기준 확대·축소 | Ctrl+휠 |
 | 오른쪽으로 회전 | R |
 | 사이드바 | F4 |
 | 전체 화면 / 발표 모드 | F11 / F5 |
 | 찾기 닫기·전체 화면 끝내기 | Esc |
 | 다음·이전 탭 | Ctrl+Tab (Ctrl+PgDn) / Ctrl+Shift+Tab (Ctrl+PgUp) |
 | 단축키 목록 | ? / F1 |
+| 메뉴 열기 (파일·편집·보기·도움말) | Alt+F / Alt+E / Alt+V / Alt+H |
+
+첫 화면의 최근 문서는 줄에 마우스를 올리면 나오는 ×로 목록에서 지운다(파일은 지워지지 않는다). 키보드로는 Tab으로 목록에 들어가 Delete.
 
 ## 설정과 로그
 

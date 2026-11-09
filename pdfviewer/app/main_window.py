@@ -2,8 +2,8 @@ import logging
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
                                QWidget)
 
@@ -32,14 +32,14 @@ DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "open_search", "prev", "n
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
-    "파일(&F)": ["open", "recent", "close_tab", None, "properties", None, "quit"],
-    "편집(&E)": ["copy", None, "open_search"],
-    "보기(&V)": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
+    "파일": ["open", "recent", "close_tab", None, "properties", None, "quit"],
+    "편집": ["copy", None, "open_search"],
+    "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
                "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
                "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_fullscreen", "toggle_presentation", None,
                "next_tab", "prev_tab"],
-    "도움말(&H)": ["shortcut_help"],
+    "도움말": ["shortcut_help"],
 }
 
 
@@ -63,11 +63,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self._was_maximized = False
         self._actions = self._make_actions()
-        self._recent_menu = QMenu("최근 파일(&R)", self, toolTipsVisible=True)
+        self._recent_menu = QMenu("최근 파일", self, toolTipsVisible=True)
         self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
 
         for title, names in MENUS.items():
             menu = self.menuBar().addMenu(title)
+            QShortcut(shortcuts.MENU_KEYS[title], self, lambda menu=menu: self._open_menu(menu))
             for name in names:
                 if name == "recent":
                     menu.addMenu(self._recent_menu)
@@ -95,9 +96,11 @@ class MainWindow(QMainWindow):
         column = QVBoxLayout(central)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
-        column.addWidget(TabBar(self.state))
+        self._tab_bar = TabBar(self.state)
+        column.addWidget(self._tab_bar)
         column.addWidget(self._stack)
         self.setCentralWidget(central)
+        central.installEventFilter(self)  # it moves when the sidebar is resized, shown or hidden
         self.setAcceptDrops(True)
         self._status = StatusBar(self.state)
         self.setStatusBar(self._status)
@@ -113,6 +116,7 @@ class MainWindow(QMainWindow):
         self.state.tabs_changed.connect(self._sync_checks)
         self.state.document_changed.connect(self._apply_document)  # first: the view must be shown to take focus
         self.state.document_changed.connect(self._update_title)
+        self.state.document_changed.connect(lambda: QTimer.singleShot(0, self._align_toolbar))  # "/ 31" → "/ 100" widens the page group
         self.state.document_changed.connect(self._focus_main)
         self.state.fullscreen_changed.connect(self._apply_fullscreen)
         self.state.sidebar_changed.connect(self._apply_sidebar)
@@ -124,6 +128,10 @@ class MainWindow(QMainWindow):
             signal.connect(self._sync_checks)
         self._sync_checks()
         self._focus_main()
+
+    def _open_menu(self, menu):
+        if self.menuBar().isVisible():  # hidden in presentation mode
+            self.menuBar().setActiveAction(menu.menuAction())
 
     def _focus_main(self):
         (self._view if self.state.document else self._empty).setFocus()
@@ -292,6 +300,17 @@ class MainWindow(QMainWindow):
         self.state.save_view()
         self.state.renderer.shutdown()
         super().closeEvent(event)
+
+    def eventFilter(self, watched, event):
+        if watched is self.centralWidget() and event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+            QTimer.singleShot(0, self._align_toolbar)  # after the toolbar's own layout settles
+        return super().eventFilter(watched, event)
+
+    def _align_toolbar(self):
+        """The zoom group starts above the first document tab, not over the sidebar."""
+        tabs = self._tab_bar
+        left = tabs.mapTo(self, QPoint(tabs.tabRect(0).left() if tabs.count() else 0, 0))
+        self._toolbar.align_zoom(self._toolbar.mapFrom(self, left).x())
 
     def mouseDoubleClickEvent(self, event):
         x, dock, central = event.position().x(), self._dock.geometry(), self.centralWidget().geometry()

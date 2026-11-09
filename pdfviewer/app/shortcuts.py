@@ -25,3 +25,6 @@ KEYS = {
     "prev_tab": ["Ctrl+Shift+Tab", "Ctrl+PgUp"],
     "shortcut_help": ["?", "F1"],
 }
+
+# Menu title -> Alt key that opens it. The titles stay plain Korean: no "(F)" in the menu bar.
+MENU_KEYS = {"파일": "Alt+F", "편집": "Alt+E", "보기": "Alt+V", "도움말": "Alt+H"}

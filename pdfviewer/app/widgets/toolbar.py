@@ -1,5 +1,5 @@
-from PySide6.QtCore import QSignalBlocker
-from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QToolBar
+from PySide6.QtCore import QEvent, QSignalBlocker, Qt
+from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QToolBar, QWidget
 
 from app.viewer_state import VIEW_MODES
 
@@ -30,16 +30,21 @@ class Toolbar(QToolBar):
         self.addWidget(self._total)
         self.addAction(actions["next"])
         self.addSeparator()
-        self.addAction(actions["zoom_out"])
+        self._lead = QWidget()  # widens so the zoom group starts over the document (align_zoom)
+        self._lead_action = self.addWidget(self._lead)
+        self._lead_action.setVisible(False)
+        self._zoom_out = actions["zoom_out"]
+        self.addAction(self._zoom_out)
         self._zoom = QComboBox()
+        # editable only so it can show any zoom (e.g. 137%); the text is read-only and a click opens the list
         self._zoom.setEditable(True)
+        self._zoom.lineEdit().setReadOnly(True)
+        self._zoom.lineEdit().installEventFilter(self)
+        self._zoom.lineEdit().setCursor(Qt.CursorShape.ArrowCursor)  # no text cursor: nothing to type
         self._zoom.setAccessibleName("확대 비율")
-        self._zoom.setToolTip("확대 비율 (직접 입력하거나 목록에서 고르기)")
-        self._zoom.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._zoom.setToolTip("확대 비율 (목록에서 고르기)")
         self._zoom.addItems([*PRESETS, *FITS])
         self._zoom.textActivated.connect(self._on_zoom_text)  # picked from the list
-        # typed + Enter: with NoInsert, textActivated only fires for text matching a list item
-        self._zoom.lineEdit().returnPressed.connect(lambda: self._on_zoom_text(self._zoom.currentText()))
         self.addWidget(self._zoom)
         self.addAction(actions["zoom_in"])
         for group in (VIEW_MODES, ("rotate_left", "rotate_right"), ("select_tool", "hand_tool")):
@@ -52,16 +57,29 @@ class Toolbar(QToolBar):
         state.zoom_changed.connect(self._show_zoom)
         self._refresh()
 
+    def align_zoom(self, x):
+        """Start the zoom group at x (toolbar coordinates); never closer than its usual place after the page group."""
+        button, gap = self.widgetForAction(self._zoom_out), self.layout().spacing()
+        # the lead's left is where the button goes without it; read it, not button minus lead, because two calls
+        # in a row (before the toolbar re-lays out) would otherwise count the lead twice
+        natural = self._lead.x() if self._lead_action.isVisible() else button.x()
+        width = x - natural - gap  # the lead brings its own gap before the button
+        self._lead.setFixedWidth(max(width, 0))
+        self._lead_action.setVisible(width > 0)
+
+    def eventFilter(self, watched, event):
+        if watched is self._zoom.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
+            self._zoom.showPopup()
+            return True
+        return super().eventFilter(watched, event)
+
     def _on_zoom_text(self, text):
         if text in FITS:
             getattr(self._state, FITS[text])()
             self._show_zoom()
             return
-        try:
-            self._state.set_zoom(float(text.strip().rstrip("%")) / 100)
-        except ValueError:
-            pass
-        self._show_zoom()  # also restores the box after invalid input
+        self._state.set_zoom(PRESETS[text])
+        self._show_zoom()
 
     def _refresh(self):
         count = self._state.page_count

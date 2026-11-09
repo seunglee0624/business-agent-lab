@@ -56,7 +56,7 @@ class ThumbnailList(OwnKeys, QListView):
         self.setAccessibleName("썸네일")
         self.setModel(ThumbnailModel(state, self))
         self.setItemDelegate(ThumbnailDelegate(self))
-        self.setUniformItemSizes(True)  # one square cell size: fast for thousands of pages
+        self.setUniformItemSizes(True)  # one cell size (fits the tallest page): fast for thousands of pages
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._debounce = QTimer(self, singleShot=True, interval=RENDER_DEBOUNCE_MS, timeout=self._request)
         # not .connect(self._debounce.start): the scroll value would become the delay in ms

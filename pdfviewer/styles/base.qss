@@ -17,18 +17,17 @@ QGraphicsView#pageView {
 /* large keyboard targets get a quiet grey frame: green around the whole page would shout */
 QGraphicsView#pageView:focus,
 QTabWidget#sidebar QListView:focus,
-QTabWidget#sidebar QTreeView:focus,
-QWidget#emptyState QListView:focus {
+QTabWidget#sidebar QTreeView:focus {
     border-color: {{color.outline}};
 }
 
 /* ---- toolbars: groups are 8px apart inside, 16px between (separators are gaps, not lines) */
 
 /* the margin is set by type, not #name: Qt reads it while the toolbar is still unnamed.
-   12px around a 32px row = the 56px bar of the spec */
+   8px around a 32px row: the menu bar sits about midway between the title bar and the toolbar icons */
 QToolBar {
     spacing: {{spacing.md}}px;
-    padding: {{spacing.lg}}px;
+    padding: {{spacing.md}}px;
 }
 
 QToolBar#toolbar,
@@ -189,9 +188,9 @@ QPushButton#primary {
     color: {{color.on_accent}};
     font-weight: {{font.heading_weight}};
     border: 2px solid transparent; /* the green shows through; white on focus */
-    border-radius: {{radius.pill_lg}}px;
+    border-radius: {{radius.md}}px; /* the zoom box's corners, not a pill */
     padding: 0px {{spacing.xxl}}px;
-    min-height: {{size.control_lg}}px;
+    min-height: {{size.control_md}}px;
 }
 
 QPushButton#primary:hover {
@@ -318,11 +317,18 @@ QLabel#heading {
     padding-top: {{spacing.xxl}}px;
 }
 
+/* as tall as its rows (up to the max, then it scrolls); no frame until Tab focuses it */
 QWidget#emptyState QListView {
     background: {{color.bg_base}};
-    border: 2px solid transparent;
+    border: 1px solid transparent;
+    border-radius: {{radius.md}}px;
+    padding: {{spacing.sm}}px; /* keeps the hover fill off the rounded corners */
     min-width: {{size.empty_list_width}}px;
     max-height: {{size.empty_list_height}}px;
+}
+
+QWidget#emptyState QListView:focus {
+    border-color: {{color.text}}; /* Tab reached it: Delete removes the selected file */
 }
 
 /* ---- status bar */
@@ -352,7 +358,8 @@ QMenuBar {
 }
 
 QMenuBar::item {
-    padding: {{spacing.sm}}px {{spacing.md}}px;
+    padding: {{spacing.xs}}px {{spacing.md}}px; /* thin and even: the text sits centred in its hover box */
+    margin-top: {{spacing.sm}}px; /* room under the title bar; a margin, so the hover box stays even around the text */
 }
 
 QMenuBar::item:selected {

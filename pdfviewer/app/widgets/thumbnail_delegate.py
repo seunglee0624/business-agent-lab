@@ -11,11 +11,11 @@ class ThumbnailDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         box, pad = theme.token("size.thumbnail"), theme.token("spacing.md")
-        return QSize(box + 2 * pad, box + 2 * pad + option.fontMetrics.height())
+        return QSize(box + 2 * pad, round(index.model().box_height()) + 2 * pad + option.fontMetrics.height())
 
     def paint(self, painter, option, index):
         model, row, cell = index.model(), index.row(), option.rect
-        box, pad = theme.token("size.thumbnail"), theme.token("spacing.md")
+        box, pad = model.box_height(), theme.token("spacing.md")
         w, h = model.size(row)
         page = QRectF(cell.center().x() - w / 2, cell.top() + pad + (box - h) / 2, w, h)
         painter.save()

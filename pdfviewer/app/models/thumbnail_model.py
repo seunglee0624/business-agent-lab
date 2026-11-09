@@ -10,6 +10,7 @@ class ThumbnailModel(QAbstractListModel):
     def __init__(self, state, parent=None):
         super().__init__(parent)
         self._state = state
+        self._box_height = None
         state.document_changed.connect(self._reset)
         state.layout_changed.connect(self._reset)  # rotation changes every thumbnail
         state.renderer.page_ready.connect(self._on_ready)
@@ -30,6 +31,12 @@ class ThumbnailModel(QAbstractListModel):
         w, h = self._state.page_size(row)
         return w * self.zoom(row), h * self.zoom(row)
 
+    def box_height(self):
+        """Height of the page area in every cell: the tallest thumbnail, so a landscape deck isn't in square cells."""
+        if self._box_height is None:  # page sizes are read once per reset (the page view reads them all anyway)
+            self._box_height = max((self.size(r)[1] for r in range(self.rowCount())), default=theme.token("size.thumbnail"))
+        return self._box_height
+
     def render_key(self, row, dpr):
         return row, self.zoom(row) * dpr, self._state.rotation
 
@@ -38,6 +45,7 @@ class ThumbnailModel(QAbstractListModel):
 
     def _reset(self):
         self.beginResetModel()
+        self._box_height = None
         self.endResetModel()
 
     def _on_ready(self, index, zoom, rotation):
