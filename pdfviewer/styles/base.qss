@@ -549,3 +549,51 @@ QPushButton#scope:checked {
     color: {{color.on_accent}};
     font-weight: {{font.heading_weight}};
 }
+
+/* ---- notes: the bar under selected text or a clicked highlight */
+
+QFrame#noteBar {
+    background: {{color.bg_elevated}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+}
+
+QFrame#noteBar QToolButton {
+    color: {{color.text}};
+    background: transparent;
+    border: none;
+    border-radius: {{radius.sm}}px;
+    padding: {{spacing.sm}}px {{spacing.md}}px;
+}
+
+QFrame#noteBar QToolButton:hover {
+    background: {{color.bg_highlight}};
+}
+
+/* colour dots: radius.md is half of size.hl_dot, so they are round */
+QFrame#noteBar QToolButton#hlDot {
+    min-width: {{size.hl_dot}}px;
+    max-width: {{size.hl_dot}}px;
+    min-height: {{size.hl_dot}}px;
+    max-height: {{size.hl_dot}}px;
+    padding: 0px;
+    border: 2px solid transparent;
+    border-radius: {{radius.md}}px;
+}
+
+QFrame#noteBar QToolButton#hlDot[hl="yellow"] { background: {{color.hl_yellow}}; }
+QFrame#noteBar QToolButton#hlDot[hl="green"] { background: {{color.hl_green}}; }
+QFrame#noteBar QToolButton#hlDot[hl="blue"] { background: {{color.hl_blue}}; }
+QFrame#noteBar QToolButton#hlDot[hl="pink"] { background: {{color.hl_pink}}; }
+
+QFrame#noteBar QToolButton#hlDot:hover,
+QFrame#noteBar QToolButton#hlDot[current="true"] {
+    border-color: {{color.text}};
+}
+
+QPlainTextEdit#noteComment {
+    background: {{color.bg_base}};
+    color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.sm}}px;
+}

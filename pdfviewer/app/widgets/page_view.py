@@ -1,9 +1,11 @@
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QPainterPath, QPixmap, QTransform
-from PySide6.QtWidgets import (QApplication, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
-                               QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView)
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import QPainterPath, QPen, QPixmap, QTransform
+from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
+                               QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView, QHBoxLayout, QPlainTextEdit,
+                               QToolButton, QVBoxLayout)
 
 from app import theme
+from app.annotation_state import COLORS
 from app.core.layout import layout
 from app.core.renderer import RENDER_DEBOUNCE_MS
 
@@ -11,15 +13,161 @@ PREVIEW_ZOOM = 0.25  # quick low-res first pass when nothing of a page is cached
 PREFETCH = 2  # pages beyond the visible ones to render ahead
 
 
+class _CommentBox(QPlainTextEdit):
+    """Ctrl+Enter saves, Esc cancels."""
+
+    def __init__(self, save, cancel):
+        super().__init__(objectName="noteComment", placeholderText="코멘트 (Ctrl+Enter 저장, Esc 취소)")
+        self._save, self._cancel = save, cancel
+        self.setTabChangesFocus(True)
+
+    def event(self, event):
+        if event.type() == QEvent.Type.ShortcutOverride and event.key() == Qt.Key.Key_Escape:
+            event.accept()  # ours, not the window's Esc action
+            return True
+        return super().event(event)
+
+    def keyPressEvent(self, event):
+        enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        if enter and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self._save()
+        elif event.key() == Qt.Key.Key_Escape:
+            self._cancel()
+        else:
+            super().keyPressEvent(event)
+
+
+class _NoteBar(QFrame):
+    """Floats under the selected text or the clicked highlight. A child of the view, not a popup window:
+    WSLg's Wayland popups do not close, and this one behaves the same everywhere.
+    selection: copy, ask the AI, a colour to highlight, a highlight with a comment.
+    highlight: its colour, comment, ask the AI, delete. comment: a box to write the comment in."""
+
+    def __init__(self, view, notes, copy_action, ask_action):
+        super().__init__(view.viewport(), objectName="noteBar")
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)  # a click between buttons is not a page click
+        self._view, self._notes, self._ask = view, notes, ask_action
+        self.mode = None
+        self._shown = None  # (mode, colour) the buttons were last set up for
+        row = QHBoxLayout()
+        row.setSpacing(theme.token("spacing.xs"))
+        self._groups = {"selection": [], "highlight": []}
+
+        def add(modes, widget):
+            row.addWidget(widget)
+            for mode in modes:
+                self._groups[mode].append(widget)
+            return widget
+
+        for action in (copy_action, ask_action):
+            button = QToolButton(focusPolicy=Qt.FocusPolicy.NoFocus)
+            button.setDefaultAction(action)
+            add(["selection"], button)
+        self._dots = {}
+        for key, label in COLORS.items():
+            dot = add(["selection", "highlight"], self._button("", lambda checked=False, key=key: self._color(key), f"{label} 하이라이트"))
+            dot.setObjectName("hlDot")
+            dot.setProperty("hl", key)
+            self._dots[key] = dot
+        add(["selection"], self._button("메모", self._highlight_with_comment, "하이라이트하고 코멘트 달기"))
+        add(["highlight"], self._button("코멘트", lambda: notes.start_editing(notes.active), "코멘트 쓰기·고치기"))
+        add(["highlight"], self._button("AI에게 질문", self._ask_about_highlight, "이 부분에 대해 AI에게 질문"))
+        add(["highlight"], self._button("삭제", lambda: self._notes.remove_highlight(self._notes.active),
+                                        "하이라이트 지우기 (Ctrl+Z 로 되돌리기)"))
+        self._box = _CommentBox(lambda: notes.stop_editing(save=True), notes.stop_editing)
+        self._box.textChanged.connect(lambda: notes.set_draft(self._box.toPlainText()))
+        self._box.setFixedSize(theme.token("size.comment_width"), theme.token("size.comment_height"))
+        self._editor_buttons = QHBoxLayout()
+        self._editor_buttons.addStretch(1)
+        self._save_button = self._button("저장", lambda: notes.stop_editing(save=True), "저장 (Ctrl+Enter)")
+        self._cancel_button = self._button("취소", notes.stop_editing, "취소 (Esc)")
+        self._editor_buttons.addWidget(self._save_button)
+        self._editor_buttons.addWidget(self._cancel_button)
+        column = QVBoxLayout(self)
+        gap = theme.token("spacing.sm")
+        column.setContentsMargins(gap, gap, gap, gap)
+        column.addLayout(row)
+        column.addWidget(self._box)
+        column.addLayout(self._editor_buttons)
+        notes.editing_changed.connect(self._on_editing)
+        self.hide()
+
+    @staticmethod
+    def _button(text, slot, tip):
+        button = QToolButton(text=text, toolTip=tip, focusPolicy=Qt.FocusPolicy.NoFocus)  # the keys stay on the page
+        button.setAccessibleName(tip)
+        button.clicked.connect(slot)
+        return button
+
+    def show_mode(self, mode):
+        """None hides the bar. A comment being written stays until it is saved or cancelled."""
+        mode = "comment" if self._notes.editing else mode
+        self.mode = mode
+        if mode is None:
+            self._shown = None
+            self.hide()
+            return
+        current = self._notes.highlight(self._notes.active)
+        shown = (mode, current and current["color"])
+        if shown == self._shown:  # scrolling: only the position changes
+            return
+        self._shown = shown
+        for widgets in self._groups.values():
+            for widget in widgets:
+                widget.hide()
+        for widget in self._groups.get(mode, []):
+            widget.show()
+        for widget in (self._box, self._save_button, self._cancel_button):
+            widget.setVisible(mode == "comment")
+        for key, dot in self._dots.items():
+            dot.setProperty("current", mode == "highlight" and current is not None and current["color"] == key)
+            dot.style().unpolish(dot)  # re-read the [current="true"] rule
+            dot.style().polish(dot)
+        self.layout().activate()  # the size of the buttons just shown, not of the last mode's
+        self.adjustSize()
+        self.show()
+        self.raise_()
+
+    def _color(self, key):
+        if self.mode == "highlight":
+            self._notes.set_highlight_color(self._notes.active, key)
+        else:
+            self._notes.highlight_selection(key)
+
+    def _highlight_with_comment(self):
+        self._notes.start_editing(self._notes.highlight_selection())
+
+    def _ask_about_highlight(self):
+        self._notes.select_highlight(self._notes.active)
+        self._notes.set_active(None)
+        self._ask.trigger()
+
+    def _on_editing(self):
+        if self._notes.editing:
+            self._box.setPlainText(self._notes.draft)
+            self._view.update_bar()
+            self._box.setFocus()
+            self._box.moveCursor(self._box.textCursor().MoveOperation.End)
+        else:
+            if self._box.hasFocus():
+                self._view.setFocus()
+            self._view.update_bar()
+
+
 class PageView(QGraphicsView):
     """Document area for all view modes. Lays pages out from ViewerState, shows the best cached image
-    of each nearby page (a paper rectangle until one arrives), and turns mouse input into state calls."""
+    of each nearby page (a paper rectangle until one arrives), and turns mouse input into state calls.
+    Highlights come from AnnotationState; right-click shows copy_action and ask_action."""
 
-    def __init__(self, state):
+    def __init__(self, state, notes, copy_action, ask_action):
         super().__init__()
         self.setObjectName("pageView")
         self.setAccessibleName("문서 페이지")
         self._state = state
+        self._notes = notes
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
+        self.addActions([copy_action, ask_action])
+        self._bar = _NoteBar(self, notes, copy_action, ask_action)
         self.setScene(QGraphicsScene(self))
         self.viewport().setMouseTracking(True)  # hover cursor over links and text
         self._items = []  # per page: (shadow, paper, image) scene items
@@ -31,6 +179,7 @@ class PageView(QGraphicsView):
         self._zoom_anchor = None  # viewport point a Ctrl+wheel zoom keeps in place (else the view's centre)
         self._following_scroll = False  # current page changes because the user scrolled
         self._selection = None
+        self._marks = {}
         self._debounce = QTimer(self, singleShot=True, interval=RENDER_DEBOUNCE_MS, timeout=self._request)
         self.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self.horizontalScrollBar().valueChanged.connect(self._on_scroll)
@@ -40,6 +189,9 @@ class PageView(QGraphicsView):
         state.page_changed.connect(self._on_page_changed)
         state.scroll_requested.connect(self._scroll_screen)
         state.selection_changed.connect(self._draw_selection)
+        state.selection_changed.connect(self.update_bar)
+        notes.highlights_changed.connect(self._draw_highlights)
+        notes.active_changed.connect(self._draw_highlights)
         state.search_changed.connect(self._draw_search)
         state.search_current_changed.connect(self._on_search_current)
         state.tool_changed.connect(self._apply_tool)
@@ -65,6 +217,20 @@ class PageView(QGraphicsView):
             item.setBrush(theme.color(color))
             item.setZValue(1)
             self.scene().addItem(item)
+        self._marks = {}  # colour -> all highlights of that colour on the laid-out pages
+        alpha = theme.token("opacity.highlight")
+        for key in COLORS:
+            item = self._marks[key] = QGraphicsPathItem()
+            color = theme.color(f"color.hl_{key}")
+            color.setAlphaF(alpha)
+            item.setPen(Qt.PenStyle.NoPen)
+            item.setBrush(color)
+            item.setZValue(0.5)  # over the page image, under the selection
+            self.scene().addItem(item)
+        self._active_mark = QGraphicsPathItem()  # outline of the clicked highlight
+        self._active_mark.setPen(QPen(theme.color("color.accent"), theme.token("size.current_frame")))
+        self._active_mark.setZValue(0.6)
+        self.scene().addItem(self._active_mark)
         doc = self._state.document
         for i in range(doc.page_count if doc else 0):
             shadow, paper, image = QGraphicsRectItem(), QGraphicsRectItem(), QGraphicsPixmapItem()
@@ -113,6 +279,7 @@ class PageView(QGraphicsView):
         self._adjusting = False
         self._draw_selection()
         self._draw_search()
+        self._draw_highlights()
 
     def _hide(self, page):
         for item in self._items[page]:
@@ -172,6 +339,7 @@ class PageView(QGraphicsView):
                 self._following_scroll = False
         self._refresh()
         self._debounce.start()
+        self.update_bar()
 
     def _scroll_screen(self, direction):
         """PgDn/PgUp: one screen down/up; at the end of the shown row (single/spread) turn the page."""
@@ -296,6 +464,48 @@ class PageView(QGraphicsView):
                 path.addRect(transform.mapRect(QRectF(x0, y0, x1 - x0, y1 - y0)))
         self._selection.setPath(path)
 
+    def _draw_highlights(self):
+        if not self._marks:
+            return
+        paths = {key: QPainterPath() for key in COLORS}
+        active = QPainterPath()
+        for item in self._notes.highlights():
+            if item["page"] in self._rects:
+                transform = self._page_transform(item["page"])
+                for x0, y0, x1, y1 in item["quads"]:
+                    box = transform.mapRect(QRectF(x0, y0, x1 - x0, y1 - y0))
+                    paths.get(item["color"], paths["yellow"]).addRect(box)
+                    if item["id"] == self._notes.active:
+                        active.addRect(box)
+        for key, path in paths.items():
+            self._marks[key].setPath(path)
+        self._active_mark.setPath(active)
+        self.update_bar()
+
+    def update_bar(self):
+        """Show the note bar under the selection (once the drag ends) or the clicked highlight, inside the view."""
+        st, bar = self._state, self._bar
+        if self._notes.active:  # also while its comment is written
+            mode, anchor = "highlight", self._active_mark.path().boundingRect()
+        elif st.selection and self._press is None and st.tool == "select" and self._selection:
+            mode, anchor = "selection", self._selection.path().boundingRect()
+        else:
+            mode, anchor = None, QRectF()
+        area = self.viewport().rect()
+        box = self.mapFromScene(anchor).boundingRect()
+        on_screen = not anchor.isEmpty() and box.intersects(area)
+        if self._notes.editing and not on_screen:  # its highlight scrolled or paged away: keep the text, close the box
+            self._notes.stop_editing(save=True)
+            return
+        bar.show_mode(mode if on_screen else None)
+        if bar.mode is None:
+            return
+        gap = theme.token("spacing.sm")
+        y = box.bottom() + gap
+        if y + bar.height() > area.bottom():
+            y = max(area.top(), box.top() - gap - bar.height())  # no room below: above it
+        bar.move(QPoint(max(area.left(), min(box.left(), area.right() - bar.width())), y))
+
     def _draw_search(self):
         hits, active = QPainterPath(), QPainterPath()
         st = self._state
@@ -364,6 +574,8 @@ class PageView(QGraphicsView):
             self._update_cursor(event.position())
             return
         if (event.position() - self._press[0]).manhattanLength() >= QApplication.startDragDistance():
+            if not self._dragged:
+                self._notes.set_active(None)  # a new selection starts: the clicked highlight lets go
             self._dragged = True
         page = self._press[1] if self._press[1] in self._rects else None  # a key may page away mid-drag
         if self._dragged and self._state.tool == "select" and page is not None:
@@ -380,13 +592,18 @@ class PageView(QGraphicsView):
         self._press = None
         if not self._dragged:
             link = self._link_at(page, point) if page is not None else None
+            mark = self._notes.highlight_at(page, point.x(), point.y()) if page is not None else None
             if link:
                 self._state.follow_link(link)
             else:
                 self._state.clear_selection()
+                self._notes.set_active(mark)
+        self.update_bar()
 
     def _update_cursor(self, view_pos):
         page, point = self._hit(view_pos)
+        mark = self._notes.highlight(self._notes.highlight_at(page, point.x(), point.y())) if page is not None else None
+        self.viewport().setToolTip(mark["comment"] if mark else "")  # the comment shows on hover
         if page is not None and self._link_at(page, point):
             shape = Qt.CursorShape.PointingHandCursor
         elif self._state.tool == "hand":

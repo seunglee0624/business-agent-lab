@@ -4,6 +4,7 @@ import tempfile
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp()  # QSettings must not touch the real user settings
+os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()  # nor the real notes and log folders
 
 import pymupdf
 import pytest

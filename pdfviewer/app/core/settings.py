@@ -47,6 +47,29 @@ def save_file_view(path, page, zoom_mode, zoom):
     _save("files/views", views)
 
 
+def cached_doc_id(path, size, mtime):
+    """A file's content id from last time, while its size and modification time are unchanged."""
+    entry = _load("files/doc_ids", {}).get(path)
+    return entry[2] if entry and entry[:2] == [size, mtime] else None
+
+
+def save_doc_id(path, size, mtime, doc_id):
+    ids = _load("files/doc_ids", {})
+    ids.pop(path, None)
+    ids[path] = [size, mtime, doc_id]
+    while len(ids) > MAX_FILE_VIEWS:
+        ids.pop(next(iter(ids)))
+    _save("files/doc_ids", ids)
+
+
+def highlight_color():
+    return QSettings().value("notes/color", "yellow")
+
+
+def save_highlight_color(color):
+    QSettings().setValue("notes/color", color)
+
+
 def window():
     """(geometry, dock state, sidebar shown, sidebar tab); the byte values are empty on first run."""
     s = QSettings()

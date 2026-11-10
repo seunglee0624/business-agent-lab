@@ -4,7 +4,7 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent / "app"
 LOGIC = [*sorted((APP / "core").rglob("*.py")), *sorted((APP / "models").glob("*.py")), APP / "viewer_state.py",
-         APP / "chat_state.py"]
+         APP / "chat_state.py", APP / "annotation_state.py"]
 UI = ("PySide6.QtWidgets", "app.widgets", "app.dialogs", "app.main_window")
 
 

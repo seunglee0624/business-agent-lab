@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QDockWidget, QFileDialog, QMainWindow, QMenu, QMe
                                QWidget)
 
 from app import shortcuts, theme
+from app.annotation_state import AnnotationState
 from app.chat_state import ChatState
 from app.core import settings
 from app.core.document import Document
@@ -26,16 +27,17 @@ from app.widgets.tab_bar import TabBar
 from app.widgets.toolbar import Toolbar
 
 APP_NAME = "PDF Viewer"
+STATUS_MESSAGE_MS = 10000  # a warning in the status bar stays this long
 log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "open_search", "prev", "next", "first_page", "last_page",
+DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "highlight", "open_search", "prev", "next", "first_page", "last_page",
                     "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
     "파일": ["open", "recent", "close_tab", None, "properties", None, "quit"],
-    "편집": ["copy", "ask_ai", None, "open_search"],
+    "편집": ["undo", "redo", None, "copy", "ask_ai", "highlight", None, "open_search"],
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
                "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
@@ -63,6 +65,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = ViewerState()
         self.chat = ChatState(self.state)
+        self.notes = AnnotationState(self.state)
         self.setWindowTitle(APP_NAME)
         self._was_maximized = False
         self._actions = self._make_actions()
@@ -87,11 +90,9 @@ class MainWindow(QMainWindow):
         self.addToolBarBreak()
         self._search_bar = SearchBar(self.state)
         self.addToolBar(self._search_bar)
-        view = self._view = PageView(self.state)
+        view = self._view = PageView(self.state, self.notes, self._actions["copy"], self._actions["ask_ai"])
         view.setAcceptDrops(False)  # dropped files go to the window
         view.viewport().setAcceptDrops(False)
-        view.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)  # right-click: these actions
-        view.addActions([self._actions["copy"], self._actions["ask_ai"]])
         self._empty = EmptyState(self._actions["open"])
         self._empty.file_chosen.connect(self.open_file)
         self._stack = QStackedWidget()
@@ -109,6 +110,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self._status = StatusBar(self.state)
         self.setStatusBar(self._status)
+        self.notes.problem.connect(lambda message: self._status.showMessage(message, STATUS_MESSAGE_MS))
         self._sidebar = Sidebar(self.state)
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
@@ -134,6 +136,9 @@ class MainWindow(QMainWindow):
         self.state.sidebar_changed.connect(self._apply_sidebar)
         self.chat.panel_changed.connect(self._apply_chat)
         self.chat.panel_changed.connect(self._sync_checks)
+        for signal in (self.notes.undo_group.canUndoChanged, self.notes.undo_group.canRedoChanged,
+                       self.notes.undo_group.activeStackChanged):
+            signal.connect(self._sync_checks)
         self.state.search_changed.connect(self._apply_search)
         self._apply_sidebar()
         self._apply_chat(focus=False)
@@ -156,7 +161,7 @@ class MainWindow(QMainWindow):
         actions = {}
 
         def add(name, label, slot, toolbar=False, checkable=False):
-            action = QAction(label, self, checkable=checkable)
+            action = QAction(label, self, checkable=checkable, objectName=name)
             if toolbar:
                 action.setIcon(icon(name))
                 action.setIconVisibleInMenu(False)  # an icon would hide the menu's check mark
@@ -172,6 +177,9 @@ class MainWindow(QMainWindow):
         add("quit", "종료", self.close)
         add("copy", "복사", st.copy)
         add("ask_ai", "AI에게 질문", self.chat.ask_about_selection)
+        add("highlight", "하이라이트", self.notes.highlight_selection)
+        add("undo", "실행 취소", self.notes.undo_group.undo)
+        add("redo", "다시 실행", self.notes.undo_group.redo)
         add("open_search", "찾기…", st.open_search)
         add("prev", "이전 페이지", st.prev, True)
         add("next", "다음 페이지", st.next, True)
@@ -235,6 +243,8 @@ class MainWindow(QMainWindow):
             a[name].setEnabled(st.document is not None)
         for name in ("next_tab", "prev_tab"):
             a[name].setEnabled(len(st.tabs) > 1)
+        a["undo"].setEnabled(self.notes.undo_group.canUndo())
+        a["redo"].setEnabled(self.notes.undo_group.canRedo())
 
     def _apply_fullscreen(self):
         if self.state.fullscreen and not self.isFullScreen():
@@ -337,6 +347,7 @@ class MainWindow(QMainWindow):
         geometry = settings.window()[0] if self.isFullScreen() else self.saveGeometry()  # don't reopen fullscreen
         settings.save_window(geometry, self.saveState(), self.state.sidebar, self._sidebar.currentIndex())
         self.state.save_view()
+        self.notes.flush()
         self.state.renderer.shutdown()
         super().closeEvent(event)
 
