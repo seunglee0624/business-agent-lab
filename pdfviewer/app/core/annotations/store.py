@@ -92,6 +92,11 @@ class AnnotationStore:
         self.find(kind, item_id).update({"updated": now(), **fields})
         self.dirty = True
 
+    def set(self, key, value):
+        """A single value such as "doc_note"."""
+        self.data[key] = value
+        self.dirty = True
+
     def save(self):
         """Atomic: a crash mid-write leaves the old file whole. Raises OSError (the changes stay in memory)."""
         if self.read_only or not self.dirty:
@@ -120,3 +125,10 @@ def _check(data):
                 and isinstance(item["text"], str) and isinstance(item["comment"], str) and len(item["words"]) == 2
                 and all(len(quad) == 4 and all(isinstance(v, (int, float)) for v in quad) for quad in item["quads"])):
             raise ValueError("bad highlight")
+    for item in data.get("notes", []):
+        if not (isinstance(item["id"], str) and isinstance(item["page"], int) and isinstance(item["text"], str)
+                and isinstance(item["source"], str)):
+            raise ValueError("bad note")
+    for item in data.get("bookmarks", []):
+        if not (isinstance(item["id"], str) and isinstance(item["page"], int)):
+            raise ValueError("bad bookmark")

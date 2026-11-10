@@ -47,7 +47,9 @@ class Toolbar(QToolBar):
         self._zoom.textActivated.connect(self._on_zoom_text)  # picked from the list
         self.addWidget(self._zoom)
         self.addAction(actions["zoom_in"])
-        for group in (VIEW_MODES, ("rotate_left", "rotate_right"), ("select_tool", "hand_tool")):
+        for group in (VIEW_MODES, ("rotate_left", "rotate_right"), ("select_tool", "hand_tool"),
+                      ("page_note", "bookmark"), ("undo", "redo"),
+                      ("open_search", "toggle_chat", "toggle_presentation")):
             self.addSeparator()
             for name in group:
                 self.addAction(actions[name])
@@ -63,7 +65,10 @@ class Toolbar(QToolBar):
         # the lead's left is where the button goes without it; read it, not button minus lead, because two calls
         # in a row (before the toolbar re-lays out) would otherwise count the lead twice
         natural = self._lead.x() if self._lead_action.isVisible() else button.x()
-        width = x - natural - gap  # the lead brings its own gap before the button
+        lead = self._lead.width() + gap if self._lead_action.isVisible() else 0
+        spare = self.width() - (self.layout().sizeHint().width() - lead)  # room left once every button fits
+        # the lead brings its own gap before the button; never so wide that buttons fall into the overflow arrow
+        width = min(x - natural, spare) - gap
         self._lead.setFixedWidth(max(width, 0))
         self._lead_action.setVisible(width > 0)
 

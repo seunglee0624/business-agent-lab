@@ -2,21 +2,24 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QLabel, QStatusBar
 
+from app.annotation_state import SAVE_STATES
 from app.core.document import format_size
 
 
 class StatusBar(QStatusBar):
-    """File name and size on the left; renders in progress, page and zoom on the right."""
+    """File name and size on the left; renders in progress, notes saving, page and zoom on the right."""
 
-    def __init__(self, state):
+    def __init__(self, state, notes):
         super().__init__()
         self.setObjectName("statusBar")
         self.setSizeGripEnabled(False)
         self._state = state
         self._file, self._renders, self._page, self._zoom = QLabel(), QLabel(), QLabel(), QLabel()
+        self._saved = QLabel(toolTip="하이라이트·메모·북마크 저장 상태")
         self.addWidget(self._file)
-        for label in (self._renders, self._page, self._zoom):
+        for label in (self._renders, self._saved, self._page, self._zoom):
             self.addPermanentWidget(label)
+        notes.save_state_changed.connect(lambda: self._saved.setText(SAVE_STATES[notes.save_state]))
         self._renders.setToolTip("렌더링을 기다리는 페이지 수")
         self._page.setToolTip("현재 페이지 / 전체 페이지")
         self._zoom.setToolTip("확대 비율")

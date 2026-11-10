@@ -70,6 +70,14 @@ def save_highlight_color(color):
     QSettings().setValue("notes/color", color)
 
 
+def notes_filter():
+    return QSettings().value("notes/filter", "highlights")
+
+
+def save_notes_filter(kind):
+    QSettings().setValue("notes/filter", kind)
+
+
 def window():
     """(geometry, dock state, sidebar shown, sidebar tab); the byte values are empty on first run."""
     s = QSettings()

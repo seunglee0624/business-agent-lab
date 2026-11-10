@@ -284,7 +284,7 @@ def test_page_links_in_answers(qtbot, window):
 
 def test_right_click_and_ctrl_shift_k_ask_about_the_selection(qtbot, window):
     view, st = window._view, window.state
-    assert [a.text() for a in view.actions()] == ["복사", "AI에게 질문"]
+    assert [a.text() for a in view.actions()] == ["복사", "AI에게 질문", "이 페이지에 메모", "북마크 켜기·끄기"]
     assert view.contextMenuPolicy() == Qt.ContextMenuPolicy.ActionsContextMenu
     window._chat_panel._input.setEnabled(True)  # no key in tests
     qtbot.keyClick(view, Qt.Key.Key_K, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)

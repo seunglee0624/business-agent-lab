@@ -31,17 +31,18 @@ STATUS_MESSAGE_MS = 10000  # a warning in the status bar stays this long
 log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "highlight", "open_search", "prev", "next", "first_page", "last_page",
+DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", "notes_tab", "open_search", "prev", "next", "first_page", "last_page",
                     "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
     "파일": ["open", "recent", "close_tab", None, "properties", None, "quit"],
-    "편집": ["undo", "redo", None, "copy", "ask_ai", "highlight", None, "open_search"],
+    "편집": ["undo", "redo", None, "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", None,
+             "open_search"],
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
                "fit_page", None,
                "single", "continuous", "spread", "cover_alone", None, "rotate_left", "rotate_right", None,
-               "select_tool", "hand_tool", None, "toggle_sidebar", "toggle_chat", "toggle_fullscreen", "toggle_presentation", None,
+               "select_tool", "hand_tool", None, "toggle_sidebar", "notes_tab", "toggle_chat", "toggle_fullscreen", "toggle_presentation", None,
                "next_tab", "prev_tab"],
     "도움말": ["shortcut_help"],
 }
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         self._search_bar = SearchBar(self.state)
         self.addToolBar(self._search_bar)
         view = self._view = PageView(self.state, self.notes, self._actions["copy"], self._actions["ask_ai"])
+        view.addActions([self._actions["page_note"], self._actions["bookmark"]])  # right-click, after copy and ask
         view.setAcceptDrops(False)  # dropped files go to the window
         view.viewport().setAcceptDrops(False)
         self._empty = EmptyState(self._actions["open"])
@@ -107,11 +109,12 @@ class MainWindow(QMainWindow):
         column.addWidget(self._stack)
         self.setCentralWidget(central)
         central.installEventFilter(self)  # it moves when the sidebar is resized, shown or hidden
+        self._toolbar.installEventFilter(self)  # its width decides how much the zoom group may move
         self.setAcceptDrops(True)
-        self._status = StatusBar(self.state)
+        self._status = StatusBar(self.state, self.notes)
         self.setStatusBar(self._status)
         self.notes.problem.connect(lambda message: self._status.showMessage(message, STATUS_MESSAGE_MS))
-        self._sidebar = Sidebar(self.state)
+        self._sidebar = Sidebar(self.state, self.notes, self._actions["ask_ai"])
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
         self._dock.setWidget(self._sidebar)
@@ -160,9 +163,9 @@ class MainWindow(QMainWindow):
         st = self.state
         actions = {}
 
-        def add(name, label, slot, toolbar=False, checkable=False):
+        def add(name, label, slot, has_icon=False, checkable=False):
             action = QAction(label, self, checkable=checkable, objectName=name)
-            if toolbar:
+            if has_icon:  # assets/icons/<name>.svg, for the toolbar or the note bar
                 action.setIcon(icon(name))
                 action.setIconVisibleInMenu(False)  # an icon would hide the menu's check mark
             action.triggered.connect(lambda checked=False: slot())
@@ -175,12 +178,17 @@ class MainWindow(QMainWindow):
         add("close_tab", "탭 닫기", st.close_tab)
         add("properties", "문서 속성…", lambda: show_properties(self, st.document))
         add("quit", "종료", self.close)
-        add("copy", "복사", st.copy)
-        add("ask_ai", "AI에게 질문", self.chat.ask_about_selection)
+        add("copy", "복사", st.copy, True)
+        add("ask_ai", "AI에게 질문", self.chat.ask_about_selection, True)
         add("highlight", "하이라이트", self.notes.highlight_selection)
-        add("undo", "실행 취소", self.notes.undo_group.undo)
-        add("redo", "다시 실행", self.notes.undo_group.redo)
-        add("open_search", "찾기…", st.open_search)
+        add("page_note", "이 페이지에 메모", self.notes.start_note, True)
+        add("bookmark", "북마크 켜기·끄기", self.notes.toggle_bookmark, True)
+        add("next_bookmark", "다음 북마크", lambda: self.notes.go_to_bookmark(1))
+        add("prev_bookmark", "이전 북마크", lambda: self.notes.go_to_bookmark(-1))
+        add("notes_tab", "메모 탭", self._show_notes_tab)
+        add("undo", "실행 취소", self.notes.undo_group.undo, True)
+        add("redo", "다시 실행", self.notes.undo_group.redo, True)
+        add("open_search", "찾기…", st.open_search, True)
         add("prev", "이전 페이지", st.prev, True)
         add("next", "다음 페이지", st.next, True)
         add("first_page", "첫 페이지", st.first_page)
@@ -200,9 +208,9 @@ class MainWindow(QMainWindow):
         add("select_tool", "선택 도구", lambda: st.set_tool("select"), True, checkable=True)
         add("hand_tool", "손 도구", lambda: st.set_tool("hand"), True, checkable=True)
         add("toggle_sidebar", "사이드바", st.toggle_sidebar, checkable=True)
-        add("toggle_chat", "AI 채팅", self.chat.toggle_panel, checkable=True)
+        add("toggle_chat", "AI 채팅", self.chat.toggle_panel, True, checkable=True)
         add("toggle_fullscreen", "전체 화면", st.toggle_fullscreen, checkable=True)
-        add("toggle_presentation", "발표 모드", st.toggle_presentation, checkable=True)
+        add("toggle_presentation", "발표 모드", st.toggle_presentation, True, checkable=True)
         add("escape", "찾기 닫기 / 전체 화면 끝내기", st.escape)
         add("next_tab", "다음 탭", st.next_tab)
         add("prev_tab", "이전 탭", st.prev_tab)
@@ -245,6 +253,10 @@ class MainWindow(QMainWindow):
             a[name].setEnabled(len(st.tabs) > 1)
         a["undo"].setEnabled(self.notes.undo_group.canUndo())
         a["redo"].setEnabled(self.notes.undo_group.canRedo())
+
+    def _show_notes_tab(self):
+        self.state.set_sidebar(True)
+        self._sidebar.setCurrentWidget(self._sidebar.notes)
 
     def _apply_fullscreen(self):
         if self.state.fullscreen and not self.isFullScreen():
@@ -352,7 +364,10 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def eventFilter(self, watched, event):
-        if watched is self.centralWidget() and event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+        moved = event.type() in (QEvent.Type.Move, QEvent.Type.Resize)
+        # LayoutRequest: a toolbar label got wider (e.g. "/ 33"), so the room for the zoom group changed
+        if watched is self.centralWidget() and moved or watched is self._toolbar and (
+                moved or event.type() == QEvent.Type.LayoutRequest):
             QTimer.singleShot(0, self._align_toolbar)  # after the toolbar's own layout settles
         return super().eventFilter(watched, event)
 

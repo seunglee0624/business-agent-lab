@@ -160,23 +160,6 @@ def test_sidebar_narrows_to_the_left_edge_and_double_click_restores_it(qtbot):
     qtbot.waitUntil(lambda: window._dock.width() == theme.token("size.sidebar_width"))
 
 
-def test_search_tab_click_opens_the_search_box(qtbot, pdf100):
-    window = MainWindow()
-    qtbot.addWidget(window)
-    tabs = window._sidebar
-    search = tabs.indexOf(tabs.search_results)
-    tabs.tabBarClicked.emit(search)  # empty screen: nothing to search
-    assert not window.state.search_open
-    window.open_file(pdf100)
-    tabs.tabBarClicked.emit(search)
-    assert window.state.search_open
-    tabs.tabBarClicked.emit(0)  # thumbnails
-    assert not window.state.search_open
-    tabs.tabBarClicked.emit(search)
-    tabs.tabBarClicked.emit(1)  # outline
-    assert not window.state.search_open
-
-
 def test_alt_keys_open_the_plain_titled_menus(qtbot, window):
     titles = [action.text() for action in window.menuBar().actions()]
     assert titles == ["파일", "편집", "보기", "도움말"]  # no "(F)" in the bar

@@ -11,7 +11,6 @@ from app.core.renderer import Renderer
 from app.main_window import MainWindow
 from app.viewer_state import ViewerState
 from app.widgets.search_bar import SearchBar
-from app.widgets.sidebar import SearchResultList, Sidebar
 
 
 @pytest.fixture
@@ -132,7 +131,6 @@ def test_ctrl_f_type_enter_and_esc(qtbot, window, pdf100):
     qtbot.keyClick(view, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
     edit = bar.findChild(QLineEdit)
     assert bar.isVisible() and edit.hasFocus()
-    assert window.findChild(Sidebar).currentWidget() is window.findChild(SearchResultList)
     qtbot.keyClicks(edit, "page 2")  # pages 2, 20..29
     qtbot.waitUntil(lambda: window.state.search_done and bool(window.state.search_results), timeout=20000)
     assert window.state.search_index == 0 and bar._count.text() == "1 / 11"
@@ -144,20 +142,6 @@ def test_ctrl_f_type_enter_and_esc(qtbot, window, pdf100):
     qtbot.keyClick(edit, Qt.Key.Key_Escape)
     assert not bar.isVisible() and view.hasFocus() and view._hits.path().isEmpty()
     assert not window.state.fullscreen
-
-
-def test_result_list_click_goes_to_the_result(qtbot, window, pdf100):
-    window.open_file(pdf100)
-    window.state.open_search()
-    run(qtbot, window.state, "page 3")
-    results = window.findChild(SearchResultList)
-    assert results.model().rowCount() == 11
-    assert results.model().index(4).data().startswith("33쪽")
-    results.setCurrentIndex(results.model().index(4))  # what a click does
-    assert window.state.current_page == 32
-    view = window._view
-    visible = view.mapToScene(view.viewport().rect()).boundingRect()
-    assert visible.contains(view._active_hit.path().boundingRect())
 
 
 def test_esc_in_presentation_ends_it_even_with_search_open(window):

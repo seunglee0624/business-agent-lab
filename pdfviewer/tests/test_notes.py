@@ -12,6 +12,7 @@ from app.core import settings
 from app.core.annotations.store import AnnotationStore, doc_id
 from app.core.document import Document
 from app.main_window import MainWindow
+from app.models.notes_model import ITEM_ROLE, KIND_ROLE, NotesModel
 from app.viewer_state import ViewerState
 
 
@@ -186,7 +187,8 @@ def test_bar_highlights_the_selection_and_follows_zoom_and_rotation(qtbot, windo
     view, st, notes = window._view, window.state, window.notes
     select_on_screen(window, 0, 1)
     qtbot.waitUntil(lambda: view._bar.isVisible())
-    assert view._bar.mode == "selection" and {"복사", "AI에게 질문", "메모", "초록 하이라이트"} <= set(bar_buttons(window))
+    assert view._bar.mode == "selection" and {"복사", "AI에게 질문", "초록 하이라이트"} <= set(bar_buttons(window))
+    assert "메모" not in bar_buttons(window)
     selected = view._selection.path().boundingRect()
     qtbot.mouseClick(bar_buttons(window)["초록 하이라이트"], Qt.MouseButton.LeftButton)
     assert [h["color"] for h in notes.highlights()] == ["green"] and not view._bar.isVisible()
@@ -227,7 +229,7 @@ def test_escape_cancels_a_comment(qtbot, window):
     view, notes = window._view, window.notes
     select_on_screen(window, 0, 0)
     qtbot.waitUntil(lambda: view._bar.isVisible())
-    qtbot.mouseClick(bar_buttons(window)["메모"], Qt.MouseButton.LeftButton)  # highlight + comment box
+    notes.start_editing(notes.highlight_selection())  # highlight + comment box
     qtbot.keyClicks(view._bar._box, "x")
     qtbot.keyClick(view._bar._box, Qt.Key.Key_Escape)
     assert [h["comment"] for h in notes.highlights()] == [""] and view.hasFocus()
@@ -326,7 +328,7 @@ def test_a_comment_being_written_is_saved_on_a_tab_switch(qtbot, window, pdf100)
     view, st, notes = window._view, window.state, window.notes
     select_on_screen(window, 0, 0)
     qtbot.waitUntil(lambda: view._bar.isVisible())
-    qtbot.mouseClick(bar_buttons(window)["메모"], Qt.MouseButton.LeftButton)
+    notes.start_editing(notes.highlight_selection())
     qtbot.keyClicks(view._bar._box, "draft")
     first = notes.store
     window.open_file(pdf100)
@@ -342,7 +344,7 @@ def test_undoing_the_highlight_closes_its_comment_box(qtbot, window):
     view, notes = window._view, window.notes
     select_on_screen(window, 0, 0)
     qtbot.waitUntil(lambda: view._bar.isVisible())
-    qtbot.mouseClick(bar_buttons(window)["메모"], Qt.MouseButton.LeftButton)
+    notes.start_editing(notes.highlight_selection())
     window._actions["undo"].trigger()  # from the menu: the box's own Ctrl+Z would undo its text
     assert notes.highlights() == [] and notes.editing is None and not view._bar._box.isVisible()
 
@@ -384,9 +386,186 @@ def test_paging_away_from_a_comment_saves_and_closes_it(qtbot, window):
     view, st, notes = window._view, window.state, window.notes
     select_on_screen(window, 0, 0)
     qtbot.waitUntil(lambda: view._bar.isVisible())
-    qtbot.mouseClick(bar_buttons(window)["메모"], Qt.MouseButton.LeftButton)
+    notes.start_editing(notes.highlight_selection())
     qtbot.keyClicks(view._bar._box, "hi")
     st.set_view_mode("single")
     st.go_to(1)  # the highlight is on page 1: the box must not stay pinned over page 2
     qtbot.waitUntil(lambda: notes.editing is None)
     assert not view._bar.isVisible() and [h["comment"] for h in notes.highlights()] == ["hi"]
+
+
+# ---- 11b: page notes, bookmarks, the document note
+
+def test_page_note_add_change_delete_and_undo(qtbot, notes_setup):
+    viewer, notes = notes_setup
+    notes.set_page_note(0, "  첫 메모 ")
+    assert notes.page_note(0)["text"] == "첫 메모" and notes.page_note(1) is None
+    notes.set_page_note(0, "고침")
+    notes.set_page_note(0, "   ")  # empty: deleted
+    assert notes.page_note(0) is None
+    notes.undo_group.undo()
+    assert notes.page_note(0)["text"] == "고침"
+    notes.undo_group.undo()
+    assert notes.page_note(0)["text"] == "첫 메모"
+
+
+def test_note_box_saves_into_its_page(qtbot, notes_setup):
+    viewer, notes = notes_setup
+    notes.start_note(1)
+    assert notes.is_editing and notes.editing_note == 1 and notes.draft == ""
+    notes.set_draft("p2")
+    notes.stop_editing(save=True)
+    assert not notes.is_editing and notes.page_note(1)["text"] == "p2"
+    notes.start_note(1)
+    assert notes.draft == "p2"
+    notes.stop_editing()  # cancel
+    assert notes.page_note(1)["text"] == "p2"
+
+
+def test_bookmark_toggle_and_undo(qtbot, notes_setup):
+    viewer, notes = notes_setup
+    viewer.go_to(2)
+    notes.toggle_bookmark()
+    assert notes.is_bookmarked(2) and not notes.is_bookmarked(0)
+    notes.toggle_bookmark(2)
+    assert not notes.is_bookmarked(2)
+    notes.undo_group.undo()
+    assert notes.is_bookmarked(2)
+
+
+def test_bookmark_is_named_after_its_first_line_and_the_list_says_so(notes_setup):
+    viewer, notes = notes_setup
+    notes.toggle_bookmark(0)  # page 1's text is read
+    notes.toggle_bookmark(2)  # page 3's is not (and it is blank): no name
+    assert [b["label"] for b in notes.store.items("bookmarks")] == ["Hello brave new world", ""]
+    model = NotesModel(notes)
+    model.set_filter("bookmarks")
+    assert model.index(0).data() == "1쪽 북마크: Hello brave new world"
+
+
+def test_next_and_previous_bookmark_wrap_around(notes_setup):
+    viewer, notes = notes_setup
+    notes.go_to_bookmark(1)  # none yet: stays
+    assert viewer.current_page == 0
+    notes.toggle_bookmark(0)
+    notes.toggle_bookmark(2)
+    for step, page in ((1, 2), (1, 0), (-1, 2), (-1, 0)):
+        notes.go_to_bookmark(step)
+        assert viewer.current_page == page
+
+
+def test_doc_note_and_save_state(qtbot, notes_setup, tmp_path):
+    viewer, notes = notes_setup
+    assert notes.save_state == ""
+    notes.set_doc_note("# 정리\n시험 범위")
+    assert notes.doc_note() == "# 정리\n시험 범위" and notes.save_state == "pending"
+    qtbot.waitUntil(lambda: notes.save_state == "saved")
+    saved = json.loads(notes.store.path.read_text(encoding="utf-8"))
+    assert saved["doc_note"] == "# 정리\n시험 범위"
+
+
+def test_notes_and_bookmarks_of_the_wrong_shape_are_kept_aside(tmp_path):
+    (tmp_path / "abc.json").write_text(json.dumps({"v": 1, "notes": [{"id": "n", "page": "x"}]}), encoding="utf-8")
+    assert ".bak" in AnnotationStore(tmp_path, "abc", "/x/a.pdf", "a").problem
+
+
+# ---- 11b on screen
+
+def test_b_key_ribbon_and_a_click_keeps_it(qtbot, window):
+    view, notes = window._view, window.notes
+    qtbot.keyClick(view, Qt.Key.Key_B)
+    assert notes.is_bookmarked(0) and not view._ribbons.path().isEmpty()
+    view.ensureVisible(view._marker_rects(0)[0])
+    ribbon, _ = view._marker_rects(0)  # after scrolling: the marks follow the view's top
+    view._update_cursor(view.mapFromScene(ribbon.center()).toPointF())
+    assert "북마크" in view.viewport().toolTip()
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.mapFromScene(ribbon.center()))
+    assert notes.is_bookmarked(0)  # not lost to a stray click
+    qtbot.keyClick(view, Qt.Key.Key_B)
+    assert not notes.is_bookmarked(0) and view._ribbons.path().isEmpty()
+
+
+def test_ribbons_stay_in_view_on_a_page_bigger_than_the_view(qtbot, window):
+    view, notes = window._view, window.notes
+    window.state.set_zoom(4)  # the page is much taller and wider than the view
+    notes.toggle_bookmark(0)
+    notes.set_page_note(0, "idea")
+    page = view._rects[0]
+    view.verticalScrollBar().setValue(view.verticalScrollBar().value() + round(page.height() / 3))
+    top = view.mapToScene(0, 0).y()
+    assert page.top() < top < page.bottom()
+    for path in (view._ribbons.path(), view._note_marks.path()):
+        assert path.boundingRect().top() == pytest.approx(top)
+    assert view.mapToScene(view.viewport().rect()).boundingRect().contains(view._ribbons.path().boundingRect())
+    assert view._marker_at(view._marker_rects(0)[0].center()) == ("bookmark", 0)
+    window._actions["toggle_chat"].trigger()  # the view narrows; nothing scrolls
+    qtbot.waitUntil(lambda: view.mapToScene(view.viewport().rect()).boundingRect().contains(
+        view._ribbons.path().boundingRect()))
+
+
+def test_m_key_writes_a_page_note_and_its_mark_reopens_it(qtbot, window):
+    view, notes = window._view, window.notes
+    view.ensureVisible(view._marker_rects(0)[1])
+    _, mark = view._marker_rects(0)  # after scrolling: the marks follow the view's top
+    qtbot.keyClick(view, Qt.Key.Key_M)
+    box = view._bar._box
+    assert notes.editing_note == 0 and box.isVisible() and box.hasFocus() and "1쪽 메모" in box.placeholderText()
+    qtbot.keyClicks(box, "Big idea")  # B and M typed into the box: not the shortcuts
+    qtbot.keyClick(box, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    assert notes.page_note(0)["text"] == "Big idea" and not notes.is_bookmarked(0)
+    assert not view._note_marks.path().isEmpty() and not box.isVisible()
+    view._update_cursor(view.mapFromScene(mark.center()).toPointF())
+    assert view.viewport().toolTip() == "Big idea"
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.mapFromScene(mark.center()))
+    assert notes.editing_note == 0 and box.toPlainText() == "Big idea"
+
+
+def notes_tab(window):
+    window._actions["notes_tab"].trigger()
+    return window._sidebar.notes
+
+
+def test_notes_tab_lists_filters_and_goes(qtbot, window):
+    st, notes, view = window.state, window.notes, window._view
+    select_on_screen(window, 0, 1)
+    highlight_id = notes.highlight_selection()
+    notes.set_page_note(2, "p3 note")
+    notes.toggle_bookmark(1)
+    panel = notes_tab(window)
+    assert window._sidebar.currentWidget() is panel and st.sidebar
+    model = panel._model
+    rows = lambda: [(model.index(r).data(KIND_ROLE), model.index(r).data(ITEM_ROLE)["page"]) for r in range(model.rowCount())]
+    assert [b.text() for b in panel._filters.buttons()] == ["하이라이트", "메모", "북마크"]  # no "전체"
+    model.set_filter("highlights")
+    assert rows() == [("highlights", 0)] and panel._count.text() == "1개"
+    panel._go(model.index(0))
+    assert notes.active == highlight_id and view._bar.mode == "highlight"
+    model.set_filter("notes")
+    assert rows() == [("notes", 2)]
+    panel._go(model.index(0))
+    assert st.current_page == 2 and notes.editing_note == 2
+    notes.stop_editing()
+    model.set_filter("bookmarks")
+    assert rows() == [("bookmarks", 1)]
+    panel._remove("bookmarks", model.index(0).data(ITEM_ROLE))
+    assert not notes.is_bookmarked(1) and rows() == []
+
+
+def test_doc_note_box_saves_and_follows_the_tab(qtbot, window, pdf100):
+    panel, notes = notes_tab(window), window.notes
+    panel._fold.click()
+    assert panel._doc_note.isVisible() and panel._doc_note.isEnabled()
+    qtbot.keyClicks(panel._doc_note, "summary")
+    assert notes.doc_note() == "summary"
+    qtbot.waitUntil(lambda: window._status._saved.text() == "저장됨")
+    window.open_file(pdf100)
+    qtbot.waitUntil(lambda: notes.store is not None)
+    assert panel._doc_note.toPlainText() == ""
+    window.state.switch_tab(0)
+    qtbot.waitUntil(lambda: panel._doc_note.toPlainText() == "summary")
+
+
+def test_notes_actions_are_on_the_toolbar_with_icons(qtbot, window):
+    for name in ("page_note", "bookmark", "undo", "redo", "open_search", "toggle_chat", "toggle_presentation"):
+        action = window._actions[name]
+        assert window._toolbar.widgetForAction(action) is not None and not action.icon().isNull(), name

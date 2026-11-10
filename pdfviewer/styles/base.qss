@@ -570,6 +570,16 @@ QFrame#noteBar QToolButton:hover {
     background: {{color.bg_highlight}};
 }
 
+/* icon buttons: like the toolbar's, icons.py centres the glyph in the button square */
+QFrame#noteBar QToolButton#noteIcon {
+    padding: 0px;
+    min-width: {{size.control_sm}}px;
+    max-width: {{size.control_sm}}px;
+    min-height: {{size.control_sm}}px;
+    max-height: {{size.control_sm}}px;
+    qproperty-iconSize: {{size.control_sm}}px {{size.control_sm}}px;
+}
+
 /* colour dots: radius.md is half of size.hl_dot, so they are round */
 QFrame#noteBar QToolButton#hlDot {
     min-width: {{size.hl_dot}}px;
@@ -596,4 +606,17 @@ QPlainTextEdit#noteComment {
     color: {{color.text}};
     border: 1px solid {{color.outline}};
     border-radius: {{radius.sm}}px;
+}
+
+/* ---- notes tab: the document note under its fold */
+
+QPlainTextEdit#docNote {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.sm}}px;
+}
+
+QPlainTextEdit#docNote:focus {
+    border-color: {{color.accent}};
 }
