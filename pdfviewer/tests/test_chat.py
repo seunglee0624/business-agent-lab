@@ -4,7 +4,7 @@ import threading
 import pytest
 from PySide6.QtCore import Qt, QUrl
 
-from app.chat_state import MAX_TURNS, ChatState
+from app.chat_state import MAX_TURNS, SCOPES, ChatState
 from app.core.document import Document
 from app.core.llm.anthropic_api import AnthropicBackend
 from app.core.llm.base import LLMBackend, LLMError, Usage
@@ -332,7 +332,7 @@ def test_scope_buttons(qtbot, window):
     panel = window._chat_panel
     panel._input.setEnabled(True)  # no key in tests
     buttons = {b.text(): b for b in panel._scope.buttons()}
-    assert list(buttons) == ["선택한 부분", "현재 페이지", "문서 전체"] and buttons["현재 페이지"].isChecked()
+    assert list(buttons) == [*SCOPES.values()] and buttons["현재 페이지"].isChecked()
     qtbot.mouseClick(buttons["문서 전체"], Qt.MouseButton.LeftButton)
     assert window.chat.scope == "document" and buttons["문서 전체"].isChecked() and not buttons["현재 페이지"].isChecked()
     qtbot.waitUntil(panel._input.hasFocus)

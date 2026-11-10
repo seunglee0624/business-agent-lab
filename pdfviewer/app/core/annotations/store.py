@@ -132,3 +132,6 @@ def _check(data):
     for item in data.get("bookmarks", []):
         if not (isinstance(item["id"], str) and isinstance(item["page"], int)):
             raise ValueError("bad bookmark")
+    for item in data.get("chat", []):
+        if not (isinstance(item["role"], str) and isinstance(item["text"], str)):
+            raise ValueError("bad chat message")

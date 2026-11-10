@@ -2,8 +2,8 @@ import re
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QDesktopServices, QPalette, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextFrameFormat
-from PySide6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QLayout, QPlainTextEdit, QPushButton, QTextBrowser,
-                               QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QLayout, QMessageBox, QPlainTextEdit, QPushButton,
+                               QTextBrowser, QToolButton, QVBoxLayout, QWidget)
 
 from app import theme
 from app.chat_state import SCOPES
@@ -125,7 +125,7 @@ class ChatPanel(QWidget):
             button.scope = key
             top.addWidget(button)
         top.addStretch(1)
-        top.addWidget(self._button("clear_chat", "대화 지우기", chat.clear))
+        top.addWidget(self._button("clear_chat", "대화 지우기", self._clear))
         top.addWidget(self._button("settings", "AI 설정", self._open_settings))
         self._info = QLabel(objectName="chatInfo", wordWrap=True)
 
@@ -222,6 +222,14 @@ class ChatPanel(QWidget):
             self._open_settings()
         elif url.scheme() == "page":
             self._chat.open_page(int(url.path()))
+        elif url.scheme() == "save":
+            self._chat.save_answer(int(url.path()))
+
+    def _clear(self):
+        """Asks first: the saved copy goes too."""
+        if self._chat.messages and QMessageBox.question(
+                self, "대화 지우기", "이 문서의 AI 대화를 지울까요? 저장된 기록도 지워집니다.") == QMessageBox.StandardButton.Yes:
+            self._chat.clear()
         elif url.scheme() in ("http", "https"):
             QDesktopServices.openUrl(url)
 
@@ -275,7 +283,9 @@ class ChatPanel(QWidget):
         link.setAnchor(True)
         link.setAnchorHref("settings:")
         link.setForeground(theme.color("color.accent"))
-        for message in self._chat.messages:
+        save = QTextCharFormat(link)
+        save.setAnchorHref("")  # set per answer below
+        for index, message in enumerate(self._chat.messages):
             role, text = message["role"], message["text"]
             if role == "note":
                 cursor.insertText(text, muted)
@@ -306,11 +316,18 @@ class ChatPanel(QWidget):
                     cursor.insertMarkdown(PAGE_REF.sub(lambda m: f"[{m[0]}](page:{m[1]})", text))
                 else:
                     cursor.insertText("…" if message.get("streaming") else "중단됨", muted)
+                if role == "assistant" and (message.get("usage") or text and not message.get("streaming")):
+                    cursor.insertBlock(QTextBlockFormat())  # a fresh format: not part of the answer's last list
                 if message.get("usage"):
                     total, cached, output = message["usage"]
                     cache = f" (캐시 {_tokens(cached)})" if cached else ""
-                    cursor.insertBlock(QTextBlockFormat())  # a fresh format: not part of the answer's last list
-                    cursor.insertText(f"입력 {_tokens(total)}{cache} · 출력 {_tokens(output)} 토큰", muted)
+                    cursor.insertText(f"입력 {_tokens(total)}{cache} · 출력 {_tokens(output)} 토큰   ", muted)
+                if role == "assistant" and text and not message.get("streaming"):
+                    if self._chat.answer_saved(message):
+                        cursor.insertText("메모에 저장됨", muted)
+                    elif self._chat.can_save_answers:
+                        save.setAnchorHref(f"save:{index}")
+                        cursor.insertText("메모로 저장", save)
             cursor.movePosition(QTextCursor.MoveOperation.End)  # out of the frame
         if follow:
             bar.setValue(bar.maximum())

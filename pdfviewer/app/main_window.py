@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
+from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
                                QWidget)
 
 from app import shortcuts, theme
@@ -31,12 +31,12 @@ STATUS_MESSAGE_MS = 10000  # a warning in the status bar stays this long
 log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "properties", "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", "notes_tab", "open_search", "prev", "next", "first_page", "last_page",
+DOCUMENT_ACTIONS = ("close_tab", "export_notes", "copy_notes", "properties", "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", "notes_tab", "open_search", "prev", "next", "first_page", "last_page",
                     "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
-    "파일": ["open", "recent", "close_tab", None, "properties", None, "quit"],
+    "파일": ["open", "recent", "close_tab", None, "export_notes", "copy_notes", None, "properties", None, "quit"],
     "편집": ["undo", "redo", None, "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", None,
              "open_search"],
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
@@ -65,8 +65,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.state = ViewerState()
-        self.chat = ChatState(self.state)
         self.notes = AnnotationState(self.state)
+        self.chat = ChatState(self.state, notes=self.notes)
         self.setWindowTitle(APP_NAME)
         self._was_maximized = False
         self._actions = self._make_actions()
@@ -176,6 +176,8 @@ class MainWindow(QMainWindow):
 
         add("open", "열기…", self.choose_file, True)
         add("close_tab", "탭 닫기", st.close_tab)
+        add("export_notes", "메모 내보내기…", self._export_notes)
+        add("copy_notes", "메모를 클립보드로 복사", self._copy_notes)
         add("properties", "문서 속성…", lambda: show_properties(self, st.document))
         add("quit", "종료", self.close)
         add("copy", "복사", st.copy, True)
@@ -253,6 +255,33 @@ class MainWindow(QMainWindow):
             a[name].setEnabled(len(st.tabs) > 1)
         a["undo"].setEnabled(self.notes.undo_group.canUndo())
         a["redo"].setEnabled(self.notes.undo_group.canRedo())
+
+    def _export_notes(self):
+        """The current document's notes as a Markdown file, by default next to the PDF."""
+        text, doc = self.notes.export_markdown(), self.state.document
+        if not text:
+            self._status.showMessage("메모를 아직 불러오는 중입니다. 잠시 뒤 다시 하세요.", STATUS_MESSAGE_MS)
+            return
+        folder = settings.export_folder() or os.path.dirname(doc.path)
+        path, _ = QFileDialog.getSaveFileName(self, "메모 내보내기", os.path.join(folder, f"{Path(doc.path).stem}_notes.md"),
+                                              "마크다운 (*.md);;모든 파일 (*)")
+        if not path:
+            return
+        try:
+            Path(path).write_text(text, encoding="utf-8")
+        except OSError as error:
+            log.warning("cannot export notes to %s", path, exc_info=True)
+            self._status.showMessage(f"메모를 내보내지 못했습니다: {error}", STATUS_MESSAGE_MS)
+            return
+        settings.save_export_folder(os.path.dirname(path))
+        self._status.showMessage(f"메모를 내보냈습니다: {path}", STATUS_MESSAGE_MS)
+
+    def _copy_notes(self):
+        text = self.notes.export_markdown()
+        if text:
+            QApplication.clipboard().setText(text)
+        self._status.showMessage("메모를 마크다운으로 복사했습니다." if text else "메모를 아직 불러오는 중입니다.",
+                                 STATUS_MESSAGE_MS)
 
     def _show_notes_tab(self):
         self.state.set_sidebar(True)

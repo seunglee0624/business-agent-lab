@@ -205,7 +205,7 @@ class NotesPanel(QWidget):
         self._state.go_to(item["page"])
         if kind == "highlights":
             self._notes.set_active(item["id"])
-        elif kind == "notes":
+        elif kind == "notes" and item["source"] == "user":
             self._notes.start_note(item["page"])
 
     def _menu(self, pos):
@@ -214,7 +214,7 @@ class NotesPanel(QWidget):
             return
         kind, item = index.data(KIND_ROLE), index.data(ITEM_ROLE)
         menu = QMenu(self)
-        if kind != "bookmarks":
+        if kind == "highlights" or kind == "notes" and item["source"] == "user":  # an AI answer stays as given
             menu.addAction("편집", lambda: self._edit(kind, item))
         if kind == "highlights":
             menu.addAction("AI에게 질문", lambda: (self._notes.select_highlight(item["id"]), self._ask.trigger()))
@@ -232,7 +232,7 @@ class NotesPanel(QWidget):
         if kind == "highlights":
             self._notes.remove_highlight(item["id"])
         elif kind == "notes":
-            self._notes.set_page_note(item["page"], "")
+            self._notes.remove_note(item["id"])
         else:
             self._notes.toggle_bookmark(item["page"])
 

@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import (QButtonGroup, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-                               QLineEdit, QPushButton, QRadioButton, QSpinBox, QVBoxLayout)
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
+                               QLabel, QLineEdit, QPushButton, QRadioButton, QSpinBox, QVBoxLayout)
 
 from app import theme
 from app.core.llm import make_backend
@@ -35,7 +35,7 @@ def _secret(value, placeholder):
 
 
 def llm_settings_dialog(parent, config):
-    """The AI backend, its key and model, and the whole-document limit. Returns the new config, or None."""
+    """The AI backend, its key and model, the whole-document limit and chat saving. Returns the new config, or None."""
     dialog = QDialog(parent, windowTitle="AI 설정", objectName="llmSettingsDialog")
     backend, backend_row = _choices(dialog, BACKENDS, config["backend"])
 
@@ -68,13 +68,15 @@ def llm_settings_dialog(parent, config):
     limit.setGroupSeparatorShown(True)
     limits = QFormLayout()
     limits.addRow("문서 전체 상한", limit)
+    save_chat = QCheckBox("문서마다 대화 기록 저장 (다시 열면 복원)", checked=config["save_chat"])
+    limits.addRow("", save_chat)
 
     def current():
         return {**config, "backend": backend.checkedButton().key,
                 "anthropic_key": anthropic_key.text().strip(), "anthropic_model": anthropic_model.text().strip(),
                 "anthropic_effort": effort.checkedButton().key, "openai_base_url": base_url.text().strip(),
                 "openai_key": compat_key.text().strip(), "openai_model": compat_model.text().strip(),
-                "document_limit": limit.value()}
+                "document_limit": limit.value(), "save_chat": save_chat.isChecked()}
 
     def show_backend():
         chosen = backend.checkedButton().key

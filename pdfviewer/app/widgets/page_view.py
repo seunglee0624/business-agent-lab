@@ -235,12 +235,6 @@ class PageView(QGraphicsView):
         self._active_mark.setPen(QPen(theme.color("color.accent"), theme.token("size.current_frame")))
         self._active_mark.setZValue(0.6)
         self.scene().addItem(self._active_mark)
-        self._ribbons, self._note_marks = QGraphicsPathItem(), QGraphicsPathItem()  # bookmarks, page notes
-        for item, color in ((self._ribbons, "color.accent"), (self._note_marks, "color.hl_yellow")):
-            item.setPen(QPen(theme.color("color.page_shadow"), 1))
-            item.setBrush(theme.color(color))
-            item.setZValue(0.7)
-            self.scene().addItem(item)
         doc = self._state.document
         for i in range(doc.page_count if doc else 0):
             shadow, paper, image = QGraphicsRectItem(), QGraphicsRectItem(), QGraphicsPixmapItem()
@@ -339,6 +333,7 @@ class PageView(QGraphicsView):
 
     def _on_scroll(self):
         st = self._state
+        self._draw_markers()  # every scroll, also the view's own (_adjusting): the ribbons stick to the view
         if self._adjusting or not st.document:
             return
         if st.view_mode == "continuous":
@@ -349,7 +344,6 @@ class PageView(QGraphicsView):
                 self._following_scroll = False
         self._refresh()
         self._debounce.start()
-        self._draw_markers()
         self.update_bar()
 
     def _scroll_screen(self, direction):
@@ -495,7 +489,11 @@ class PageView(QGraphicsView):
         self.update_bar()
 
     def _draw_markers(self):
-        """Bookmark and page-note ribbons; they follow a page scrolled half out of view (_marker_rects)."""
+        """The ribbons follow the view (_marker_rects), so the whole view is painted again (drawForeground)."""
+        self.viewport().update()
+
+    def _marker_paths(self):
+        """(bookmark ribbons, page-note ribbons) in scene coordinates, where the view is now."""
         ribbons, notes = QPainterPath(), QPainterPath()
         bookmarked, noted = self._notes.marked_pages()
         for page in (bookmarked | noted) & self._rects.keys():  # only marked pages: cheap on thousands of pages
@@ -504,8 +502,15 @@ class PageView(QGraphicsView):
                 ribbons.addPolygon(_ribbon(ribbon))
             if page in noted:  # the same ribbon, in the note colour
                 notes.addPolygon(_ribbon(note))
-        self._ribbons.setPath(ribbons)
-        self._note_marks.setPath(notes)
+        return ribbons, notes
+
+    def drawForeground(self, painter, rect):
+        """Ribbons are painted, not scene items: worked out at paint time, they are never left where the view was
+        before the view scrolled itself (e.g. at the bottom of a page after a page turn in single page view)."""
+        painter.setPen(QPen(theme.color("color.page_shadow"), 1))
+        for path, color in zip(self._marker_paths(), ("color.accent", "color.hl_yellow")):
+            painter.setBrush(theme.color(color))
+            painter.drawPath(path)
 
     def _marker_rects(self, page):
         """Scene rects of a page's bookmark ribbon (top-right corner) and note mark (left of it).

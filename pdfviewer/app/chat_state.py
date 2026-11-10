@@ -5,6 +5,7 @@ from app.core.llm import make_backend, prompts
 from app.core.llm.worker import LLMWorker
 
 SCOPES = {"selection": "선택한 부분", "page": "현재 페이지", "document": "문서 전체"}
+SAVED_KEYS = ("role", "text", "where", "sent", "page", "usage", "note_id")  # what a saved conversation keeps
 MAX_TURNS = 10  # question+answer pairs sent back as history; older ones are dropped
 
 
@@ -12,7 +13,9 @@ class ChatState(QObject):
     """Sole owner of the AI chat: one conversation per open file, the context scope, and the answer in progress.
     Messages: {"role": "user" | "assistant" | "error" | "note", "text", ...}. A user message keeps "sent", the exact
     content sent; turns already sent never change (append-only), so each request reuses the previous one's cache.
-    The first whole-document question puts the document in the system prompt, where it stays for that conversation."""
+    The first whole-document question puts the document in the system prompt, where it stays for that conversation.
+    With notes (AnnotationState), each finished turn is saved in the file's notes and comes back when it is reopened,
+    and an answer can be kept as a note of the page it was asked on."""
 
     changed = Signal()  # messages added or an answer grew; also when another file's conversation is shown
     busy_changed = Signal()
@@ -23,9 +26,9 @@ class ChatState(QObject):
     backend_changed = Signal()  # the AI settings were saved
     input_requested = Signal()  # "AI에게 질문": the question box should take the keys
 
-    def __init__(self, viewer, backend=None):
+    def __init__(self, viewer, backend=None, notes=None):
         super().__init__()
-        self._viewer = viewer
+        self._viewer, self._notes = viewer, notes
         config = settings.llm_config()
         self.backend = backend or make_backend(config)
         self.document_limit = config["document_limit"]
@@ -41,6 +44,8 @@ class ChatState(QObject):
         renderer.text_ready.connect(self._on_text)
         renderer.document_text_ready.connect(self._on_text)
         viewer.document_changed.connect(self._on_document)
+        if notes:
+            notes.changed.connect(self._restore)  # also when a document's notes finish loading
         for signal in (renderer.text_ready, renderer.document_text_ready, viewer.page_changed, viewer.selection_changed,
                        viewer.document_changed, self.scope_changed, self.panel_changed):
             signal.connect(self.context_changed)
@@ -138,13 +143,13 @@ class ChatState(QObject):
                 chat.append({"role": "error", "kind": "no_selection", "text": "선택한 부분이 없습니다."})
                 self.changed.emit()
                 return
-            where, self._needs = f"p.{viewer.selection[0] + 1}", None
+            where, self._needs, page = f"p.{viewer.selection[0] + 1}", None, viewer.selection[0]
         elif self.scope == "document":
-            where, self._needs = "문서 전체", "document"
+            where, self._needs, page = "문서 전체", "document", viewer.current_page
         else:
-            self._needs = viewer.current_page
+            self._needs = page = viewer.current_page
             where = f"p.{self._needs + 1}"
-        user = {"role": "user", "text": question, "where": where}
+        user = {"role": "user", "text": question, "where": where, "page": page}  # page: where "메모로 저장" puts it
         answer = {"role": "assistant", "text": "", "streaming": True}
         chat += [user, answer]
         self._turn = chat, user, answer
@@ -164,12 +169,57 @@ class ChatState(QObject):
             self._fail("cancelled", "보내기 전에 중지했습니다.")
 
     def clear(self):
-        """Forget this file's conversation (and the document it carried)."""
+        """Forget this file's conversation (and the document it carried), the saved copy too."""
         self.cancel()
         self.messages.clear()
         if self._viewer.document:
             self._documents.pop(self._viewer.document.path, None)
+            if self._notes:  # even with saving off: a cleared conversation must not come back
+                self._notes.save_chat(self._viewer.document.path, [])
         self.changed.emit()
+
+    # ---- saving: the conversation and answers kept as notes
+
+    def save_answer(self, index):
+        """Keep the answer at messages[index] as a note of the page its question was asked on."""
+        messages = self.messages
+        answer = messages[index] if 0 <= index < len(messages) else None
+        if not (self.can_save_answers and answer and answer["role"] == "assistant" and answer["text"]
+                and not answer.get("streaming") and not self.answer_saved(answer)):
+            return
+        question = next((m for m in reversed(messages[:index]) if m["role"] == "user"), {})
+        page = question.get("page", self._viewer.current_page)  # conversations saved before 11c have none
+        answer["note_id"] = self._notes.add_ai_note(page, answer["text"], question.get("text", ""))
+        self._save(messages)
+        self.changed.emit()
+
+    @property
+    def can_save_answers(self):
+        """Answers can be kept once this file's notes have loaded."""
+        return self._notes is not None and self._notes.store is not None
+
+    def answer_saved(self, message):
+        """Whether an answer is kept as a note (not if that note was deleted or undone since)."""
+        return bool(self._notes and message.get("note_id") and self._notes.has_note(message["note_id"]))
+
+    def _save(self, chat):
+        """Save a conversation into its file's notes: finished turns only, no errors or notes."""
+        path = next((path for path, messages in self._chats.items() if messages is chat), None)
+        if not (self._notes and path and self.config["save_chat"]):
+            return
+        kept = [{key: m[key] for key in SAVED_KEYS if key in m} for m in chat
+                if m["role"] in ("user", "assistant") and not m.get("failed") and not m.get("streaming")]
+        self._notes.save_chat(path, kept)
+
+    def _restore(self):
+        """A file whose notes just loaded gets its saved conversation back, unless one was started already."""
+        doc = self._viewer.document
+        if not (self._notes and doc and not self._chats.get(doc.path) and self.config["save_chat"]):
+            return
+        saved = self._notes.saved_chat()
+        if saved:
+            self._chats[doc.path] = saved
+            self.changed.emit()
 
     def _page_text(self, page, request):
         """The page's text, or None while it is still being extracted (asked for if request)."""
@@ -252,11 +302,12 @@ class ChatState(QObject):
             worker.deleteLater()
         if worker is not self._worker:
             return
-        answer = self._turn[2]
+        chat, _, answer = self._turn
         answer.pop("streaming")
         if usage:
             answer["usage"] = usage
         self._turn = self._worker = None
+        self._save(chat)
         self.busy_changed.emit()
         self.changed.emit()
 

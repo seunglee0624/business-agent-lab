@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QStandardPaths, QTimer, Signal
 from PySide6.QtGui import QUndoCommand, QUndoGroup, QUndoStack
 
 from app.core import settings
+from app.core.annotations.export import to_markdown
 from app.core.annotations.store import AnnotationStore, doc_id, new_id, now
 
 COLORS = {"yellow": "노랑", "green": "초록", "blue": "파랑", "pink": "분홍"}
@@ -47,8 +48,8 @@ SAVE_STATES = {"": "", "pending": "저장 중…", "saved": "저장됨", "failed
 
 
 class AnnotationState(QObject):
-    """Sole owner of the notes of every open document: highlights, page notes, bookmarks, the document note
-    (chat later). Each document's notes live in core/annotations/store.py, found by content id.
+    """Sole owner of the notes of every open document: highlights, page notes (the user's, one per page, and saved
+    AI answers), bookmarks, the document note and the saved AI conversation. Each document's notes live in core/annotations/store.py, found by content id.
     Every change but the document note (typed in its own box, with that box's undo) can be undone."""
 
     changed = Signal()  # any highlight, page note, bookmark or the document note; also a document switch
@@ -121,6 +122,17 @@ class AnnotationState(QObject):
 
     def doc_note(self):
         return self.store.data["doc_note"] if self.store else ""
+
+    def has_note(self, note_id):
+        return self.store is not None and self.store.find("notes", note_id) is not None
+
+    def saved_chat(self):
+        """The current document's saved AI conversation (copies: the chat owns its live messages)."""
+        return [dict(message) for message in self.store.data["chat"]] if self.store else []
+
+    def export_markdown(self):
+        """The current document's notes as Markdown ("" while they are still loading)."""
+        return to_markdown(self.store.data) if self.store else ""
 
     @property
     def is_editing(self):
@@ -195,6 +207,23 @@ class AnnotationState(QObject):
         words = info[0] if info else []
         line = [w[4] for w in words if words and w[5:7] == words[0][5:7]]  # same (block, line) as the first word
         return " ".join(line)[:LABEL_CHARS]
+
+    def add_ai_note(self, page, text, question):
+        """An AI answer kept as a note of the page it was asked on; returns its id."""
+        item = {"id": new_id(), "page": page, "text": text.strip(), "source": "ai", "question": question,
+                "created": now(), "updated": now()}
+        self._add("notes", item, "AI 답변 메모")
+        return item["id"]
+
+    def remove_note(self, note_id):
+        self._remove("notes", note_id, "메모 지우기")
+
+    def save_chat(self, path, messages):
+        """Keep a file's AI conversation in its notes (no undo step: the chat has its own clear)."""
+        store = self._stores.get(self._ids.get(path))
+        if store is not None and messages != store.data["chat"]:
+            store.set("chat", messages)
+            self._changed(emit=False)
 
     def set_doc_note(self, text):
         """Kept as typed (no undo step per key: its box has its own undo)."""

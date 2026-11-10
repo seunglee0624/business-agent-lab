@@ -62,6 +62,15 @@ def save_doc_id(path, size, mtime, doc_id):
     _save("files/doc_ids", ids)
 
 
+def export_folder():
+    """Where notes were last exported ("" before the first time)."""
+    return QSettings().value("notes/export_folder", "")
+
+
+def save_export_folder(folder):
+    QSettings().setValue("notes/export_folder", folder)
+
+
 def highlight_color():
     return QSettings().value("notes/color", "yellow")
 
@@ -112,6 +121,7 @@ LLM_DEFAULTS = {
     "openai_key": "",  # some servers (Ollama) need none
     "max_tokens": 4096,  # covers thinking too, so well above a typical answer
     "document_limit": 60000,  # characters of a whole document sent at most
+    "save_chat": True,  # keep each file's AI conversation in its notes
 }
 
 

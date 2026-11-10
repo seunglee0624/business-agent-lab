@@ -7,6 +7,11 @@ KIND_ROLE = Qt.ItemDataRole.UserRole + 1  # "highlights" | "notes" | "bookmarks"
 ITEM_ROLE = Qt.ItemDataRole.UserRole + 2  # the stored dict
 
 
+def label(kind, item):
+    """What a row is called: a saved AI answer is a note too, marked as the AI's."""
+    return "AI 메모" if kind == "notes" and item.get("source") == "ai" else FILTERS[kind]
+
+
 class NotesModel(QAbstractListModel):
     """The current document's highlights, page notes or bookmarks (one kind at a time) in page order.
     Reloaded from AnnotationState on every change (a few hundred rows at most)."""
@@ -44,5 +49,5 @@ class NotesModel(QAbstractListModel):
             return item
         if role == Qt.ItemDataRole.DisplayRole:  # also what a screen reader says
             text = {"highlights": item.get("text", ""), "notes": item.get("text", ""), "bookmarks": item.get("label", "")}[kind]
-            return f"{item['page'] + 1}쪽 {FILTERS[kind]}: {text}"
+            return f"{item['page'] + 1}쪽 {label(kind, item)}: {text}"
         return None

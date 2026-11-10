@@ -3,7 +3,7 @@ from PySide6.QtGui import QFontMetrics, QTextLayout
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from app import theme
-from app.models.notes_model import FILTERS, ITEM_ROLE, KIND_ROLE
+from app.models.notes_model import ITEM_ROLE, KIND_ROLE, label
 
 QUOTE_LINES = 2
 
@@ -34,13 +34,13 @@ class NotesDelegate(QStyledItemDelegate):
         painter.save()
         if option.state & QStyle.StateFlag.State_Selected:
             painter.fillRect(cell, theme.color("color.bg_highlight"))
-        color = {"highlights": f"color.hl_{item.get('color', 'yellow')}", "notes": "color.hl_yellow",
-                 "bookmarks": "color.accent"}[kind]
+        color = {"highlights": f"color.hl_{item.get('color', 'yellow')}", "bookmarks": "color.accent",
+                 "notes": "color.text_muted" if item.get("source") == "ai" else "color.hl_yellow"}[kind]
         painter.fillRect(QRectF(cell.left(), cell.top() + pad, band, cell.height() - 2 * pad), theme.color(color))
         left, width = cell.left() + band + pad, cell.width() - band - 2 * pad
         y = cell.top() + pad
         painter.setPen(theme.color("color.text_muted"))
-        painter.drawText(QRectF(left, y, width, line), Qt.AlignmentFlag.AlignLeft, FILTERS[kind])
+        painter.drawText(QRectF(left, y, width, line), Qt.AlignmentFlag.AlignLeft, label(kind, item))
         painter.drawText(QRectF(left, y, width, line), Qt.AlignmentFlag.AlignRight, f"p.{item['page'] + 1}")
         text, text_color, comment = self._lines(index)
         painter.setPen(theme.color(text_color))

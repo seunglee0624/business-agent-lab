@@ -474,7 +474,7 @@ def test_notes_and_bookmarks_of_the_wrong_shape_are_kept_aside(tmp_path):
 def test_b_key_ribbon_and_a_click_keeps_it(qtbot, window):
     view, notes = window._view, window.notes
     qtbot.keyClick(view, Qt.Key.Key_B)
-    assert notes.is_bookmarked(0) and not view._ribbons.path().isEmpty()
+    assert notes.is_bookmarked(0) and not view._marker_paths()[0].isEmpty()
     view.ensureVisible(view._marker_rects(0)[0])
     ribbon, _ = view._marker_rects(0)  # after scrolling: the marks follow the view's top
     view._update_cursor(view.mapFromScene(ribbon.center()).toPointF())
@@ -482,7 +482,7 @@ def test_b_key_ribbon_and_a_click_keeps_it(qtbot, window):
     qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.mapFromScene(ribbon.center()))
     assert notes.is_bookmarked(0)  # not lost to a stray click
     qtbot.keyClick(view, Qt.Key.Key_B)
-    assert not notes.is_bookmarked(0) and view._ribbons.path().isEmpty()
+    assert not notes.is_bookmarked(0) and view._marker_paths()[0].isEmpty()
 
 
 def test_ribbons_stay_in_view_on_a_page_bigger_than_the_view(qtbot, window):
@@ -494,13 +494,13 @@ def test_ribbons_stay_in_view_on_a_page_bigger_than_the_view(qtbot, window):
     view.verticalScrollBar().setValue(view.verticalScrollBar().value() + round(page.height() / 3))
     top = view.mapToScene(0, 0).y()
     assert page.top() < top < page.bottom()
-    for path in (view._ribbons.path(), view._note_marks.path()):
+    for path in view._marker_paths():
         assert path.boundingRect().top() == pytest.approx(top)
-    assert view.mapToScene(view.viewport().rect()).boundingRect().contains(view._ribbons.path().boundingRect())
+    assert view.mapToScene(view.viewport().rect()).boundingRect().contains(view._marker_paths()[0].boundingRect())
     assert view._marker_at(view._marker_rects(0)[0].center()) == ("bookmark", 0)
     window._actions["toggle_chat"].trigger()  # the view narrows; nothing scrolls
     qtbot.waitUntil(lambda: view.mapToScene(view.viewport().rect()).boundingRect().contains(
-        view._ribbons.path().boundingRect()))
+        view._marker_paths()[0].boundingRect()))
 
 
 def test_m_key_writes_a_page_note_and_its_mark_reopens_it(qtbot, window):
@@ -513,7 +513,7 @@ def test_m_key_writes_a_page_note_and_its_mark_reopens_it(qtbot, window):
     qtbot.keyClicks(box, "Big idea")  # B and M typed into the box: not the shortcuts
     qtbot.keyClick(box, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
     assert notes.page_note(0)["text"] == "Big idea" and not notes.is_bookmarked(0)
-    assert not view._note_marks.path().isEmpty() and not box.isVisible()
+    assert not view._marker_paths()[1].isEmpty() and not box.isVisible()
     view._update_cursor(view.mapFromScene(mark.center()).toPointF())
     assert view.viewport().toolTip() == "Big idea"
     qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.mapFromScene(mark.center()))

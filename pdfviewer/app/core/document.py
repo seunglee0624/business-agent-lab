@@ -14,6 +14,7 @@ class Document:
         # identifies this file version for the render workers' own open copies
         self.key = (self.path, os.stat(self.path).st_mtime_ns)
         self._sizes = {}  # index -> (w, h); continuous layout asks for every page often
+        self._page_count = None  # the thumbnail list asks thousands of times per jump
 
     @property
     def is_locked(self):
@@ -24,11 +25,14 @@ class Document:
         ok = bool(self._doc.authenticate(password))
         if ok:
             self.password = password
+            self._page_count = None  # counted while locked
         return ok
 
     @property
     def page_count(self):
-        return self._doc.page_count
+        if self._page_count is None:
+            self._page_count = self._doc.page_count
+        return self._page_count
 
     def page_size(self, index):
         if index not in self._sizes:
