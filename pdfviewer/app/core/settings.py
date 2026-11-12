@@ -62,15 +62,6 @@ def save_doc_id(path, size, mtime, doc_id):
     _save("files/doc_ids", ids)
 
 
-def export_folder():
-    """Where notes were last exported ("" before the first time)."""
-    return QSettings().value("notes/export_folder", "")
-
-
-def save_export_folder(folder):
-    QSettings().setValue("notes/export_folder", folder)
-
-
 def highlight_color():
     return QSettings().value("notes/color", "yellow")
 

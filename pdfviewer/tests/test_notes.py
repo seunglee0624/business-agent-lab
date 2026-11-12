@@ -240,6 +240,15 @@ def test_clicking_a_highlights_own_colour_removes_it(qtbot, window):
     assert [h["color"] for h in notes.highlights()] == ["yellow"]
 
 
+    select_on_screen(window, 0, 0)  # part of it, selected again: its colour takes it off, no second copy
+    qtbot.waitUntil(view._bar.isVisible)
+    qtbot.mouseClick(bar_buttons(window)["노랑 하이라이트 지우기 (Ctrl+Z 로 되돌리기)"], Qt.MouseButton.LeftButton)
+    assert notes.highlights() == [] and window.state.selection is None
+    select_on_screen(window, 0, 1)
+    qtbot.waitUntil(view._bar.isVisible)
+    assert "노랑 하이라이트" in bar_buttons(window)  # nothing highlighted any more: it adds again
+
+
 def test_escape_cancels_a_comment(qtbot, window):
     view, notes = window._view, window.notes
     select_on_screen(window, 0, 0)
@@ -624,14 +633,6 @@ def test_notes_tab_menu_changes_colour_and_footer_exports(qtbot, window, monkeyp
     assert [a.text() for a in colours.actions()] == ["노랑", "초록", "파랑", "분홍"]
     colours.actions()[2].trigger()
     assert notes.store.items("highlights")[0]["color"] == "blue"
-    export = panel.findChild(QToolButton, "notesExport")
-    triggered = []
-    window._actions["export_notes"].triggered.disconnect()
-    window._actions["export_notes"].triggered.connect(lambda: triggered.append(1))
-    export.click()
-    assert triggered and export.isEnabled()
-    window._actions["export_notes"].setEnabled(False)
-    assert not export.isEnabled()
 
 
 def test_an_ai_note_is_listed_without_markdown_marks(notes_setup):

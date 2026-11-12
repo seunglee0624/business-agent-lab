@@ -31,12 +31,12 @@ STATUS_MESSAGE_MS = 10000  # a warning in the status bar stays this long
 log = logging.getLogger(__name__)
 
 # need an open document: disabled on the empty screen so no button silently does nothing
-DOCUMENT_ACTIONS = ("close_tab", "export_notes", "copy_notes", "properties", "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", "notes_tab", "open_search", "prev", "next", "first_page", "last_page",
+DOCUMENT_ACTIONS = ("close_tab", "copy_notes", "properties", "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", "notes_tab", "open_search", "prev", "next", "first_page", "last_page",
                     "page_up", "page_down", "zoom_in", "zoom_out", "actual_size", "fit_width", "fit_page", *VIEW_MODES, "cover_alone", "rotate_left", "rotate_right", "select_tool", "hand_tool",
                     "toggle_presentation")
 
 MENUS = {  # None = separator, "recent" = the recent files submenu
-    "파일": ["open", "recent", "close_tab", None, "export_notes", "copy_notes", None, "properties", None, "quit"],
+    "파일": ["open", "recent", "close_tab", None, "copy_notes", None, "properties", None, "quit"],
     "편집": ["undo", "redo", None, "copy", "ask_ai", "highlight", "page_note", "bookmark", "next_bookmark", "prev_bookmark", None,
              "open_search"],
     "보기": ["prev", "next", "first_page", "last_page", None, "zoom_in", "zoom_out", "actual_size", "fit_width",
@@ -127,7 +127,7 @@ class MainWindow(QMainWindow):
         self._status = StatusBar(self.state, self.notes)
         self.setStatusBar(self._status)
         self.notes.problem.connect(lambda message: self._status.showMessage(message, STATUS_MESSAGE_MS))
-        self._sidebar = Sidebar(self.state, self.notes, self._actions["ask_ai"], self._actions["export_notes"])
+        self._sidebar = Sidebar(self.state, self.notes, self._actions["ask_ai"])
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
         inset = QWidget(objectName="sidebarInset")  # a gap from the window's left edge for the tabs and outlined buttons
@@ -214,7 +214,6 @@ class MainWindow(QMainWindow):
 
         add("open", "열기…", self.choose_file, True)
         add("close_tab", "탭 닫기", st.close_tab)
-        add("export_notes", "노트 내보내기…", self._export_notes)
         add("copy_notes", "노트를 클립보드로 복사", self._copy_notes)
         add("properties", "문서 속성…", lambda: show_properties(self, st.document))
         add("quit", "종료", self.close)
@@ -293,26 +292,6 @@ class MainWindow(QMainWindow):
             a[name].setEnabled(len(st.tabs) > 1)
         a["undo"].setEnabled(self.notes.undo_group.canUndo())
         a["redo"].setEnabled(self.notes.undo_group.canRedo())
-
-    def _export_notes(self):
-        """The current document's notes as a Markdown file, by default next to the PDF."""
-        text, doc = self.notes.export_markdown(), self.state.document
-        if not text:
-            self._status.showMessage("노트를 아직 불러오는 중입니다. 잠시 뒤 다시 하세요.", STATUS_MESSAGE_MS)
-            return
-        folder = settings.export_folder() or os.path.dirname(doc.path)
-        path, _ = QFileDialog.getSaveFileName(self, "노트 내보내기", os.path.join(folder, f"{Path(doc.path).stem}_notes.md"),
-                                              "마크다운 (*.md);;모든 파일 (*)")
-        if not path:
-            return
-        try:
-            Path(path).write_text(text, encoding="utf-8")
-        except OSError as error:
-            log.warning("cannot export notes to %s", path, exc_info=True)
-            self._status.showMessage(f"노트를 내보내지 못했습니다: {error}", STATUS_MESSAGE_MS)
-            return
-        settings.save_export_folder(os.path.dirname(path))
-        self._status.showMessage(f"노트를 내보냈습니다: {path}", STATUS_MESSAGE_MS)
 
     def _copy_notes(self):
         text = self.notes.export_markdown()

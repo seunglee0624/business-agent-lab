@@ -142,10 +142,19 @@ class AnnotationState(QObject):
                 return item["id"]
         return None
 
+    def covering_highlight(self):
+        """The highlight that already holds every selected word (the newest), or None."""
+        if not self._viewer.selection:
+            return None
+        page, first, last = self._viewer.selection
+        return next((h for h in reversed(self.highlights())
+                     if h["page"] == page and h["words"][0] <= first and last <= h["words"][1]), None)
+
     # ---- changes (each one undoable)
 
     def highlight_selection(self, color=None):
-        """Highlight the selected words; returns the new highlight's id (None without a selection)."""
+        """Highlight the selected words; returns the new highlight's id (None without a selection).
+        Words already highlighted in that colour lose the highlight instead: the colour works as a toggle."""
         viewer, store = self._viewer, self.store
         info = viewer.renderer.info(viewer.selection[0]) if viewer.selection else None
         if store is None or not info:
@@ -153,6 +162,11 @@ class AnnotationState(QObject):
         if color and color != self.color:
             self.color = color
             settings.save_highlight_color(color)
+        covering = self.covering_highlight()
+        if covering and covering["color"] == self.color:
+            self.remove_highlight(covering["id"])
+            viewer.clear_selection()
+            return None
         page, first, last = viewer.selection
         item = {"id": new_id(), "page": page, "words": [first, last], "quads": _line_boxes(info[0][first:last + 1]),
                 "text": viewer.selected_text(), "color": self.color, "comment": "", "created": now(), "updated": now()}

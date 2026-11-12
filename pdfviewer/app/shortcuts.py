@@ -7,7 +7,6 @@ from app.core import settings
 KEYS = {
     "open": ["Ctrl+O"],
     "close_tab": ["Ctrl+W"],
-    "export_notes": ["Ctrl+E"],
     "properties": ["Ctrl+D"],
     "quit": ["Ctrl+Q"],
     "copy": ["Ctrl+C"],

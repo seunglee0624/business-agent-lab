@@ -115,8 +115,8 @@ def test_ribbons_are_painted_at_the_page_top_after_a_page_turn(qtbot, text_pdf):
         window.state.renderer.shutdown()
 
 
-def test_chat_panel_save_link_and_export(qtbot, text_pdf, tmp_path, monkeypatch):
-    from PySide6.QtWidgets import QFileDialog
+def test_chat_panel_save_link_and_copy(qtbot, text_pdf, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
     from app.main_window import MainWindow
     window = MainWindow()
     qtbot.addWidget(window)
@@ -131,11 +131,7 @@ def test_chat_panel_save_link_and_export(qtbot, text_pdf, tmp_path, monkeypatch)
         panel._open_link(QUrl("save:1"))
         panel._render()
         assert "메모에 저장됨" in panel._log.toPlainText() and "메모로 저장" not in panel._log.toPlainText()
-        target = tmp_path / "out" / "text_notes.md"
-        target.parent.mkdir()
-        monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args: (str(target), ""))
-        window._actions["export_notes"].trigger()
-        assert target.read_text(encoding="utf-8").startswith("# text\n\n## 하이라이트·메모\n\n### p.1\n\n**AI** (질문: 질문)")
-        assert settings.export_folder() == str(target.parent)
+        window._actions["copy_notes"].trigger()
+        assert QApplication.clipboard().text().startswith("# text\n\n## 하이라이트·메모\n\n### p.1\n\n**AI** (질문: 질문)")
     finally:
         window.state.renderer.shutdown()

@@ -129,7 +129,10 @@ class _NoteBar(QFrame):
             self._shown = self._grab = self.moved = None
             self.hide()
             return
-        current = self._notes.highlight(self._notes.active)
+        if mode == "selection":  # words already highlighted: their colour shows, and takes it off
+            current = self._notes.covering_highlight()
+        else:
+            current = self._notes.highlight(self._notes.active)
         shown = (mode, current and current["color"])
         if shown == self._shown:  # scrolling: only the position changes
             return
@@ -147,7 +150,7 @@ class _NoteBar(QFrame):
         for widget in (self._box, self._save_button, self._cancel_button, self._grip):
             widget.setVisible(mode == "comment")
         for key, dot in self._dots.items():
-            on = mode == "highlight" and current is not None and current["color"] == key
+            on = mode != "comment" and current is not None and current["color"] == key
             dot.setProperty("current", on)
             tip = f"{COLORS[key]} 하이라이트" + (" 지우기 (Ctrl+Z 로 되돌리기)" if on else "")
             dot.setToolTip(tip)

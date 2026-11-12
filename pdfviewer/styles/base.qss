@@ -775,25 +775,3 @@ QFrame#noteBar QToolButton#noteSave:pressed {
     background: {{color.accent_pressed}};
 }
 
-/* the notes tab footer (export): an outlined secondary button like the dialogs' */
-QToolButton#notesExport {
-    background: transparent;
-    color: {{color.text}};
-    border: 1px solid {{color.outline}};
-    border-radius: {{radius.md}}px;
-    padding: 0px; /* a tab column's width: the text is centred, side padding would cut it */
-    min-height: {{size.control_sm}}px;
-}
-
-QToolButton#notesExport:hover {
-    border-color: {{color.text}};
-}
-
-QToolButton#notesExport:focus {
-    border: 2px solid {{color.accent}};
-}
-
-QToolButton#notesExport:disabled {
-    color: {{color.text_disabled}};
-    border-color: {{color.bg_highlight}};
-}
