@@ -17,7 +17,7 @@ class Tab:
     """An open file and how it was left. The visible tab's live values are on ViewerState."""
     document: object
     page: int = 0
-    zoom_mode: str = "fit_width"
+    zoom_mode: str = "fit_page"
     zoom: float = 1.0
     view_mode: str = "single"
     cover_alone: bool = True
@@ -51,7 +51,7 @@ class ViewerState(QObject):
         self.tab_index = None  # current tab
         self.current_page = 0
         self.zoom = 1.0
-        self.zoom_mode = "fit_width"  # "custom" | "fit_width" | "fit_page"
+        self.zoom_mode = "fit_page"  # "custom" | "fit_width" | "fit_page"; a whole page in view to start
         self.view_mode = "single"  # one page at a time until the reader picks another mode
         self.cover_alone = True  # spread mode: first page on its own, like a book cover
         self.rotation = 0  # extra clockwise degrees for the whole document

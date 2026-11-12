@@ -1,10 +1,11 @@
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QPainterPath, QPen, QPixmap, QPolygonF, QTransform
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView, QHBoxLayout, QPlainTextEdit,
-                               QToolButton, QVBoxLayout)
+                               QSizeGrip, QToolButton, QVBoxLayout)
 
 from app import theme
+from app.core import settings
 from app.annotation_state import COLORS
 from app.icons import icon
 from app.core.layout import layout
@@ -21,6 +22,12 @@ class _CommentBox(QPlainTextEdit):
         super().__init__(objectName="noteComment", placeholderText="코멘트 (Ctrl+Enter 저장, Esc 취소)")
         self._save, self._cancel = save, cancel
         self.setTabChangesFocus(True)
+        self.setMinimumSize(theme.token("size.comment_width"), theme.token("size.comment_height"))
+        saved = settings.comment_size()
+        self.hint = QSize(*saved).expandedTo(self.minimumSize()) if saved else self.minimumSize()
+
+    def sizeHint(self):
+        return self.hint
 
     def event(self, event):
         if event.type() == QEvent.Type.ShortcutOverride and event.key() == Qt.Key.Key_Escape:
@@ -42,13 +49,17 @@ class _NoteBar(QFrame):
     """Floats under the selected text or the clicked highlight. A child of the view, not a popup window:
     WSLg's Wayland popups do not close, and this one behaves the same everywhere.
     selection: copy, ask the AI, a colour to highlight.
-    highlight: its colour, comment, ask the AI, delete. comment: a box to write the comment in."""
+    highlight: its colour, comment, ask the AI, delete. comment: a box to write the comment in,
+    moved by dragging the bar's free space and resized by its corner grip."""
 
     def __init__(self, view, notes, copy_action, ask_action):
         super().__init__(view.viewport(), objectName="noteBar")
+        self.setWindowFlags(Qt.WindowType.SubWindow)  # the size grip resizes this bar, not the main window
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)  # a click between buttons is not a page click
         self._view, self._notes, self._ask = view, notes, ask_action
         self.mode = None
+        self.moved = None  # where the user dragged it in the view: it stays there while the page scrolls
+        self._grab = None  # the press point while it is dragged
         self._shown = None  # (mode, colour) the buttons were last set up for
         row = QHBoxLayout()
         row.setSpacing(theme.token("spacing.xs"))
@@ -77,7 +88,6 @@ class _NoteBar(QFrame):
                                         "하이라이트 지우기 (Ctrl+Z 로 되돌리기)", "delete"))
         self._box = _CommentBox(lambda: notes.stop_editing(save=True), notes.stop_editing)
         self._box.textChanged.connect(lambda: notes.set_draft(self._box.toPlainText()))
-        self._box.setFixedSize(theme.token("size.comment_width"), theme.token("size.comment_height"))
         self._editor_buttons = QHBoxLayout()
         self._editor_buttons.addStretch(1)
         self._save_button = self._button("저장", lambda: notes.stop_editing(save=True), "저장 (Ctrl+Enter)")
@@ -86,6 +96,10 @@ class _NoteBar(QFrame):
         self._cancel_button.setObjectName("noteCancel")
         self._editor_buttons.addWidget(self._save_button)
         self._editor_buttons.addWidget(self._cancel_button)
+        self._grip = QSizeGrip(self)
+        self._editor_buttons.addWidget(self._grip, 0, Qt.AlignmentFlag.AlignBottom)
+        for button in (self._save_button, self._cancel_button):
+            button.setCursor(Qt.CursorShape.ArrowCursor)  # not the bar's move cursor
         column = QVBoxLayout(self)
         gap = theme.token("spacing.sm")
         column.setContentsMargins(gap, gap, gap, gap)
@@ -109,9 +123,12 @@ class _NoteBar(QFrame):
     def show_mode(self, mode):
         """None hides the bar. A comment being written stays until it is saved or cancelled."""
         mode = "comment" if self._notes.is_editing else mode
+        if self.mode == "comment" and mode != "comment" and self._box.size() != self._box.hint:
+            self._box.hint = self._box.size()  # the next comment, also after a restart, opens at this size
+            settings.save_comment_size(self._box.hint.width(), self._box.hint.height())
         self.mode = mode
         if mode is None:
-            self._shown = None
+            self._shown = self._grab = self.moved = None
             self.hide()
             return
         current = self._notes.highlight(self._notes.active)
@@ -119,12 +136,17 @@ class _NoteBar(QFrame):
         if shown == self._shown:  # scrolling: only the position changes
             return
         self._shown = shown
+        self.moved = None
+        if mode == "comment":
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            self.unsetCursor()
         for widgets in self._groups.values():
             for widget in widgets:
                 widget.hide()
         for widget in self._groups.get(mode, []):
             widget.show()
-        for widget in (self._box, self._save_button, self._cancel_button):
+        for widget in (self._box, self._save_button, self._cancel_button, self._grip):
             widget.setVisible(mode == "comment")
         for key, dot in self._dots.items():
             dot.setProperty("current", mode == "highlight" and current is not None and current["color"] == key)
@@ -134,6 +156,23 @@ class _NoteBar(QFrame):
         self.adjustSize()
         self.show()
         self.raise_()
+
+    def mousePressEvent(self, event):
+        if self.mode == "comment" and event.button() == Qt.MouseButton.LeftButton:
+            self._grab = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._grab is not None:
+            area, pos = self.parentWidget().rect(), self.mapToParent(event.position().toPoint()) - self._grab
+            self.move(max(0, min(pos.x(), area.width() - self.width())),
+                      max(0, min(pos.y(), area.height() - self.height())))
+            self.moved = self.pos()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._grab = None
+        super().mouseReleaseEvent(event)
 
     def _color(self, key):
         if self.mode == "highlight":
@@ -565,6 +604,9 @@ class PageView(QGraphicsView):
             return
         bar.show_mode(mode if on_screen else None)
         if bar.mode is None:
+            return
+        if bar.moved is not None:  # the view's scroll also shifts its child widgets
+            bar.move(bar.moved)
             return
         gap = theme.token("spacing.sm")
         y = box.bottom() + gap

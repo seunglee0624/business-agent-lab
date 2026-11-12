@@ -375,11 +375,52 @@ def test_a_click_between_the_bar_buttons_is_not_a_page_click(qtbot, window):
 
 def test_the_bar_follows_a_scroll(qtbot, window):
     view = window._view
+    window.state.fit_width()  # taller than the view: room to scroll
     select_on_screen(window, 0, 1)
     qtbot.waitUntil(lambda: view._bar.isVisible())
     before = view._bar.pos()
     view.verticalScrollBar().setValue(view.verticalScrollBar().value() + 20)
     assert view._bar.isVisible() and view._bar.pos().y() == before.y() - 20
+
+
+def drag(widget, start, end):
+    """A left-button drag sent as events: QTest's mouseMove carries no pressed button."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    left, none = Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton
+    for kind, pos, button, buttons in ((QEvent.Type.MouseButtonPress, start, left, left),
+                                       (QEvent.Type.MouseMove, end, none, left),
+                                       (QEvent.Type.MouseButtonRelease, end, left, none)):
+        point = QPointF(pos)
+        QApplication.sendEvent(widget, QMouseEvent(kind, point, QPointF(widget.mapToGlobal(pos)), button, buttons,
+                                                   Qt.KeyboardModifier.NoModifier))
+
+
+def test_the_comment_box_moves_and_resizes(qtbot, window):
+    view, notes = window._view, window.notes
+    bar = view._bar
+    window.state.fit_width()  # room to scroll
+    select_on_screen(window, 0, 0)
+    qtbot.waitUntil(bar.isVisible)
+    notes.start_editing(notes.highlight_selection())
+    assert bar.cursor().shape() == Qt.CursorShape.SizeAllCursor
+    before = bar.pos()
+    drag(bar, QPoint(1, 1), QPoint(31, 41))  # the bar's padding
+    assert bar.pos() == before + QPoint(30, 40)
+    view.verticalScrollBar().setValue(view.verticalScrollBar().value() + 20)
+    assert bar.isVisible() and bar.pos() == before + QPoint(30, 40)  # stays where it was put
+
+    size = bar._box.size()
+    drag(bar._grip, QPoint(1, 1), QPoint(41, 21))  # the grip keeps the bar inside the view
+    grown = bar._box.size()
+    assert grown.width() > size.width() and grown.height() > size.height()
+    qtbot.keyClick(bar._box, Qt.Key.Key_Escape)
+    notes.start_editing(notes.highlights()[0]["id"])  # the next comment: the dragged size, under its highlight
+    assert bar._box.size() == grown and bar.moved is None
+    qtbot.keyClick(bar._box, Qt.Key.Key_Escape)
+    assert settings.comment_size() == [grown.width(), grown.height()]  # a restart opens it at this size too
+    assert type(bar._box)(None, None).sizeHint() == grown
 
 
 def test_paging_away_from_a_comment_saves_and_closes_it(qtbot, window):

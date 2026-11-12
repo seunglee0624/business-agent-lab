@@ -62,6 +62,15 @@ def shortcuts_dialog(parent, actions, keys_changed):
             text_box.style().unpolish(text_box)  # QSS reads a dynamic property only on re-polish
             text_box.style().polish(text_box)
             default.setVisible(shortcuts.keys(name) != shortcuts.KEYS.get(name, []))  # only where a key was changed
+        # wide enough for the longest keys ("Ctrl+Tab, Ctrl+PgDown"): QLineEdit's own hint is 17 x's plus its
+        # padding and frame, so that hint minus the 17 x's is what the box adds around its text
+        boxes = [edit.findChild(QLineEdit) for edit, _ in rows.values()]
+        if boxes:
+            metrics = boxes[0].fontMetrics()
+            around = boxes[0].sizeHint().width() - 17 * metrics.horizontalAdvance("x")
+            width = max(metrics.horizontalAdvance(box.text()) for box in boxes) + around + 2  # +2: the text cursor
+            for edit, _ in rows.values():
+                edit.setMinimumWidth(width)
 
     def change(name, keys):
         shortcuts.set_keys(name, keys)

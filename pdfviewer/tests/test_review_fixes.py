@@ -23,7 +23,7 @@ def test_zoom_box_takes_no_typing_and_opens_on_click(qtbot, window, pdf100):
     window.open_file(pdf100)
     box = window.findChild(Toolbar)._zoom
     qtbot.keyClicks(box.lineEdit(), "130")
-    assert box.currentText() == "폭 맞춤" and window.state.zoom_mode == "fit_width"
+    assert box.currentText() == "페이지 맞춤" and window.state.zoom_mode == "fit_page"
     qtbot.mouseClick(box.lineEdit(), Qt.MouseButton.LeftButton)
     qtbot.waitUntil(box.view().isVisible)
     box.hidePopup()
@@ -45,11 +45,11 @@ def test_paging_during_drag_does_not_crash(qtbot, window, pdf100):
 def test_zoom_box_follows_mode_even_when_zoom_is_equal(qtbot, window, pdf100):
     window.open_file(pdf100)
     box = window.findChild(Toolbar)._zoom
-    assert box.currentText() == "폭 맞춤"
+    assert box.currentText() == "페이지 맞춤"
     window.state.set_zoom(window.state.zoom)  # same number, mode becomes custom
     assert box.currentText().endswith("%")
-    window.state.fit_width()  # same number again, mode back to fit width
-    assert box.currentText() == "폭 맞춤"
+    window.state.fit_page()  # same number again, mode back to fit page
+    assert box.currentText() == "페이지 맞춤"
 
 
 def test_presentation_returns_to_fullscreen_it_started_from(pdf100):

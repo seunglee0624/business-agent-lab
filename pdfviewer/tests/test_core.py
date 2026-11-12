@@ -47,9 +47,9 @@ def test_fit_and_custom_zoom(pdf100):
     state = ViewerState()
     state.set_viewport(300, 300)
     state.open(Document(pdf100))
-    assert state.zoom == pytest.approx(0.5)  # default fit_width: 300 / 600
-    state.fit_page()
-    assert state.zoom == pytest.approx(0.375)  # 300 / 800
+    assert state.zoom == pytest.approx(0.375)  # default fit_page: 300 / 800
+    state.fit_width()
+    assert state.zoom == pytest.approx(0.5)  # 300 / 600
     state.set_zoom(100)
     assert state.zoom_mode == "custom" and state.zoom == ViewerState.MAX_ZOOM
     state.set_viewport(900, 900)  # custom zoom ignores viewport changes

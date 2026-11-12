@@ -134,3 +134,11 @@ def test_esc_in_a_key_edit_cancels(qtbot, dialog):
     qtbot.keyClick(edit, Qt.Key.Key_Escape)
     assert shortcuts.keys("next") == ["Right"] and edit.keySequence().toString() == "Right"
     assert not edit.hasFocus() and dialog.isVisible()  # the next Esc closes the dialog
+
+
+def test_every_key_box_shows_its_whole_text(qtbot, dialog):
+    dialog.show()
+    qtbot.waitExposed(dialog)
+    for edit in dialog.findChildren(QKeySequenceEdit):
+        box = edit.findChild(QLineEdit)
+        assert box.fontMetrics().horizontalAdvance(box.text()) <= box.contentsRect().width() - 8, box.text()

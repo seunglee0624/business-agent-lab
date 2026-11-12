@@ -162,3 +162,12 @@ def quick_questions():
 
 def save_quick_questions(questions):
     _save("chat/quick_questions", questions)
+
+
+def comment_size():
+    """[width, height] the comment box was last dragged to, or None."""
+    return _load("notes/comment_size", None)
+
+
+def save_comment_size(width, height):
+    _save("notes/comment_size", [width, height])
