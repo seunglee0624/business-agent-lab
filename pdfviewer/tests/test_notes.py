@@ -225,6 +225,21 @@ def test_click_a_highlight_then_comment_and_delete(qtbot, window):
     assert [h["comment"] for h in notes.highlights()] == ["Hi"]
 
 
+def test_clicking_a_highlights_own_colour_removes_it(qtbot, window):
+    view, notes = window._view, window.notes
+    select_on_screen(window, 0, 1)
+    highlight_id = notes.highlight_selection("green")
+    mark = view._marks["green"].path().boundingRect()
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view_point(view, mark))
+    assert view._bar.mode == "highlight"
+    qtbot.mouseClick(bar_buttons(window)["노랑 하이라이트"], Qt.MouseButton.LeftButton)  # another colour: recolour
+    assert notes.highlight(highlight_id)["color"] == "yellow"
+    qtbot.mouseClick(bar_buttons(window)["노랑 하이라이트 지우기 (Ctrl+Z 로 되돌리기)"], Qt.MouseButton.LeftButton)
+    assert notes.highlights() == [] and not view._bar.isVisible()
+    qtbot.keyClick(view, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert [h["color"] for h in notes.highlights()] == ["yellow"]
+
+
 def test_escape_cancels_a_comment(qtbot, window):
     view, notes = window._view, window.notes
     select_on_screen(window, 0, 0)
@@ -415,12 +430,11 @@ def test_the_comment_box_moves_and_resizes(qtbot, window):
     drag(bar._grip, QPoint(1, 1), QPoint(41, 21))  # the grip keeps the bar inside the view
     grown = bar._box.size()
     assert grown.width() > size.width() and grown.height() > size.height()
+    assert settings.comment_size() == [grown.width(), grown.height()]  # saved on release: the app may close next
     qtbot.keyClick(bar._box, Qt.Key.Key_Escape)
     notes.start_editing(notes.highlights()[0]["id"])  # the next comment: the dragged size, under its highlight
     assert bar._box.size() == grown and bar.moved is None
-    qtbot.keyClick(bar._box, Qt.Key.Key_Escape)
-    assert settings.comment_size() == [grown.width(), grown.height()]  # a restart opens it at this size too
-    assert type(bar._box)(None, None).sizeHint() == grown
+    assert type(bar._box)(None, None).sizeHint() == grown  # a restart opens it at this size too
 
 
 def test_paging_away_from_a_comment_saves_and_closes_it(qtbot, window):
@@ -495,14 +509,14 @@ def test_next_and_previous_bookmark_wrap_around(notes_setup):
         assert viewer.current_page == page
 
 
-def test_doc_note_and_save_state(qtbot, notes_setup, tmp_path):
+def test_save_state(qtbot, notes_setup, tmp_path):
     viewer, notes = notes_setup
     assert notes.save_state == ""
-    notes.set_doc_note("# 정리\n시험 범위")
-    assert notes.doc_note() == "# 정리\n시험 범위" and notes.save_state == "pending"
+    notes.toggle_bookmark(0)
+    assert notes.save_state == "pending"
     qtbot.waitUntil(lambda: notes.save_state == "saved")
     saved = json.loads(notes.store.path.read_text(encoding="utf-8"))
-    assert saved["doc_note"] == "# 정리\n시험 범위"
+    assert [b["page"] for b in saved["bookmarks"]] == [0]
 
 
 def test_notes_and_bookmarks_of_the_wrong_shape_are_kept_aside(tmp_path):
@@ -625,20 +639,6 @@ def test_an_ai_note_is_listed_without_markdown_marks(notes_setup):
     item = {"page": 0, "text": "**굵게** `code`\n\n```python\nx = 1\n```", "source": "ai"}
     assert text("notes", item).split() == ["굵게", "code", "x", "=", "1"]
     assert text("notes", {"page": 0, "text": "**그대로**", "source": "user"}) == "**그대로**"
-
-
-def test_doc_note_box_saves_and_follows_the_tab(qtbot, window, pdf100):
-    panel, notes = notes_tab(window), window.notes
-    panel._fold.click()
-    assert panel._doc_note.isVisible() and panel._doc_note.isEnabled()
-    qtbot.keyClicks(panel._doc_note, "summary")
-    assert notes.doc_note() == "summary"
-    qtbot.waitUntil(lambda: window._status._saved.text() == "저장됨")
-    window.open_file(pdf100)
-    qtbot.waitUntil(lambda: notes.store is not None)
-    assert panel._doc_note.toPlainText() == ""
-    window.state.switch_tab(0)
-    qtbot.waitUntil(lambda: panel._doc_note.toPlainText() == "summary")
 
 
 def test_notes_actions_are_on_the_toolbar_with_icons(qtbot, window):

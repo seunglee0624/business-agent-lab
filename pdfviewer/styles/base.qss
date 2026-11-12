@@ -747,19 +747,6 @@ QPlainTextEdit#noteComment {
     border-radius: {{radius.sm}}px;
 }
 
-/* ---- notes tab: the document note under its fold */
-
-QPlainTextEdit#docNote {
-    background: {{color.bg_elevated}};
-    color: {{color.text}};
-    border: 1px solid {{color.outline}};
-    border-radius: {{radius.sm}}px;
-}
-
-QPlainTextEdit#docNote:focus {
-    border-color: {{color.accent}};
-}
-
 /* the comment and page-note box: the dialogs' green save and outlined cancel, at the bar's small size */
 QFrame#noteBar QToolButton#noteSave,
 QFrame#noteBar QToolButton#noteCancel {
@@ -788,23 +775,21 @@ QFrame#noteBar QToolButton#noteSave:pressed {
     background: {{color.accent_pressed}};
 }
 
-/* the notes tab footer (document note fold, export): outlined secondary buttons like the dialogs' */
-QToolButton#docNoteFold, QToolButton#notesExport {
+/* the notes tab footer (export): an outlined secondary button like the dialogs' */
+QToolButton#notesExport {
     background: transparent;
     color: {{color.text}};
     border: 1px solid {{color.outline}};
     border-radius: {{radius.md}}px;
-    padding: 0px; /* a tab column's width: the text is centred, side padding would cut "문서 노트" */
+    padding: 0px; /* a tab column's width: the text is centred, side padding would cut it */
     min-height: {{size.control_sm}}px;
 }
 
-QToolButton#docNoteFold:hover,
-QToolButton#docNoteFold:checked,
 QToolButton#notesExport:hover {
     border-color: {{color.text}};
 }
 
-QToolButton#docNoteFold:focus, QToolButton#notesExport:focus {
+QToolButton#notesExport:focus {
     border: 2px solid {{color.accent}};
 }
 

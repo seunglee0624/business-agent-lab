@@ -100,6 +100,7 @@ class _NoteBar(QFrame):
         self._editor_buttons.addWidget(self._grip, 0, Qt.AlignmentFlag.AlignBottom)
         for button in (self._save_button, self._cancel_button):
             button.setCursor(Qt.CursorShape.ArrowCursor)  # not the bar's move cursor
+        self._grip.installEventFilter(self)
         column = QVBoxLayout(self)
         gap = theme.token("spacing.sm")
         column.setContentsMargins(gap, gap, gap, gap)
@@ -123,9 +124,6 @@ class _NoteBar(QFrame):
     def show_mode(self, mode):
         """None hides the bar. A comment being written stays until it is saved or cancelled."""
         mode = "comment" if self._notes.is_editing else mode
-        if self.mode == "comment" and mode != "comment" and self._box.size() != self._box.hint:
-            self._box.hint = self._box.size()  # the next comment, also after a restart, opens at this size
-            settings.save_comment_size(self._box.hint.width(), self._box.hint.height())
         self.mode = mode
         if mode is None:
             self._shown = self._grab = self.moved = None
@@ -149,13 +147,24 @@ class _NoteBar(QFrame):
         for widget in (self._box, self._save_button, self._cancel_button, self._grip):
             widget.setVisible(mode == "comment")
         for key, dot in self._dots.items():
-            dot.setProperty("current", mode == "highlight" and current is not None and current["color"] == key)
+            on = mode == "highlight" and current is not None and current["color"] == key
+            dot.setProperty("current", on)
+            tip = f"{COLORS[key]} 하이라이트" + (" 지우기 (Ctrl+Z 로 되돌리기)" if on else "")
+            dot.setToolTip(tip)
+            dot.setAccessibleName(tip)
             dot.style().unpolish(dot)  # re-read the [current="true"] rule
             dot.style().polish(dot)
         self.layout().activate()  # the size of the buttons just shown, not of the last mode's
         self.adjustSize()
         self.show()
         self.raise_()
+
+    def eventFilter(self, watched, event):
+        if watched is self._grip and event.type() == QEvent.Type.MouseButtonRelease:
+            self._box.hint = self._box.size()  # the next comment, also after a restart, opens at this size
+            self._box.updateGeometry()
+            settings.save_comment_size(self._box.hint.width(), self._box.hint.height())
+        return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event):
         if self.mode == "comment" and event.button() == Qt.MouseButton.LeftButton:
@@ -175,7 +184,10 @@ class _NoteBar(QFrame):
         super().mouseReleaseEvent(event)
 
     def _color(self, key):
-        if self.mode == "highlight":
+        current = self._notes.highlight(self._notes.active)
+        if self.mode == "highlight" and current and current["color"] == key:  # its own colour again: take it off
+            self._notes.remove_highlight(self._notes.active)
+        elif self.mode == "highlight":
             self._notes.set_highlight_color(self._notes.active, key)
         else:
             self._notes.highlight_selection(key)

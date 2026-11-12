@@ -49,14 +49,14 @@ class AnnotationStore:
             text = self.path.read_text(encoding="utf-8")
         except OSError as error:  # locked or no permission: it may be fine later, so leave it alone
             log.warning("cannot read %s", self.path, exc_info=True)
-            self.read_only, self.problem = True, f"메모 파일을 읽지 못해 이번에는 저장하지 않습니다: {error}"
+            self.read_only, self.problem = True, f"노트 파일을 읽지 못해 이번에는 저장하지 않습니다: {error}"
             return {}
         try:
             data = json.loads(text)
             if not isinstance(data, dict):
                 raise ValueError("not an object")
             if data.get("v", 0) > VERSION:
-                self.read_only, self.problem = True, "새 버전 앱이 만든 메모 파일이라 읽기만 합니다."
+                self.read_only, self.problem = True, "새 버전 앱이 만든 노트 파일이라 읽기만 합니다."
                 return data
             _check(data)
         except (ValueError, TypeError, KeyError):
@@ -65,10 +65,10 @@ class AnnotationStore:
                 os.replace(self.path, backup)
             except OSError as error:  # locked or read-only folder: keep the file and don't write over it
                 log.warning("cannot move broken notes file %s", self.path, exc_info=True)
-                self.read_only, self.problem = True, f"메모 파일이 깨졌는데 옮기지도 못해 이번에는 저장하지 않습니다: {error}"
+                self.read_only, self.problem = True, f"노트 파일이 깨졌는데 옮기지도 못해 이번에는 저장하지 않습니다: {error}"
                 return {}
             log.warning("broken notes file moved to %s", backup)
-            self.problem = f"메모 파일이 깨져 {backup.name} 으로 옮기고 새로 시작합니다."
+            self.problem = f"노트 파일이 깨져 {backup.name} 으로 옮기고 새로 시작합니다."
             return {}
         return data
 

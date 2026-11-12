@@ -42,7 +42,7 @@ def test_markdown_export():
         "### p.1\n\n> first\n> line\n\n코멘트: 중요\n\n> second\n\n**메모**: my note\n\n"
         "### p.3\n\n**AI** (질문: 뭐야?)\n\nAI says\n")
     empty = {"title": "", "doc_note": "", "bookmarks": [], "highlights": [], "notes": [], "chat": []}
-    assert to_markdown(empty) == "# 메모\n"
+    assert to_markdown(empty) == "# 노트\n"
 
 
 def test_an_answer_becomes_an_ai_note_of_the_question_page(qtbot, setup):

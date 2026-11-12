@@ -120,9 +120,6 @@ class AnnotationState(QObject):
         after = [p for p in pages if p > here] if step > 0 else [p for p in reversed(pages) if p < here]
         self._viewer.go_to(after[0] if after else pages[0 if step > 0 else -1])
 
-    def doc_note(self):
-        return self.store.data["doc_note"] if self.store else ""
-
     def has_note(self, note_id):
         return self.store is not None and self.store.find("notes", note_id) is not None
 
@@ -224,12 +221,6 @@ class AnnotationState(QObject):
         if store is not None and messages != store.data["chat"]:
             store.set("chat", messages)
             self._changed(emit=False)
-
-    def set_doc_note(self, text):
-        """Kept as typed (no undo step per key: its box has its own undo)."""
-        if self.store is not None and text != self.store.data["doc_note"]:
-            self.store.set("doc_note", text)
-            self._changed(emit=False)  # only its own box shows it: no list reload per key
 
     def _add(self, kind, item, text, content_id=None):
         content_id = content_id or self._current_id()
@@ -341,7 +332,7 @@ class AnnotationState(QObject):
             except OSError as error:
                 failed = True
                 log.warning("cannot save %s", store.path, exc_info=True)
-                self.problem.emit(f"메모를 저장하지 못했습니다 ({error}). 다음 변경 때 다시 시도합니다.")
+                self.problem.emit(f"노트를 저장하지 못했습니다 ({error}). 다음 변경 때 다시 시도합니다.")
         if self.save_state:  # nothing changed yet this session: nothing to report
             self._set_save_state("failed" if failed else "saved")
 
@@ -377,7 +368,7 @@ class AnnotationState(QObject):
                 self._stores[content_id].save()
             except OSError as error:
                 log.warning("cannot save %s", self._stores[content_id].path, exc_info=True)
-                self.problem.emit(f"메모를 저장하지 못했습니다 ({error}). 다음 변경 때 다시 시도합니다.")
+                self.problem.emit(f"노트를 저장하지 못했습니다 ({error}). 다음 변경 때 다시 시도합니다.")
                 continue
             del self._stores[content_id]
             stack = self._stacks.pop(content_id)

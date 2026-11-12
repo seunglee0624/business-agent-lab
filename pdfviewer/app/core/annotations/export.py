@@ -3,7 +3,7 @@
 
 def to_markdown(data):
     """data: an AnnotationStore's data. Document note, bookmarks, then each page's highlights and notes."""
-    out = [f"# {data.get('title') or '메모'}"]
+    out = [f"# {data.get('title') or '노트'}"]
     if data["doc_note"].strip():
         out += ["## 문서 노트", data["doc_note"].strip()]
     bookmarks = sorted(data["bookmarks"], key=lambda b: b["page"])

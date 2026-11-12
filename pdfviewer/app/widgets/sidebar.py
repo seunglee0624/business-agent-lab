@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QHBoxLayout, QLabel, QListView, QMenu, QPlainTextEdit,
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QHBoxLayout, QLabel, QListView, QMenu,
                                QPushButton, QStackedWidget, QTabWidget, QToolButton, QTreeView, QVBoxLayout, QWidget)
 
 from app import theme
@@ -23,8 +23,8 @@ class Sidebar(QTabWidget):
         self.addTab(self.thumbnails, "썸네일")
         self.addTab(OutlinePanel(state), "목차")
         self.notes = NotesPanel(state, notes, ask_action, export_action)
-        self.addTab(self.notes, "메모")
-        for i, tip in enumerate(("페이지 썸네일", "문서 목차", "하이라이트·메모·북마크와 문서 노트")):
+        self.addTab(self.notes, "노트")
+        for i, tip in enumerate(("페이지 썸네일", "문서 목차", "하이라이트·메모·북마크")):
             self.setTabToolTip(i, tip)
 
 
@@ -147,31 +147,21 @@ class NotesPanel(QWidget):
         self._list.setItemDelegate(NotesDelegate(self._list))
         self._list.setResizeMode(QListView.ResizeMode.Adjust)  # rows re-wrap to the sidebar's width
         self._list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self._list.setAccessibleName("메모 목록")
+        self._list.setAccessibleName("노트 목록")
         self._list.clicked.connect(self._go)
         self._list.activated.connect(self._go)
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._menu)
         self._empty = QLabel(alignment=Qt.AlignmentFlag.AlignCenter, wordWrap=True, objectName="fieldName")
         self._count = QLabel(objectName="notesCount", alignment=Qt.AlignmentFlag.AlignCenter)
-        self._fold = QToolButton(text="문서 노트", checkable=True, objectName="docNoteFold",
-                                 toolTip="문서 전체에 대한 노트 (자동 저장)")
-        self._fold.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._fold.setArrowType(Qt.ArrowType.RightArrow)
-        self._fold.toggled.connect(self._unfold)
-        self._doc_note = QPlainTextEdit(objectName="docNote", placeholderText="이 문서에 대한 노트 (자동 저장)")
-        self._doc_note.setFixedHeight(theme.token("size.doc_note"))
-        self._doc_note.setAccessibleName("문서 노트")
-        self._doc_note.hide()
-        self._doc_note.textChanged.connect(lambda: notes.set_doc_note(self._doc_note.toPlainText()))
-        # not setDefaultAction: it would take the menu's longer "메모 내보내기…" back on every enable
+        # not setDefaultAction: it would take the menu's longer "노트 내보내기…" back on every enable
         export = QToolButton(text="내보내기", objectName="notesExport", toolTip=export_action.toolTip())
         export.clicked.connect(export_action.trigger)
         export_action.changed.connect(lambda: export.setEnabled(export_action.isEnabled()))
         export.setEnabled(export_action.isEnabled())
         footer = QHBoxLayout()
         footer.setSpacing(gap)
-        for widget in (self._fold, export, self._count):
+        for widget in (export, self._count):
             widget.setFixedWidth(column_width)
             footer.addWidget(widget)
         footer.addStretch(1)
@@ -182,34 +172,16 @@ class NotesPanel(QWidget):
         column.addWidget(self._list, 1)
         column.addWidget(self._empty, 1)
         column.addLayout(footer)
-        column.addWidget(self._doc_note)
         self._model.modelReset.connect(self._update)
-        notes.changed.connect(self._load_doc_note)
         self._update()
-        self._load_doc_note()
 
     def _update(self):
         rows = self._model.rowCount()
         self._list.setVisible(rows > 0)
         self._empty.setVisible(rows == 0)
         self._empty.setText("하이라이트(H)·메모(M)·북마크(B)가 여기에 모입니다." if self._state.document
-                            else "문서를 열면 메모가 여기에 모입니다.")
+                            else "문서를 열면 노트가 여기에 모입니다.")
         self._count.setText(f"{rows}개" if rows else "")  # the kind is the checked filter above
-
-    def _unfold(self, shown):
-        self._fold.setArrowType(Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow)
-        self._doc_note.setVisible(shown)
-        if shown:
-            self._doc_note.setFocus()
-
-    def _load_doc_note(self):
-        """Another document: its note. Not while typing: the text is the box's own."""
-        self._doc_note.setEnabled(self._notes.store is not None)
-        text = self._notes.doc_note()
-        if text != self._doc_note.toPlainText():
-            self._doc_note.blockSignals(True)  # loading is not typing
-            self._doc_note.setPlainText(text)
-            self._doc_note.blockSignals(False)
 
     def _go(self, index):
         kind, item = index.data(KIND_ROLE), index.data(ITEM_ROLE)
