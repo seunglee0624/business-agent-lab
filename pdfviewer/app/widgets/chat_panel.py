@@ -1,8 +1,9 @@
 import re
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QDesktopServices, QPalette, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextFrameFormat
-from PySide6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QLayout, QMessageBox, QPlainTextEdit, QPushButton,
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import (QActionGroup, QDesktopServices, QPalette, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextFormat,
+                           QTextFrameFormat, QTextLength, QTextTableFormat)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
                                QTextBrowser, QToolButton, QVBoxLayout, QWidget)
 
 from app import theme
@@ -35,6 +36,15 @@ class _Input(QPlainTextEdit):
 
     submitted = Signal()
     leave = Signal()
+    focused = Signal(bool)  # the box around it shows the focus ring
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.focused.emit(True)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.focused.emit(False)
 
     def event(self, event):
         if event.type() == QEvent.Type.ShortcutOverride and event.key() == Qt.Key.Key_Escape:
@@ -51,116 +61,89 @@ class _Input(QPlainTextEdit):
             super().keyPressEvent(event)
 
 
-class _Flow(QLayout):
-    """Buttons left to right, wrapping onto the next row when the panel is narrow."""
-
-    def __init__(self, spacing):
-        super().__init__()
-        self._items = []
-        self.setSpacing(spacing)
-        self.setContentsMargins(0, 0, 0, 0)
-
-    def addItem(self, item):
-        self._items.append(item)
-
-    def count(self):
-        return len(self._items)
-
-    def itemAt(self, i):
-        return self._items[i] if 0 <= i < len(self._items) else None
-
-    def takeAt(self, i):
-        return self._items.pop(i) if 0 <= i < len(self._items) else None
-
-    def hasHeightForWidth(self):
-        return True
-
-    def heightForWidth(self, width):
-        return self._place(QRect(0, 0, width, 0), move=False)
-
-    def setGeometry(self, rect):
-        super().setGeometry(rect)
-        self._place(rect, move=True)
-
-    def sizeHint(self):
-        return self.minimumSize()
-
-    def minimumSize(self):
-        size = QSize()
-        for item in self._items:
-            size = size.expandedTo(item.minimumSize())
-        return size
-
-    def _place(self, rect, move):
-        x, y, row_height, gap = rect.x(), rect.y(), 0, self.spacing()
-        for item in self._items:
-            hint = item.sizeHint()
-            if x > rect.x() and x + hint.width() > rect.right() + 1:
-                x, y, row_height = rect.x(), y + row_height + gap, 0
-            if move:
-                item.setGeometry(QRect(QPoint(x, y), hint))
-            x += hint.width() + gap
-            row_height = max(row_height, hint.height())
-        return y + row_height - rect.y()
-
-
 class ChatPanel(QWidget):
-    """Right-side AI chat: scope and clear on top, what the question will carry, the conversation,
-    quick questions, then the question box. Everything it shows comes from ChatState."""
+    """Right-side AI chat: what the question will carry on top, the conversation (or, before it, a greeting
+    and the quick questions), then one rounded box with the question, its scope and send.
+    Everything it shows comes from ChatState."""
 
     leave = Signal()  # Esc in the question box
 
     def __init__(self, chat):
         super().__init__(objectName="chatPanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)  # the rounded card is drawn from QSS
         self._chat = chat
-        # one button per scope, not a drop-down: one click, and no popup (WSLg's Wayland popups do not close)
-        self._scope = QButtonGroup(self, exclusive=True)
         top = QHBoxLayout()
         top.setSpacing(theme.token("spacing.sm"))
-        for key, label in SCOPES.items():
-            button = QPushButton(label, objectName="scope", checkable=True, toolTip="질문과 함께 보낼 부분")
-            button.setAccessibleName(f"질문 범위: {label}")
-            button.clicked.connect(lambda checked=False, key=key: self._choose_scope(key))
-            self._scope.addButton(button)
-            button.scope = key
-            top.addWidget(button)
-        top.addStretch(1)
+        self._info = QLabel(objectName="chatInfo", wordWrap=True)
+        top.addWidget(self._info, 1)
         top.addWidget(self._button("clear_chat", "대화 지우기", self._clear))
         top.addWidget(self._button("settings", "AI 설정", self._open_settings))
-        self._info = QLabel(objectName="chatInfo", wordWrap=True)
 
         self._notice = QLabel('AI 채팅을 쓰려면 <a href="settings:">AI 설정</a>에서 API 키를 넣으세요 '
                               "(또는 ANTHROPIC_API_KEY 환경변수).", objectName="chatNotice", wordWrap=True)
         self._notice.linkActivated.connect(self._open_settings)
-        self._log = QTextBrowser(objectName="chatLog", openLinks=False,
-                                 placeholderText="지금 보는 페이지나 선택한 부분에 대해 물어보세요.")
+        self._log = QTextBrowser(objectName="chatLog", openLinks=False)
         palette = self._log.palette()
         palette.setColor(QPalette.ColorRole.Link, theme.color("color.accent"))
         self._log.setPalette(palette)
         self._log.anchorClicked.connect(self._open_link)
 
-        self._quick = QWidget()
-        self._quick.setLayout(_Flow(theme.token("spacing.sm")))
+        # before the first question: a greeting in the middle, the quick questions one per row under it
+        self._empty = QWidget(objectName="chatEmpty")
+        greeting = QLabel("이 문서에서 무엇이 궁금하세요?", objectName="chatGreeting", wordWrap=True,
+                          alignment=Qt.AlignmentFlag.AlignCenter)
+        self._quick = QVBoxLayout()
+        self._quick.setSpacing(theme.token("spacing.sm"))
+        empty = QVBoxLayout(self._empty)
+        empty.setContentsMargins(0, 0, 0, 0)
+        empty.addStretch(1)
+        empty.addWidget(greeting)
+        empty.addStretch(1)
+        empty.addLayout(self._quick)
+
+        self._composer = QFrame(objectName="chatComposer")
         self._input = _Input(objectName="chatInput", accessibleName="질문",
                              placeholderText="질문 입력 (Enter 보내기, Shift+Enter 줄바꿈)")
         self._input.setTabChangesFocus(True)
         self._input.submitted.connect(self._send)
         self._input.leave.connect(self.leave)
+        self._input.focused.connect(self._mark_composer)
+        # the scope as a menu button, like the model picker in other chat apps
+        self._scope = QActionGroup(self, exclusive=True)
+        menu = QMenu(self)
+        for key, label in SCOPES.items():
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(key)  # not a Python attribute: Qt may hand back a fresh wrapper without it
+            action.triggered.connect(lambda checked=False, key=key: self._choose_scope(key))
+            self._scope.addAction(action)
+        self._scope_button = QPushButton(objectName="chatScope", toolTip="질문과 함께 보낼 부분")
+        self._scope_button.setMenu(menu)
+        self._scope_button.setIcon(icon("dropdown"))
+        caret = theme.token("spacing.xl")
+        self._scope_button.setIconSize(QSize(caret, caret))
+        self._scope_button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)  # text, then the caret
         self._send_button = self._button("send", "보내기 (Enter)", self._send_or_stop)
-        bottom = QHBoxLayout()
-        bottom.addWidget(self._input, 1)
-        bottom.addWidget(self._send_button, 0, Qt.AlignmentFlag.AlignBottom)
+        controls = QHBoxLayout()
+        controls.setSpacing(theme.token("spacing.sm"))
+        controls.addStretch(1)
+        controls.addWidget(self._scope_button)
+        controls.addWidget(self._send_button)
+        inside = QVBoxLayout(self._composer)
+        gap = theme.token("spacing.md")
+        inside.setContentsMargins(gap, gap, gap, gap)
+        inside.setSpacing(theme.token("spacing.xs"))
+        inside.addWidget(self._input)
+        inside.addLayout(controls)
 
         layout = QVBoxLayout(self)
-        gap = theme.token("spacing.md")
         layout.setContentsMargins(gap, gap, gap, gap)
         layout.setSpacing(gap)
         layout.addLayout(top)
-        layout.addWidget(self._info)
-        layout.addWidget(self._notice)
         layout.addWidget(self._log, 1)
-        layout.addWidget(self._quick)
-        layout.addLayout(bottom)
+        layout.addWidget(self._empty, 1)
+        layout.addWidget(self._notice)
+        layout.addWidget(self._composer)
 
         self._timer = QTimer(self, singleShot=True, interval=RENDER_MS, timeout=self._render)
         chat.changed.connect(lambda: self._timer.isActive() or self._timer.start())
@@ -224,17 +207,21 @@ class ChatPanel(QWidget):
             self._chat.open_page(int(url.path()))
         elif url.scheme() == "save":
             self._chat.save_answer(int(url.path()))
+        elif url.scheme() in ("http", "https"):
+            QDesktopServices.openUrl(url)
 
     def _clear(self):
         """Asks first: the saved copy goes too."""
         if self._chat.messages and QMessageBox.question(
                 self, "대화 지우기", "이 문서의 AI 대화를 지울까요? 저장된 기록도 지워집니다.") == QMessageBox.StandardButton.Yes:
             self._chat.clear()
-        elif url.scheme() in ("http", "https"):
-            QDesktopServices.openUrl(url)
+
+    def _mark_composer(self, focused):
+        self._composer.setProperty("focused", focused)
+        self._composer.style().polish(self._composer)
 
     def _fill_quick(self):
-        layout = self._quick.layout()
+        layout = self._quick
         while layout.count():
             layout.takeAt(0).widget().deleteLater()
         for question in self._chat.quick_questions:
@@ -242,8 +229,8 @@ class ChatPanel(QWidget):
             scope = SCOPES.get(question.get("scope"), "지금 범위")
             chip.setToolTip(f"{question['text']}\n({scope})")
             chip.clicked.connect(lambda checked=False, q=question: self._chat.ask_quick(q))
-            layout.addWidget(chip)
-        layout.addWidget(self._button("edit", "빠른 질문 편집", self._edit_quick))
+            layout.addWidget(chip, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._button("edit", "빠른 질문 편집", self._edit_quick), 0, Qt.AlignmentFlag.AlignLeft)
         self._apply_busy()
 
     def _edit_quick(self):
@@ -258,24 +245,90 @@ class ChatPanel(QWidget):
         self._send_button.setToolTip(tip)
         self._send_button.setAccessibleName(tip.split(" (")[0])
         self._send_button.setEnabled(self._available)
-        for chip in self._quick.findChildren(QPushButton, "chip"):
+        for chip in self._empty.findChildren(QPushButton, "chip"):
             chip.setEnabled(self._available and not busy)
 
     def _apply_scope(self):
-        for button in self._scope.buttons():
-            button.setChecked(button.scope == self._chat.scope)
+        for action in self._scope.actions():
+            action.setChecked(action.data() == self._chat.scope)
+        self._scope_button.setText(SCOPES[self._chat.scope])
+        self._scope_button.setAccessibleName(f"질문 범위: {SCOPES[self._chat.scope]}")
 
     def _show_info(self):
         info = self._chat.context_info()
         self._info.setText(f"{info} · {self._chat.backend.model}" if info else self._chat.backend.model)
 
+    @staticmethod
+    def _tidy_answer(frame):
+        """What insertMarkdown leaves plain: no empty line above an answer that opens with a list or
+        table, quiet table lines with room in the cells, and code on its own darker ground."""
+        def drop_empty_first_line(area):  # a frame or a table cell
+            first = area.firstCursorPosition().block()
+            if not first.text() and first.next().position() < area.lastCursorPosition().position():
+                QTextCursor(first.next()).deletePreviousChar()  # keeps the next block's list format
+
+        drop_empty_first_line(frame)
+        first = frame.firstCursorPosition()
+        top = first.blockFormat()
+        top.setTopMargin(0)
+        first.setBlockFormat(top)
+        for table in frame.childFrames():
+            for row in range(table.rows()):  # a table right after code gets an empty line in its first cell
+                for column in range(table.columns()):
+                    drop_empty_first_line(table.cellAt(row, column))
+            box = table.format()
+            box.setBorder(1)
+            box.setBorderBrush(theme.color("color.bg_highlight"))
+            box.setBorderCollapse(True)
+            box.setCellPadding(theme.token("spacing.sm"))
+            table.setFormat(box)
+        block, end = frame.firstCursorPosition().block(), frame.lastPosition()
+        while block.isValid() and block.position() < end:
+            at, look = QTextCursor(block), block.blockFormat()
+            if at.currentTable():
+                look.setTopMargin(0)  # a paragraph's gap would push one cell's text off its row
+                look.setBottomMargin(0)
+            elif look.hasProperty(QTextFormat.Property.BlockCodeFence):
+                look.setBackground(theme.color("color.bg_base"))
+                look.setLeftMargin(theme.token("spacing.sm"))
+            at.setBlockFormat(look)
+            block = block.next()
+
+    @staticmethod
+    def _question_box(cursor, index):
+        """The user's question: a grey box with a grey band on the left, so it reads as the reader's own words,
+        not a heading. Grey, not the accent: the band marks no state. Returns a cursor inside it."""
+        box = QTextTableFormat()
+        box.setBorder(0)
+        box.setCellSpacing(0)
+        box.setCellPadding(0)
+        box.setWidth(QTextLength(QTextLength.Type.PercentageLength, 100))
+        box.setColumnWidthConstraints([QTextLength(QTextLength.Type.FixedLength, theme.token("size.hl_band")),
+                                       QTextLength(QTextLength.Type.VariableLength, 0)])
+        box.setBackground(theme.color("color.chat_user"))
+        box.setTopMargin(theme.token("spacing.xl") if index else 0)  # a turn starts with the space before it
+        table = cursor.insertTable(1, 2, box)
+        band = table.cellAt(0, 0).format()
+        band.setBackground(theme.color("color.outline"))
+        table.cellAt(0, 0).setFormat(band)
+        cell = table.cellAt(0, 1)
+        text = cell.format().toTableCellFormat()
+        text.setPadding(theme.token("spacing.md"))
+        cell.setFormat(text)
+        return cell.firstCursorPosition()
+
     def _render(self):
         self._show_info()
+        self._log.setVisible(bool(self._chat.messages))
+        self._empty.setVisible(not self._chat.messages)
         bar = self._log.verticalScrollBar()
         follow = bar.value() >= bar.maximum() - theme.token("spacing.xl")  # the reader was at the end: keep up
         document = self._log.document()
         document.clear()
+        document.setIndentWidth(theme.token("spacing.xl"))  # list bullets; Qt's 40px crowds the narrow panel
         cursor = QTextCursor(document)
+        gap = QTextBlockFormat()  # the empty block Qt keeps between two frames: spacing comes from the margins
+        gap.setLineHeight(1, QTextBlockFormat.LineHeightTypes.FixedHeight.value)
         plain, muted, danger = QTextCharFormat(), QTextCharFormat(), QTextCharFormat()
         muted.setForeground(theme.color("color.text_muted"))
         danger.setForeground(theme.color("color.danger"))
@@ -288,12 +341,14 @@ class ChatPanel(QWidget):
         for index, message in enumerate(self._chat.messages):
             role, text = message["role"], message["text"]
             if role == "note":
+                cursor.setBlockFormat(QTextBlockFormat())  # not the collapsed gap
                 cursor.insertText(text, muted)
                 cursor.insertBlock()
                 continue
             frame = QTextFrameFormat()
             frame.setPadding(theme.token("spacing.md"))
             frame.setBottomMargin(theme.token("spacing.md"))
+            frame.setTopMargin(theme.token("spacing.xs"))  # an answer or error sits right under its question
             if role == "error":
                 frame.setBorder(1)
                 frame.setBorderBrush(theme.color("color.danger"))
@@ -306,14 +361,16 @@ class ChatPanel(QWidget):
                 if message.get("kind") in SETTINGS_HINTS:
                     cursor.insertBlock()
                     cursor.insertText("AI 설정 열기", link)
+            elif role == "user":
+                cursor = self._question_box(cursor, index)
+                cursor.insertText(f"{message['where']}  ", muted)
+                cursor.insertText(text, plain)
             else:
-                frame.setBackground(theme.color("color.chat_user" if role == "user" else "color.chat_assistant"))
+                frame.setBackground(theme.color("color.chat_assistant"))
                 cursor.insertFrame(frame)
-                if role == "user":
-                    cursor.insertText(f"{message['where']}  ", muted)
-                    cursor.insertText(text, plain)
-                elif text:
+                if text:
                     cursor.insertMarkdown(PAGE_REF.sub(lambda m: f"[{m[0]}](page:{m[1]})", text))
+                    self._tidy_answer(cursor.currentFrame())
                 else:
                     cursor.insertText("…" if message.get("streaming") else "중단됨", muted)
                 if role == "assistant" and (message.get("usage") or text and not message.get("streaming")):
@@ -329,5 +386,6 @@ class ChatPanel(QWidget):
                         save.setAnchorHref(f"save:{index}")
                         cursor.insertText("메모로 저장", save)
             cursor.movePosition(QTextCursor.MoveOperation.End)  # out of the frame
+            cursor.setBlockFormat(gap)
         if follow:
             bar.setValue(bar.maximum())

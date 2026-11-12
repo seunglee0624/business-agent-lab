@@ -21,6 +21,14 @@ def _shown(keys):
 class _KeyEdit(QKeySequenceEdit):
     """Esc cancels instead of becoming the key, and leaves the edit so the next Esc closes the dialog."""
 
+    def __init__(self):
+        super().__init__()
+        self.editingFinished.connect(self.korean_placeholder)
+
+    def korean_placeholder(self):
+        """Qt puts back its English "Press shortcut" whenever it resets (a new key, focus out)."""
+        self.findChild(QLineEdit).setPlaceholderText("키 없음")
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape and event.modifiers() == Qt.KeyboardModifier.NoModifier:
             self.clearFocus()
@@ -46,13 +54,14 @@ def shortcuts_dialog(parent, actions, keys_changed):
                 edit.setMaximumSequenceLength(4)  # room to show every key; lowering it again keeps them
                 edit.setKeySequence(_shown(shortcuts.keys(name)))
                 edit.setMaximumSequenceLength(1)  # recording takes one key, then finishes at once
+            edit.korean_placeholder()
             others = clashes.get(name, [])
             edit.setToolTip("\n".join(f"‘{owner_label(o)}’와 겹침" for o in others))
             text_box = edit.findChild(QLineEdit)  # the edit draws its keys in this inner box
             text_box.setProperty("conflict", bool(others))
             text_box.style().unpolish(text_box)  # QSS reads a dynamic property only on re-polish
             text_box.style().polish(text_box)
-            default.setEnabled(shortcuts.keys(name) != shortcuts.KEYS.get(name, []))
+            default.setVisible(shortcuts.keys(name) != shortcuts.KEYS.get(name, []))  # only where a key was changed
 
     def change(name, keys):
         shortcuts.set_keys(name, keys)
@@ -64,7 +73,7 @@ def shortcuts_dialog(parent, actions, keys_changed):
         if not edit.keySequence().isEmpty() and edit.keySequence() != _shown(shortcuts.keys(name)):
             change(name, [QKeySequence(edit.keySequence()[0]).toString()])
 
-    size = theme.token("size.control_sm") // 2
+    size = theme.token("size.control_sm")
     for row, (name, action) in enumerate(actions.items()):
         grid.addWidget(QLabel(_label(action), objectName="fieldName"), row, 0)
         if name in shortcuts.FIXED:
@@ -73,12 +82,16 @@ def shortcuts_dialog(parent, actions, keys_changed):
         edit = _KeyEdit()
         edit.setAccessibleName(f"{_label(action)} 단축키")
         edit.editingFinished.connect(lambda name=name, edit=edit: recorded(name, edit))
-        clear = QToolButton(objectName="clearKey", toolTip="키 지우기", autoRaise=True)
+        clear = QToolButton(objectName="rowRemove", toolTip="키 지우기")  # as in the quick-question editor
         clear.setAccessibleName(f"{_label(action)} 키 지우기")
         clear.setIcon(icon("close"))
+        clear.setFixedSize(size, size)
         clear.setIconSize(QSize(size, size))
         clear.clicked.connect(lambda checked=False, name=name: change(name, []))
         default = QPushButton("기본값으로")
+        hidden = default.sizePolicy()
+        hidden.setRetainSizeWhenHidden(True)  # the rows keep their width when it hides
+        default.setSizePolicy(hidden)
         default.clicked.connect(lambda checked=False, name=name: change(name, shortcuts.KEYS.get(name, [])))
         grid.addWidget(edit, row, 1)
         grid.addWidget(clear, row, 2)

@@ -38,6 +38,13 @@ QToolBar#searchBar {
     qproperty-iconSize: {{size.control_sm}}px {{size.control_sm}}px; /* icons.py centres the glyph in the button square */
 }
 
+/* the dock resize handles: the page's ground, so the panes stand apart without a bar between,
+   as wide as the gap at the window's edges */
+QMainWindow::separator {
+    background: {{color.bg_base}};
+    width: {{spacing.md}}px;
+}
+
 QToolBar::separator {
     width: 0px;
     background: transparent;
@@ -92,6 +99,14 @@ QLineEdit:focus,
 QSpinBox:focus,
 QComboBox:focus {
     border: 2px solid {{color.accent}};
+}
+
+/* an input that does not apply now (e.g. the other AI backend's model): its text greys out too */
+QLineEdit:disabled,
+QSpinBox:disabled,
+QComboBox:disabled {
+    color: {{color.text_disabled}};
+    border-color: {{color.bg_highlight}};
 }
 
 /* the text box inside a spin box or editable combo box: the outer pill already draws the frame */
@@ -153,9 +168,9 @@ QSpinBox::down-arrow {
 QToolBar#searchBar QLineEdit {
     min-width: {{size.search_input}}px;
     max-width: {{size.search_max}}px;
-    min-height: {{size.input_md}}px; /* + the 1px border = control_md */
-    max-height: {{size.input_md}}px;
-    padding: 0px {{spacing.xl}}px;
+    min-height: {{size.input_sm}}px; /* + the 1px border = control_sm, like its buttons and the toolbar's boxes */
+    max-height: {{size.input_sm}}px;
+    padding: 0px {{spacing.lg}}px;
 }
 
 QToolBar#searchBar QLabel {
@@ -196,6 +211,13 @@ QPushButton#primary {
     border-radius: {{radius.md}}px; /* the zoom box's corners, not a pill */
     padding: 0px {{spacing.xxl}}px;
     min-height: {{size.control_md}}px;
+}
+
+/* in a dialog the main button sits beside 취소: same height, told apart by its colour.
+   The empty window's 파일 열기 keeps the taller size above. */
+QDialog QPushButton#primary {
+    border: 1px solid transparent;
+    min-height: {{size.control_sm}}px;
 }
 
 QPushButton#primary:hover {
@@ -242,14 +264,45 @@ QTabWidget#sidebar > QTabBar::tab:selected {
     font-weight: {{font.heading_weight}};
 }
 
-QToolButton#tabClose,
-QToolButton#clearKey {
+/* keyboard focus on a tab bar: the current tab gets the focus ring */
+QTabBar#tabBar::tab:selected:focus,
+QTabWidget#sidebar > QTabBar::tab:selected:focus {
+    border: 2px solid {{color.accent}};
+}
+
+QToolButton#tabClose {
     background: transparent;
     border: none;
+    border-radius: {{radius.sm}}px;
     padding: 0px;
 }
 
+QToolButton#tabClose:hover {
+    background: {{color.bg_highlight}};
+}
+
+/* "remove this row" in the quick-question and shortcut editors: a quiet square that lights up like the chat's icon buttons */
+QToolButton#rowRemove {
+    background: transparent;
+    color: {{color.text_muted}};
+    border: 2px solid transparent;
+    border-radius: {{radius.md}}px;
+    padding: 0px;
+}
+
+QToolButton#rowRemove:hover {
+    background: {{color.bg_elevated}};
+}
+
+QToolButton#rowRemove:focus {
+    border-color: {{color.accent}};
+}
+
 /* ---- sidebar: tabs on top (styled with the document tabs above), then the lists */
+
+QWidget#sidebarInset {
+    background: {{color.bg_panel}};
+}
 
 QTabWidget#sidebar::pane {
     border: none;
@@ -260,7 +313,7 @@ QTabWidget#sidebar > QTabBar {
 }
 
 QTabWidget#sidebar > QTabBar::tab {
-    /* thirds of the default sidebar: (size.sidebar_width - 2 gaps of spacing.md) / 3 */
+    /* thirds of the default sidebar: (size.sidebar_width - its left inset - 2 gaps, all spacing.md) / 3 */
     width: {{size.sidebar_tab}}px;
     padding: 0px;
 }
@@ -460,33 +513,99 @@ QLineEdit[conflict="true"] {
 
 /* ---- AI chat panel (right dock) */
 
+/* the chat is a rounded card on the page's dark ground, like a window of its own */
+QWidget#chatInset,
+QWidget#central {
+    background: {{color.bg_base}};
+}
+
 QWidget#chatPanel {
     background: {{color.bg_panel}};
     color: {{color.text}};
+    border: 1px solid {{color.bg_highlight}};
+    border-radius: {{radius.lg}}px;
 }
 
 QTextBrowser#chatLog {
     background: {{color.bg_panel}};
     color: {{color.text}};
-    border: none;
+    border: 2px solid transparent; /* room for the focus ring without moving the text */
+}
+
+QTextBrowser#chatLog:focus {
+    border-color: {{color.outline}}; /* like the page and the sidebar lists */
+}
+
+/* the question box: one rounded box holding the text, the scope menu and send; its border lights up on focus */
+QFrame#chatComposer {
+    background: {{color.bg_elevated}};
+    border: 1px solid {{color.bg_highlight}};
+    border-radius: {{radius.lg}}px;
+}
+
+QFrame#chatComposer[focused="true"] {
+    border-color: {{color.accent}};
 }
 
 QPlainTextEdit#chatInput {
-    background: {{color.bg_elevated}};
+    background: transparent;
     color: {{color.text}};
-    border: 1px solid {{color.outline}};
-    border-radius: {{radius.md}}px;
-    padding: {{spacing.sm}}px;
+    border: none;
     max-height: {{size.chat_input}}px;
-}
-
-QPlainTextEdit#chatInput:focus {
-    border-color: {{color.accent}};
 }
 
 QPlainTextEdit#chatInput:disabled {
     color: {{color.text_disabled}};
-    border-color: {{color.bg_highlight}};
+}
+
+/* the scope picker inside the box: quiet text with a caret, like a model picker */
+QPushButton#chatScope {
+    background: transparent;
+    color: {{color.text_muted}};
+    border: 2px solid transparent;
+    border-radius: {{radius.md}}px;
+    padding: 0px {{spacing.md}}px;
+    font-size: {{font.caption_size}}px;
+}
+
+QPushButton#chatScope:hover {
+    background: {{color.bg_highlight}};
+    color: {{color.text}};
+}
+
+QPushButton#chatScope:focus {
+    border-color: {{color.accent}};
+}
+
+QPushButton#chatScope::menu-indicator {
+    image: none; /* the caret is the button's own icon, right of the text */
+    width: 0px;
+}
+
+QLabel#chatGreeting {
+    color: {{color.text}};
+    font-size: {{font.title_size}}px;
+    font-weight: {{font.heading_weight}};
+    padding: 0px {{spacing.xl}}px;
+}
+
+/* quick questions before the first message: one per row, grey rounded rectangles */
+QWidget#chatPanel QPushButton#chip {
+    background: {{color.bg_elevated}};
+    border: 2px solid transparent;
+    font-size: {{font.size}}px;
+}
+
+QWidget#chatPanel QPushButton#chip:hover {
+    background: {{color.bg_highlight}};
+}
+
+QWidget#chatPanel QPushButton#chip:focus {
+    border-color: {{color.accent}};
+}
+
+QWidget#chatPanel QPushButton#chip:disabled {
+    color: {{color.text_disabled}};
 }
 
 QLabel#chatNotice {
@@ -498,8 +617,8 @@ QLabel#chatNotice {
 QToolButton#chatButton {
     background: transparent;
     color: {{color.text_muted}};
-    border: none;
-    border-radius: {{radius.pill_sm}}px;
+    border: 2px solid transparent;
+    border-radius: {{radius.md}}px;
     min-width: {{size.control_sm}}px;
     min-height: {{size.control_sm}}px;
     max-width: {{size.control_sm}}px;
@@ -509,6 +628,10 @@ QToolButton#chatButton {
 QToolButton#chatButton:hover {
     color: {{color.text}};
     background: {{color.bg_elevated}};
+}
+
+QToolButton#chatButton:focus {
+    border-color: {{color.accent}};
 }
 
 QToolButton#chatButton:disabled {
@@ -521,33 +644,49 @@ QLabel#chatInfo {
     font-weight: {{font.caption_weight}};
 }
 
-/* quick questions: small pills under the conversation */
+/* quick questions and the AI settings' presets: small rounded rectangles like the inputs */
 QPushButton#chip {
-    border-radius: {{radius.pill_sm}}px;
-    padding: 0px {{spacing.lg}}px;
+    border-radius: {{radius.md}}px;
+    padding: 1px {{spacing.lg}}px; /* 1px more each way: as tall as the 2px-bordered icon buttons beside it */
     font-size: {{font.caption_size}}px;
 }
 
-/* scope buttons: one row of grey pills, the chosen one white (filter-chip style) */
-QPushButton#scope {
-    background: {{color.bg_elevated}};
+/* the AI settings' provider whose address is in use: white */
+QPushButton#chip:checked {
+    background: {{color.text}};
+    color: {{color.on_accent}};
+    border-color: {{color.text}};
+    font-weight: {{font.heading_weight}};
+}
+
+/* the notes tab's filters: the sidebar's tabs again (grey text, the chosen one filled) */
+QPushButton#notesFilter {
+    background: transparent;
+    color: {{color.text_muted}};
     border: 2px solid transparent;
-    border-radius: {{radius.pill_sm}}px;
-    padding: 0px {{spacing.lg}}px;
+    border-radius: {{radius.md}}px;
+    min-height: {{size.control_sm}}px;
+    padding: 0px;
 }
 
-QPushButton#scope:hover {
+QPushButton#notesFilter:hover {
+    background: {{color.bg_elevated}};
+    color: {{color.text}};
+}
+
+QPushButton#notesFilter:checked {
     background: {{color.bg_highlight}};
+    color: {{color.text}};
+    font-weight: {{font.heading_weight}};
 }
 
-QPushButton#scope:focus {
+QPushButton#notesFilter:focus {
     border-color: {{color.accent}};
 }
 
-QPushButton#scope:checked {
-    background: {{color.text}};
-    color: {{color.on_accent}};
-    font-weight: {{font.heading_weight}};
+QTabWidget#sidebar QLabel#notesCount {
+    color: {{color.text_muted}};
+    padding: 0px;
 }
 
 /* ---- notes: the bar under selected text or a clicked highlight */
@@ -619,4 +758,57 @@ QPlainTextEdit#docNote {
 
 QPlainTextEdit#docNote:focus {
     border-color: {{color.accent}};
+}
+
+/* the comment and page-note box: the dialogs' green save and outlined cancel, at the bar's small size */
+QFrame#noteBar QToolButton#noteSave,
+QFrame#noteBar QToolButton#noteCancel {
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+    padding: {{spacing.sm}}px {{spacing.lg}}px;
+}
+
+QFrame#noteBar QToolButton#noteCancel:hover {
+    background: transparent;
+    border-color: {{color.text}};
+}
+
+QFrame#noteBar QToolButton#noteSave {
+    background: {{color.accent}};
+    color: {{color.on_accent}};
+    font-weight: {{font.heading_weight}};
+    border-color: transparent;
+}
+
+QFrame#noteBar QToolButton#noteSave:hover {
+    background: {{color.accent_hover}};
+}
+
+QFrame#noteBar QToolButton#noteSave:pressed {
+    background: {{color.accent_pressed}};
+}
+
+/* the notes tab footer (document note fold, export): outlined secondary buttons like the dialogs' */
+QToolButton#docNoteFold, QToolButton#notesExport {
+    background: transparent;
+    color: {{color.text}};
+    border: 1px solid {{color.outline}};
+    border-radius: {{radius.md}}px;
+    padding: 0px; /* a tab column's width: the text is centred, side padding would cut "문서 노트" */
+    min-height: {{size.control_sm}}px;
+}
+
+QToolButton#docNoteFold:hover,
+QToolButton#docNoteFold:checked,
+QToolButton#notesExport:hover {
+    border-color: {{color.text}};
+}
+
+QToolButton#docNoteFold:focus, QToolButton#notesExport:focus {
+    border: 2px solid {{color.accent}};
+}
+
+QToolButton#notesExport:disabled {
+    color: {{color.text_disabled}};
+    border-color: {{color.bg_highlight}};
 }

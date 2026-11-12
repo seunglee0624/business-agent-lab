@@ -3,7 +3,7 @@ from PySide6.QtGui import QFontMetrics, QTextLayout
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from app import theme
-from app.models.notes_model import ITEM_ROLE, KIND_ROLE, label
+from app.models.notes_model import ITEM_ROLE, KIND_ROLE, label, text
 
 QUOTE_LINES = 2
 
@@ -17,7 +17,7 @@ class NotesDelegate(QStyledItemDelegate):
         kind, item = index.data(KIND_ROLE), index.data(ITEM_ROLE)
         if kind == "bookmarks":
             return item.get("label") or "북마크한 페이지", "color.text_muted", ""
-        return item["text"], "color.text", item.get("comment", "")
+        return text(kind, item), "color.text", item.get("comment", "")
 
     def sizeHint(self, option, index):
         pad, line = theme.token("spacing.md"), option.fontMetrics.height()

@@ -59,6 +59,7 @@ def test_spread_fit_width_counts_the_gap(pdf100):
 def test_presentation_restores_previous_view(pdf100):
     state = ViewerState()
     state.open(Document(pdf100))
+    state.set_view_mode("continuous")
     state.set_zoom(1.3)
     state.toggle_presentation()
     assert (state.view_mode, state.zoom_mode, state.fullscreen) == ("single", "fit_page", True)

@@ -32,7 +32,7 @@ class ChatState(QObject):
         config = settings.llm_config()
         self.backend = backend or make_backend(config)
         self.document_limit = config["document_limit"]
-        self.scope = settings.chat_scope() if settings.chat_scope() in SCOPES else "page"
+        self.scope = "page"  # every launch starts on the current page, whatever was picked last time
         self.panel = settings.chat_panel()
         self.quick_questions = settings.quick_questions()
         self._chats = {}  # file path -> messages
@@ -64,7 +64,6 @@ class ChatState(QObject):
     def set_scope(self, scope):
         if scope in SCOPES and scope != self.scope:
             self.scope = scope
-            settings.save_chat_scope(scope)
             self.scope_changed.emit()
 
     def set_panel(self, shown):
@@ -336,3 +335,5 @@ class ChatState(QObject):
             self._fail("cancelled", "다른 문서로 바뀌어 질문을 보내지 않았습니다.")
         else:
             self.changed.emit()
+        if self._viewer.document is None:  # the last tab closed: nothing left to ask about
+            self.set_panel(False)

@@ -146,14 +146,6 @@ def save_chat_panel(shown):
     QSettings().setValue("chat/visible", shown)
 
 
-def chat_scope():
-    return QSettings().value("chat/scope", "page")
-
-
-def save_chat_scope(scope):
-    QSettings().setValue("chat/scope", scope)
-
-
 DEFAULT_QUICK_QUESTIONS = [  # scope "": whatever scope is chosen at the time
     {"label": "페이지 요약", "text": "이 페이지의 핵심을 3~5줄로 요약해줘.", "scope": "page"},
     {"label": "쉽게 설명", "text": "선택한 부분을 쉽게 풀어서 설명해줘.", "scope": "selection"},

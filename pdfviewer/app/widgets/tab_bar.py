@@ -48,8 +48,9 @@ class TabBar(QTabBar):
         button.setAccessibleName(f"탭 닫기: {name}")
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Ctrl+W closes from the keyboard; an extra Tab stop per tab is noise
         button.setIcon(icon("close"))
-        size = theme.token("size.control_sm") // 2
-        button.setIconSize(QSize(size, size))  # the icon is a button-sized square: half of it = a 10px glyph
+        size = theme.token("size.control_sm") * 3 // 4  # the icon is a button-sized square: 3/4 of it = a 15px glyph
+        button.setFixedSize(size, size)
+        button.setIconSize(QSize(size, size))
         button.clicked.connect(lambda: self.tabCloseRequested.emit(next(
             i for i in range(self.count()) if self.tabButton(i, QTabBar.ButtonPosition.RightSide) is button)))
         return button

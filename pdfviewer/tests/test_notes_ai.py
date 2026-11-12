@@ -38,7 +38,7 @@ def test_markdown_export():
             "notes": [{"id": "n1", "page": 0, "text": "my note", "source": "user"},
                       {"id": "n2", "page": 2, "text": "AI says", "source": "ai", "question": "뭐야?"}]}
     assert to_markdown(data) == (
-        "# lecture\n\n## 문서 노트\n\n# 정리\n시험 범위\n\n## 북마크\n\n- p.1 — Intro\n- p.5\n\n## 하이라이트·메모\n\n"
+        "# lecture\n\n## 문서 노트\n\n# 정리\n시험 범위\n\n## 북마크\n\n- p.1: Intro\n- p.5\n\n## 하이라이트·메모\n\n"
         "### p.1\n\n> first\n> line\n\n코멘트: 중요\n\n> second\n\n**메모**: my note\n\n"
         "### p.3\n\n**AI** (질문: 뭐야?)\n\nAI says\n")
     empty = {"title": "", "doc_note": "", "bookmarks": [], "highlights": [], "notes": [], "chat": []}

@@ -551,6 +551,41 @@ def test_notes_tab_lists_filters_and_goes(qtbot, window):
     assert not notes.is_bookmarked(1) and rows() == []
 
 
+def test_notes_tab_menu_changes_colour_and_footer_exports(qtbot, window, monkeypatch):
+    from PySide6.QtWidgets import QMenu
+    notes = window.notes
+    select_on_screen(window, 0, 1)
+    highlight_id = notes.highlight_selection()
+    panel = notes_tab(window)
+    panel._model.set_filter("highlights")
+    shown = []
+
+    class Menu(QMenu):  # records the menu instead of opening it
+        def exec(self, *args):
+            shown.append(self)
+    monkeypatch.setattr("app.widgets.sidebar.QMenu", Menu)
+    panel._menu(panel._list.visualRect(panel._model.index(0)).center())
+    colours = next(a.menu() for a in shown[0].actions() if a.text() == "색 변경")
+    assert [a.text() for a in colours.actions()] == ["노랑", "초록", "파랑", "분홍"]
+    colours.actions()[2].trigger()
+    assert notes.store.items("highlights")[0]["color"] == "blue"
+    export = panel.findChild(QToolButton, "notesExport")
+    triggered = []
+    window._actions["export_notes"].triggered.disconnect()
+    window._actions["export_notes"].triggered.connect(lambda: triggered.append(1))
+    export.click()
+    assert triggered and export.isEnabled()
+    window._actions["export_notes"].setEnabled(False)
+    assert not export.isEnabled()
+
+
+def test_an_ai_note_is_listed_without_markdown_marks(notes_setup):
+    from app.models.notes_model import text
+    item = {"page": 0, "text": "**굵게** `code`\n\n```python\nx = 1\n```", "source": "ai"}
+    assert text("notes", item).split() == ["굵게", "code", "x", "=", "1"]
+    assert text("notes", {"page": 0, "text": "**그대로**", "source": "user"}) == "**그대로**"
+
+
 def test_doc_note_box_saves_and_follows_the_tab(qtbot, window, pdf100):
     panel, notes = notes_tab(window), window.notes
     panel._fold.click()

@@ -248,7 +248,7 @@ def test_answer_keeps_its_token_usage(qtbot, setup):
     assert chat.messages[-1]["usage"] == Usage(1500, 1200, 30)
 
 
-def test_context_info_and_scope_is_remembered(qtbot, setup):
+def test_context_info_and_scope_starts_on_the_page(qtbot, setup):
     viewer, chat, backend = setup
     chat.set_panel(True)
     chat.context_info()  # starts extracting page 1
@@ -256,7 +256,7 @@ def test_context_info_and_scope_is_remembered(qtbot, setup):
     assert chat.context_info().startswith("p.1 · ")
     chat.set_scope("selection")
     assert chat.context_info() == "선택한 부분 없음"
-    assert ChatState(viewer, backend).scope == "selection"
+    assert ChatState(viewer, backend).scope == "page"  # not remembered: a new launch starts on the page
 
 
 def test_quick_question_uses_its_scope_and_edits_are_saved(qtbot, setup):
@@ -327,14 +327,48 @@ def test_quick_question_dialog(qtbot):
     assert [q["label"] for q in result] == ["한 줄 요약", "용어 정리"]
 
 
-def test_scope_buttons(qtbot, window):
+def test_scope_menu_and_empty_state(qtbot, window):
     window.chat.set_panel(True)
     panel = window._chat_panel
     panel._input.setEnabled(True)  # no key in tests
-    buttons = {b.text(): b for b in panel._scope.buttons()}
-    assert list(buttons) == [*SCOPES.values()] and buttons["현재 페이지"].isChecked()
-    qtbot.mouseClick(buttons["문서 전체"], Qt.MouseButton.LeftButton)
-    assert window.chat.scope == "document" and buttons["문서 전체"].isChecked() and not buttons["현재 페이지"].isChecked()
+    actions = {a.text(): a for a in panel._scope.actions()}
+    assert list(actions) == [*SCOPES.values()] and actions["현재 페이지"].isChecked()
+    assert panel._scope_button.text() == "현재 페이지" and [a.data() for a in actions.values()] == list(SCOPES)
+    actions["문서 전체"].trigger()
+    assert window.chat.scope == "document" and actions["문서 전체"].isChecked() and not actions["현재 페이지"].isChecked()
+    assert panel._scope_button.text() == "문서 전체"
     qtbot.waitUntil(panel._input.hasFocus)
+    assert panel._composer.property("focused")
     window.chat.set_scope("selection")  # e.g. right-click "AI에게 질문"
-    assert buttons["선택한 부분"].isChecked()
+    assert actions["선택한 부분"].isChecked() and panel._scope_button.text() == "선택한 부분"
+    assert panel._empty.isVisible() and not panel._log.isVisible()  # no messages yet: greeting and quick questions
+    window.chat.messages.append({"role": "note", "text": "x"})
+    panel._render()
+    assert panel._log.isVisible() and not panel._empty.isVisible()
+
+
+def test_answer_markdown_is_tidied(qapp):
+    from PySide6.QtGui import QTextCursor, QTextDocument, QTextFrameFormat, QTextTable
+    from app.widgets.chat_panel import ChatPanel
+    document = QTextDocument()
+    cursor = QTextCursor(document)
+    frame = cursor.insertFrame(QTextFrameFormat())
+    cursor.insertMarkdown("- one\n- two\n\n```\nx = 1\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")
+    ChatPanel._tidy_answer(frame)
+    first = frame.firstCursorPosition().block()
+    assert first.text() == "one" and first.textList() is not None  # no empty line above the list
+    table = next(f for f in frame.childFrames() if isinstance(f, QTextTable))
+    assert table.format().borderCollapse() and table.format().cellPadding() > 0
+    assert table.cellAt(0, 0).firstCursorPosition().block().text() == "a"  # not an empty line above it
+    code = first.next().next()
+    assert code.text() == "x = 1" and code.blockFormat().background().style() != 0
+
+
+def test_closing_the_last_tab_closes_the_chat(setup, pdf100):
+    viewer, chat, backend = setup
+    viewer.open(Document(pdf100))
+    chat.set_panel(True)
+    viewer.close_tab()
+    assert viewer.document and chat.panel  # another tab is left: the chat stays
+    viewer.close_tab()
+    assert viewer.document is None and not chat.panel

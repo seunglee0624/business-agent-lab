@@ -126,6 +126,7 @@ def window(qtbot):
 
 def test_ctrl_f_type_enter_and_esc(qtbot, window, pdf100):
     window.open_file(pdf100)
+    window.state.set_view_mode("continuous")  # every hit on screen, not only the current page's
     bar, view = window.findChild(SearchBar), window._view
     assert not bar.isVisible()
     qtbot.keyClick(view, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)

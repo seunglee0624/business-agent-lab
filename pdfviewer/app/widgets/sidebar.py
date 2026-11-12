@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QHBoxLayout, QLa
                                QPushButton, QStackedWidget, QTabWidget, QToolButton, QTreeView, QVBoxLayout, QWidget)
 
 from app import theme
+from app.annotation_state import COLORS
 from app.models.notes_model import FILTERS, ITEM_ROLE, KIND_ROLE, NotesModel
 from app.models.outline_model import PAGE_ROLE, OutlineModel
 from app.models.thumbnail_model import ThumbnailModel
@@ -15,13 +16,13 @@ class Sidebar(QTabWidget):
     """Thumbnails, outline and notes tabs. Clicks call ViewerState.go_to (and AnnotationState
     for notes); the current page comes from their signals."""
 
-    def __init__(self, state, notes, ask_action):
+    def __init__(self, state, notes, ask_action, export_action):
         super().__init__()
         self.setObjectName("sidebar")
         self.thumbnails = ThumbnailList(state)
         self.addTab(self.thumbnails, "썸네일")
         self.addTab(OutlinePanel(state), "목차")
-        self.notes = NotesPanel(state, notes, ask_action)
+        self.notes = NotesPanel(state, notes, ask_action, export_action)
         self.addTab(self.notes, "메모")
         for i, tip in enumerate(("페이지 썸네일", "문서 목차", "하이라이트·메모·북마크와 문서 노트")):
             self.setTabToolTip(i, tip)
@@ -124,16 +125,19 @@ class NotesPanel(QWidget):
     """Filter buttons, the notes list in page order, its count, and the document note under a fold.
     A click goes to the item: a highlight is selected on the page, a page note opens its box."""
 
-    def __init__(self, state, notes, ask_action):
+    def __init__(self, state, notes, ask_action, export_action):
         super().__init__()
         self._state, self._notes, self._ask = state, notes, ask_action
         self._model = NotesModel(notes, self)
         # buttons, not a drop-down: no popup (WSLg's Wayland popups do not close)
         self._filters = QButtonGroup(self, exclusive=True)
+        # the filters and the footer sit in the columns of the sidebar's tabs above, the filters styled as tabs
+        column_width, gap = theme.token("size.sidebar_tab"), theme.token("spacing.md")
         chips = QHBoxLayout()
-        chips.setSpacing(theme.token("spacing.sm"))
+        chips.setSpacing(gap)
         for key, label in FILTERS.items():
-            button = QPushButton(label, objectName="scope", checkable=True, checked=key == self._model.filter)
+            button = QPushButton(label, objectName="notesFilter", checkable=True, checked=key == self._model.filter)
+            button.setFixedWidth(column_width)
             button.clicked.connect(lambda checked=False, key=key: self._model.set_filter(key))
             self._filters.addButton(button)
             chips.addWidget(button)
@@ -149,7 +153,7 @@ class NotesPanel(QWidget):
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._menu)
         self._empty = QLabel(alignment=Qt.AlignmentFlag.AlignCenter, wordWrap=True, objectName="fieldName")
-        self._count = QLabel(objectName="fieldName")
+        self._count = QLabel(objectName="notesCount", alignment=Qt.AlignmentFlag.AlignCenter)
         self._fold = QToolButton(text="문서 노트", checkable=True, objectName="docNoteFold",
                                  toolTip="문서 전체에 대한 노트 (자동 저장)")
         self._fold.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -160,13 +164,20 @@ class NotesPanel(QWidget):
         self._doc_note.setAccessibleName("문서 노트")
         self._doc_note.hide()
         self._doc_note.textChanged.connect(lambda: notes.set_doc_note(self._doc_note.toPlainText()))
+        # not setDefaultAction: it would take the menu's longer "메모 내보내기…" back on every enable
+        export = QToolButton(text="내보내기", objectName="notesExport", toolTip=export_action.toolTip())
+        export.clicked.connect(export_action.trigger)
+        export_action.changed.connect(lambda: export.setEnabled(export_action.isEnabled()))
+        export.setEnabled(export_action.isEnabled())
         footer = QHBoxLayout()
-        footer.addWidget(self._fold)
+        footer.setSpacing(gap)
+        for widget in (self._fold, export, self._count):
+            widget.setFixedWidth(column_width)
+            footer.addWidget(widget)
         footer.addStretch(1)
-        footer.addWidget(self._count)
         column = QVBoxLayout(self)
         m = theme.token("spacing.md")
-        column.setContentsMargins(m, m, m, m)
+        column.setContentsMargins(0, m, 0, m)  # flush left like the tabs and the other tabs' lists
         column.addLayout(chips)
         column.addWidget(self._list, 1)
         column.addWidget(self._empty, 1)
@@ -183,7 +194,7 @@ class NotesPanel(QWidget):
         self._empty.setVisible(rows == 0)
         self._empty.setText("하이라이트(H)·메모(M)·북마크(B)가 여기에 모입니다." if self._state.document
                             else "문서를 열면 메모가 여기에 모입니다.")
-        self._count.setText(f"{rows}개" if rows else "")
+        self._count.setText(f"{rows}개" if rows else "")  # the kind is the checked filter above
 
     def _unfold(self, shown):
         self._fold.setArrowType(Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow)
@@ -218,6 +229,11 @@ class NotesPanel(QWidget):
             menu.addAction("편집", lambda: self._edit(kind, item))
         if kind == "highlights":
             menu.addAction("AI에게 질문", lambda: (self._notes.select_highlight(item["id"]), self._ask.trigger()))
+            colors = menu.addMenu("색 변경")
+            for key, name in COLORS.items():
+                choice = colors.addAction(name, lambda key=key: self._notes.set_highlight_color(item["id"], key))
+                choice.setCheckable(True)
+                choice.setChecked(item.get("color", "yellow") == key)
         menu.addAction("삭제", lambda: self._remove(kind, item))
         menu.exec(self._list.viewport().mapToGlobal(pos))
 

@@ -82,6 +82,8 @@ class _NoteBar(QFrame):
         self._editor_buttons.addStretch(1)
         self._save_button = self._button("저장", lambda: notes.stop_editing(save=True), "저장 (Ctrl+Enter)")
         self._cancel_button = self._button("취소", notes.stop_editing, "취소 (Esc)")
+        self._save_button.setObjectName("noteSave")  # the dialogs' green save and outlined cancel, smaller
+        self._cancel_button.setObjectName("noteCancel")
         self._editor_buttons.addWidget(self._save_button)
         self._editor_buttons.addWidget(self._cancel_button)
         column = QVBoxLayout(self)

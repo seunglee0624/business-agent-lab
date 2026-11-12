@@ -34,6 +34,7 @@ def test_home_end_and_actual_size_keys(qtbot, window):
 
 
 def test_page_down_scrolls_a_screen_in_continuous(qtbot, window):
+    window.state.set_view_mode("continuous")
     bar = window._view.verticalScrollBar()
     start = bar.value()
     qtbot.keyClick(window._view, Qt.Key.Key_PageDown)
@@ -147,7 +148,7 @@ def test_log_file_written(tmp_path):
         handler.close()
 
 
-def test_sidebar_narrows_to_the_left_edge_and_double_click_restores_it(qtbot):
+def test_sidebar_narrows_to_the_left_edge_double_click_restores_then_closes_it(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
     window.resize(1200, 800)
@@ -158,6 +159,45 @@ def test_sidebar_narrows_to_the_left_edge_and_double_click_restores_it(qtbot):
     x = (window._dock.geometry().right() + window.centralWidget().geometry().left()) // 2 + 1
     qtbot.mouseDClick(window, Qt.MouseButton.LeftButton, pos=QPoint(x, y))
     qtbot.waitUntil(lambda: window._dock.width() == theme.token("size.sidebar_width"))
+    x = (window._dock.geometry().right() + window.centralWidget().geometry().left()) // 2 + 1
+    qtbot.mouseDClick(window, Qt.MouseButton.LeftButton, pos=QPoint(x, y))  # again, at the usual width
+    qtbot.waitUntil(lambda: not window._dock.isVisible())
+    assert not window.state.sidebar and not window._actions["toggle_sidebar"].isChecked()
+    qtbot.waitUntil(lambda: window._view.mapTo(window, QPoint(0, 0)).x() == theme.token("spacing.md"))  # off the edge
+    strip = window._sidebar_strip  # the strip it left: the border's cursor, a double-click opens it
+    assert strip.isVisible() and strip.cursor().shape() == Qt.CursorShape.SplitHCursor
+    qtbot.mouseClick(strip, Qt.MouseButton.LeftButton)
+    assert not window._dock.isVisible()  # one click does nothing
+    qtbot.mouseDClick(strip, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(window._dock.isVisible)
+    assert not strip.isVisible()
+
+
+def test_chat_border_double_click_restores_then_closes_it_and_its_strip_opens_it(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.resize(1200, 800)
+    window.show()
+    window.chat.set_panel(True)
+    dock, usual = window._chat_dock, theme.token("size.chat_width") + theme.token("spacing.md")
+    window.resizeDocks([dock], [500], Qt.Orientation.Horizontal)
+    qtbot.waitUntil(lambda: dock.width() == 500)
+    y = dock.geometry().center().y()
+    border = lambda: QPoint((window.centralWidget().geometry().right() + dock.geometry().left()) // 2 + 1, y)
+    qtbot.mouseDClick(window, Qt.MouseButton.LeftButton, pos=border())
+    qtbot.waitUntil(lambda: dock.width() == usual)
+    qtbot.mouseDClick(window, Qt.MouseButton.LeftButton, pos=border())  # again, at the usual width
+    qtbot.waitUntil(lambda: not dock.isVisible())
+    assert not window.chat.panel and not window._actions["toggle_chat"].isChecked()
+    strip = window._chat_strip  # 8px off the right edge, the border's cursor, a double-click opens it
+    assert strip.isVisible() and strip.cursor().shape() == Qt.CursorShape.SplitHCursor
+    assert window.width() - window._view.parentWidget().mapTo(window, QPoint(0, 0)).x() - window._stack.width() \
+        == theme.token("spacing.md")
+    qtbot.mouseClick(strip, Qt.MouseButton.LeftButton)
+    assert not dock.isVisible()  # one click does nothing
+    qtbot.mouseDClick(strip, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(dock.isVisible)
+    assert not strip.isVisible()
 
 
 def test_alt_keys_open_the_plain_titled_menus(qtbot, window):

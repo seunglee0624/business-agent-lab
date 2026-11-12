@@ -19,7 +19,7 @@ class Tab:
     page: int = 0
     zoom_mode: str = "fit_width"
     zoom: float = 1.0
-    view_mode: str = "continuous"
+    view_mode: str = "single"
     cover_alone: bool = True
     rotation: int = 0
 
@@ -52,7 +52,7 @@ class ViewerState(QObject):
         self.current_page = 0
         self.zoom = 1.0
         self.zoom_mode = "fit_width"  # "custom" | "fit_width" | "fit_page"
-        self.view_mode = "continuous"
+        self.view_mode = "single"  # one page at a time until the reader picks another mode
         self.cover_alone = True  # spread mode: first page on its own, like a book cover
         self.rotation = 0  # extra clockwise degrees for the whole document
         self.tool = "select"  # "select" | "hand"

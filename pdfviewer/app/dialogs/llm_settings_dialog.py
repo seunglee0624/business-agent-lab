@@ -50,12 +50,20 @@ def llm_settings_dialog(parent, config):
 
     compat = QGroupBox("OpenAI 호환")
     base_url = QLineEdit(config["openai_base_url"], placeholderText="https://…/v1")
-    presets = QHBoxLayout()
+    presets, preset_buttons = QHBoxLayout(), {}
+    def mark_preset():  # the provider whose address is in the box is the white one
+        for url, button in preset_buttons.items():
+            button.setChecked(base_url.text().strip().rstrip("/") == url)
     for name, url in PRESETS.items():
-        button = QPushButton(name, objectName="chip", toolTip=url)
-        button.clicked.connect(lambda checked=False, url=url: base_url.setText(url))
+        button = preset_buttons[url] = QPushButton(name, objectName="chip", toolTip=url, checkable=True)
+        button.clicked.connect(lambda checked=False, url=url: (base_url.setText(url), mark_preset()))
         presets.addWidget(button)
+    width = max(button.sizeHint().width() for button in preset_buttons.values())
+    for button in preset_buttons.values():
+        button.setFixedWidth(width)  # one size: a row of equals, not of name lengths
     presets.addStretch(1)
+    base_url.textChanged.connect(mark_preset)
+    mark_preset()
     compat_key = _secret(config["openai_key"], "Ollama 는 비워 둬도 됨")
     compat_model = QLineEdit(config["openai_model"], placeholderText="모델 이름 (제공자 문서 참고)")
     form = QFormLayout(compat)
@@ -66,7 +74,8 @@ def llm_settings_dialog(parent, config):
 
     limit = QSpinBox(minimum=1000, maximum=1_000_000, singleStep=10000, value=config["document_limit"], suffix="자")
     limit.setGroupSeparatorShown(True)
-    limits = QFormLayout()
+    common = QGroupBox("공통")
+    limits = QFormLayout(common)
     limits.addRow("문서 전체 상한", limit)
     save_chat = QCheckBox("문서마다 대화 기록 저장 (다시 열면 복원)", checked=config["save_chat"])
     limits.addRow("", save_chat)
@@ -124,7 +133,7 @@ def llm_settings_dialog(parent, config):
     layout.addLayout(backend_row)
     layout.addWidget(anthropic)
     layout.addWidget(compat)
-    layout.addLayout(limits)
+    layout.addWidget(common)
     layout.addLayout(test_row)
     layout.addWidget(QLabel("API 키는 이 컴퓨터의 앱 설정에 암호화 없이 저장됩니다.", objectName="fieldName", wordWrap=True))
     layout.addWidget(buttons)

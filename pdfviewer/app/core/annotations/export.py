@@ -8,7 +8,7 @@ def to_markdown(data):
         out += ["## 문서 노트", data["doc_note"].strip()]
     bookmarks = sorted(data["bookmarks"], key=lambda b: b["page"])
     if bookmarks:
-        out += ["## 북마크", "\n".join(f"- p.{b['page'] + 1}" + (f" — {b['label']}" if b.get("label") else "")
+        out += ["## 북마크", "\n".join(f"- p.{b['page'] + 1}" + (f": {b['label']}" if b.get("label") else "")
                                       for b in bookmarks)]
     pages = {}
     # highlights top to bottom, then the page's notes in the order they were made

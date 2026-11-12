@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
+from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
                                QWidget)
 
 from app import shortcuts, theme
@@ -100,24 +100,40 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.addWidget(self._empty)
         self._stack.addWidget(view)
-        central = QWidget()
-        column = QVBoxLayout(central)
-        column.setContentsMargins(0, 0, 0, 0)
+        central = QWidget(objectName="central")
+        central.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)  # the gap left when the sidebar is closed
+        row = QHBoxLayout(central)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        # the strips a closed sidebar or chat leaves at the window's edge: the border's cursor, a double-click opens it
+        self._sidebar_strip, self._chat_strip = (QWidget(cursor=Qt.CursorShape.SplitHCursor) for _ in range(2))
+        column = QVBoxLayout()
         column.setSpacing(0)
+        for item in (self._sidebar_strip, column, self._chat_strip):
+            if isinstance(item, QWidget):
+                item.setFixedWidth(theme.token("spacing.md"))
+                row.addWidget(item)
+            else:
+                row.addLayout(item)
         self._tab_bar = TabBar(self.state)
         column.addWidget(self._tab_bar)
         column.addWidget(self._stack)
         self.setCentralWidget(central)
+        self._sidebar_strip.installEventFilter(self)  # after _tab_bar exists: eventFilter reads it
+        self._chat_strip.installEventFilter(self)
         central.installEventFilter(self)  # it moves when the sidebar is resized, shown or hidden
         self._toolbar.installEventFilter(self)  # its width decides how much the zoom group may move
         self.setAcceptDrops(True)
         self._status = StatusBar(self.state, self.notes)
         self.setStatusBar(self._status)
         self.notes.problem.connect(lambda message: self._status.showMessage(message, STATUS_MESSAGE_MS))
-        self._sidebar = Sidebar(self.state, self.notes, self._actions["ask_ai"])
+        self._sidebar = Sidebar(self.state, self.notes, self._actions["ask_ai"], self._actions["export_notes"])
         self._dock = QDockWidget(objectName="sidebar_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._dock.setTitleBarWidget(QWidget())  # no title bar: the menu/F4 toggles it, the edge drag resizes it
-        self._dock.setWidget(self._sidebar)
+        inset = QWidget(objectName="sidebarInset")  # a gap from the window's left edge for the tabs and outlined buttons
+        QVBoxLayout(inset).setContentsMargins(theme.token("spacing.md"), 0, 0, 0)
+        inset.layout().addWidget(self._sidebar)
+        self._dock.setWidget(inset)
         self._sidebar.setMinimumWidth(1)  # not the tabs' width: the document may take the window up to its left edge
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
         self._chat_panel = ChatPanel(self.chat)
@@ -125,8 +141,13 @@ class MainWindow(QMainWindow):
         self.chat.input_requested.connect(self._chat_panel.focus_input)
         self._chat_dock = QDockWidget(objectName="chat_dock", features=QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self._chat_dock.setTitleBarWidget(QWidget())
-        self._chat_dock.setWidget(self._chat_panel)
+        card = QWidget(objectName="chatInset")  # off the window's right edge, as the sidebar is off the left
+        QVBoxLayout(card).setContentsMargins(0, 0, theme.token("spacing.md"), 0)  # the top follows _level_chat
+        card.layout().addWidget(self._chat_panel)
+        self._chat_dock.setWidget(card)
+        self._tab_bar.installEventFilter(self)  # its height decides where the chat card starts
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._chat_dock)
+        self._order_tab_keys()
         self._restore_settings()
         self._search_bar.setVisible(False)  # after restoreState, which would bring back a saved visibility
 
@@ -155,6 +176,23 @@ class MainWindow(QMainWindow):
     def _open_menu(self, menu):
         if self.menuBar().isVisible():  # hidden in presentation mode
             self.menuBar().setActiveAction(menu.menuAction())
+
+    def _order_tab_keys(self):
+        """Tab follows the screen: toolbar, search bar, sidebar, document, chat. Qt's own order is the order the
+        widgets were made in, which put the toolbar after the chat panel. Within a region the order stays."""
+        regions = [self._toolbar, self._search_bar, self._sidebar, self.centralWidget(), self._chat_panel]
+
+        def region(widget):
+            return next((i for i, r in enumerate(regions) if r.isAncestorOf(widget)), None)
+
+        chain, widget = [], self.nextInFocusChain()
+        while widget not in chain:
+            chain.append(widget)
+            widget = widget.nextInFocusChain()
+        tabbable = sorted((w for w in chain if region(w) is not None and w.focusPolicy() & Qt.FocusPolicy.TabFocus),
+                          key=region)  # stable sort: each region keeps its own order
+        for first, second in zip(tabbable, tabbable[1:]):
+            QWidget.setTabOrder(first, second)
 
     def _focus_main(self):
         (self._view if self.state.document else self._empty).setFocus()
@@ -311,7 +349,10 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentWidget(self._view if self.state.document else self._empty)
 
     def _apply_sidebar(self):
-        self._dock.setVisible(self.state.sidebar and not self.state.presentation)
+        shown = self.state.sidebar and not self.state.presentation
+        self._dock.setVisible(shown)
+        # closed: the document keeps the 8px the sidebar kept from the window's edge (presentation: edge to edge)
+        self._sidebar_strip.setVisible(not shown and not self.state.presentation)
 
     def _apply_chat(self, focus=True):
         shown = self.chat.panel and not self.state.presentation
@@ -319,6 +360,7 @@ class MainWindow(QMainWindow):
         if not shown and focus_widget and self._chat_panel.isAncestorOf(focus_widget):
             self._focus_main()  # hiding the focused box would leave the keys nowhere
         self._chat_dock.setVisible(shown)
+        self._chat_strip.setVisible(not shown and not self.state.presentation)
         if shown and focus:  # opened with Ctrl+Shift+L: ready to type
             self._chat_panel.focus_input()
 
@@ -398,7 +440,17 @@ class MainWindow(QMainWindow):
         if watched is self.centralWidget() and moved or watched is self._toolbar and (
                 moved or event.type() == QEvent.Type.LayoutRequest):
             QTimer.singleShot(0, self._align_toolbar)  # after the toolbar's own layout settles
+        if watched is self._tab_bar and event.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.Hide):
+            self._level_chat()
+        if watched in (self._sidebar_strip, self._chat_strip) and event.type() == QEvent.Type.MouseButtonDblClick:
+            self.state.set_sidebar(True) if watched is self._sidebar_strip else self.chat.set_panel(True)
+            return True
         return super().eventFilter(watched, event)
+
+    def _level_chat(self):
+        """The chat card starts where the page does: under the document tabs, or at the top when there are none."""
+        top = 0 if self._tab_bar.isHidden() else self._tab_bar.height()
+        self._chat_dock.widget().layout().setContentsMargins(0, top, theme.token("spacing.md"), 0)
 
     def _align_toolbar(self):
         """The zoom group starts above the first document tab, not over the sidebar."""
@@ -407,11 +459,18 @@ class MainWindow(QMainWindow):
         self._toolbar.align_zoom(self._toolbar.mapFrom(self, left).x())
 
     def mouseDoubleClickEvent(self, event):
-        x, dock, central = event.position().x(), self._dock.geometry(), self.centralWidget().geometry()
-        if self._dock.isVisible() and dock.right() < x < central.left():  # the sidebar's resize border
-            self.resizeDocks([self._dock], [theme.token("size.sidebar_width")], Qt.Orientation.Horizontal)
-        else:
-            super().mouseDoubleClickEvent(event)
+        """On a dock's resize border: back to its usual width, or closed if it already has it."""
+        x, central = event.position().x(), self.centralWidget().geometry()
+        chat_width = theme.token("size.chat_width") + theme.token("spacing.md")  # the card and its gap from the edge
+        for dock, width, close, on_border in (
+                (self._dock, theme.token("size.sidebar_width"), lambda: self.state.set_sidebar(False),
+                 self._dock.geometry().right() < x < central.left()),
+                (self._chat_dock, chat_width, lambda: self.chat.set_panel(False),
+                 central.right() < x < self._chat_dock.geometry().left())):
+            if dock.isVisible() and on_border:
+                close() if dock.width() == width else self.resizeDocks([dock], [width], Qt.Orientation.Horizontal)
+                return
+        super().mouseDoubleClickEvent(event)
 
     def _update_title(self):
         doc = self.state.document

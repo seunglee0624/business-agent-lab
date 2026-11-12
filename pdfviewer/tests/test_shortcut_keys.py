@@ -94,13 +94,13 @@ def test_clashing_keys_turn_red_until_one_changes(window, dialog):
 
 def test_clear_default_and_reset_buttons(window, dialog):
     edit = edit_of(dialog, "확대")
-    row = dialog.findChild(QToolButton, "clearKey").parentWidget().layout()
+    row = dialog.findChild(QToolButton, "rowRemove").parentWidget().layout()
     index = row.indexOf(edit)
     r, _, _, _ = row.getItemPosition(index)
     clear, default = row.itemAtPosition(r, 2).widget(), row.itemAtPosition(r, 3).widget()
-    assert isinstance(default, QPushButton) and not default.isEnabled()  # nothing to undo yet
+    assert isinstance(default, QPushButton) and default.isHidden()  # nothing to undo yet
     clear.click()
-    assert window._actions["zoom_in"].shortcuts() == [] and default.isEnabled()
+    assert window._actions["zoom_in"].shortcuts() == [] and not default.isHidden()
     default.click()
     assert [k.toString() for k in window._actions["zoom_in"].shortcuts()] == ["Ctrl++", "Ctrl+="]
     record(edit_of(dialog, "축소"), "Z")

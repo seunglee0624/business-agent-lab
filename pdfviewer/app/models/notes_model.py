@@ -1,4 +1,7 @@
+from functools import lru_cache
+
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
+from PySide6.QtGui import QTextDocument
 
 from app.core import settings
 
@@ -10,6 +13,20 @@ ITEM_ROLE = Qt.ItemDataRole.UserRole + 2  # the stored dict
 def label(kind, item):
     """What a row is called: a saved AI answer is a note too, marked as the AI's."""
     return "AI 메모" if kind == "notes" and item.get("source") == "ai" else FILTERS[kind]
+
+
+def text(kind, item):
+    """A row's words: a saved AI answer without its markdown marks ("**", "```", "|")."""
+    if kind == "bookmarks":
+        return item.get("label", "")
+    return _plain(item["text"]) if item.get("source") == "ai" else item.get("text", "")
+
+
+@lru_cache(maxsize=512)  # the list repaints often; an answer's text never changes
+def _plain(markdown):
+    document = QTextDocument()
+    document.setMarkdown(markdown)
+    return document.toPlainText()
 
 
 class NotesModel(QAbstractListModel):
@@ -48,6 +65,5 @@ class NotesModel(QAbstractListModel):
         if role == ITEM_ROLE:
             return item
         if role == Qt.ItemDataRole.DisplayRole:  # also what a screen reader says
-            text = {"highlights": item.get("text", ""), "notes": item.get("text", ""), "bookmarks": item.get("label", "")}[kind]
-            return f"{item['page'] + 1}쪽 {label(kind, item)}: {text}"
+            return f"{item['page'] + 1}쪽 {label(kind, item)}: {text(kind, item)}"
         return None

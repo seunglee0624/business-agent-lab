@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLineEdit
 
 from app.main_window import MainWindow
 from app.widgets.toolbar import Toolbar
@@ -52,3 +53,38 @@ def test_toolbar_buttons_are_icons_with_tooltips(qtbot):
                 continue  # widgets (page box, zoom box) and the text toggles
             assert not action.icon().isNull() and action.toolTip(), action.text()
     assert w._actions["zoom_in"].toolTip() == "확대 (Ctrl++)"
+
+
+def test_tab_key_follows_the_screen_order(qtbot, pdf100):
+    """Toolbar, sidebar, document, chat: also after the chat panel remakes its quick-question buttons."""
+    from PySide6.QtWidgets import QApplication
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show()
+    window.activateWindow()
+    qtbot.waitUntil(window.isActiveWindow)
+    window.open_file(pdf100)
+    window._actions["toggle_chat"].trigger()
+    window._chat_panel._fill_quick()
+    regions = [window._toolbar, window._sidebar, window.centralWidget(), window._chat_panel]
+    seen = []
+    window._toolbar.findChild(QLineEdit).setFocus()  # the page number box, the first stop
+    for _ in range(40):
+        widget = QApplication.focusWidget()
+        seen.append(next(i for i, r in enumerate(regions) if r.isAncestorOf(widget)))
+        window.focusNextChild()
+    first_lap = seen[:seen.index(0, seen.index(3))]  # up to the return to the toolbar
+    assert first_lap == sorted(first_lap) and set(first_lap) == {0, 1, 2, 3}
+    window.state.renderer.shutdown()
+
+
+def test_chat_card_starts_level_with_the_page(qtbot, pdf100):
+    from PySide6.QtCore import QPoint
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show()
+    window.chat.set_panel(True)
+    top = lambda widget: widget.mapTo(window, QPoint(0, 0)).y()
+    qtbot.waitUntil(lambda: top(window._chat_panel) == top(window._stack))  # no tabs yet: both at the top
+    window.open_file(pdf100)
+    qtbot.waitUntil(lambda: top(window._chat_panel) == top(window._view) > top(window._tab_bar))

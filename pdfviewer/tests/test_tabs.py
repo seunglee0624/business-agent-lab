@@ -37,7 +37,7 @@ def test_each_tab_keeps_its_own_view(st, files):
     st.set_view_mode("spread")
     st.rotate_right()
     st.switch_tab(1)
-    assert (st.current_page, st.view_mode, st.rotation, st.document.path) == (0, "continuous", 0, files[1])
+    assert (st.current_page, st.view_mode, st.rotation, st.document.path) == (0, "single", 0, files[1])
     st.go_to(3)
     st.prev_tab()
     assert (st.current_page, st.zoom, st.view_mode, st.rotation) == (41, 1.5, "spread", 90)
@@ -80,7 +80,7 @@ def test_closing_a_tab_in_presentation_keeps_its_real_view(st, files):
     st.set_zoom(1.5)
     st.toggle_presentation()
     st.switch_tab(1)
-    assert not st.presentation and st.view_mode == "continuous"
+    assert not st.presentation and st.view_mode == "single"
     assert settings.file_view(files[0])[1:] == ("custom", 1.5)
     st.switch_tab(0)
     st.toggle_presentation()

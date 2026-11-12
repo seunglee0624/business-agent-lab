@@ -101,10 +101,14 @@ def test_settings_dialog_and_connection_test(qtbot, server):
     def fill():
         dialog = QApplication.activeModalWidget()
         next(b for b in dialog.findChildren(QRadioButton) if b.text().startswith("OpenAI")).click()
-        next(b for b in dialog.findChildren(QPushButton) if b.text() == "Gemini").click()
+        chips = {b.text(): b for b in dialog.findChildren(QPushButton) if b.objectName() == "chip"}
+        chips["Gemini"].click()
+        chips["Gemini"].click()  # again: still the one in use
         edits = {e.placeholderText(): e for e in dialog.findChildren(QLineEdit)}
         assert edits["https://…/v1"].text().startswith("https://generativelanguage")
+        assert [name for name, chip in chips.items() if chip.isChecked()] == ["Gemini"]
         edits["https://…/v1"].setText(server.url)
+        assert not any(chip.isChecked() for chip in chips.values())  # a typed address is no provider's
         edits["모델 이름 (제공자 문서 참고)"].setText("gemini-x")
         next(b for b in dialog.findChildren(QPushButton) if b.text() == "연결 테스트").click()
         qtbot.waitUntil(lambda: any("연결됨 (gemini-x): 안녕" in label.text() for label in dialog.findChildren(QLabel)))
