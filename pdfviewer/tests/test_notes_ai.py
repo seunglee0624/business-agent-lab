@@ -1,10 +1,9 @@
-"""Phase 11c: AI answers kept as notes, the conversation saved with the notes, Markdown export."""
+"""Phase 11c: AI answers kept in page notes (the conversation itself is not saved), Markdown export."""
 import pytest
 from PySide6.QtCore import QPointF, QUrl
 
 from app.annotation_state import AnnotationState
 from app.chat_state import ChatState
-from app.core import settings
 from app.core.annotations.export import to_markdown
 from app.core.document import Document
 from app.models.notes_model import NotesModel
@@ -45,48 +44,44 @@ def test_markdown_export():
     assert to_markdown(empty) == "# 노트\n"
 
 
-def test_an_answer_becomes_an_ai_note_of_the_question_page(qtbot, setup):
+def test_an_answer_goes_into_the_question_pages_own_note(qtbot, setup):
     viewer, notes, chat = setup
     ask(qtbot, chat, "무슨 내용?")
+    chat.messages[1]["text"] = "**굵게** 핵심"  # an answer in markdown
     viewer.go_to(2)  # saved on the page it was asked on, not the one shown now
     chat.save_answer(1)
-    note = notes.store.items("notes")[0]
-    assert (note["page"], note["text"], note["source"], note["question"]) == (0, "answer 1", "ai", "무슨 내용?")
-    assert chat.answer_saved(chat.messages[1]) and notes.page_note(0) is None  # not the user's own page note
+    assert notes.page_note(0)["text"] == "굵게 핵심" and notes.page_note(0)["source"] == "user"  # plain text
+    assert chat.answer_saved(chat.messages[1]) and notes.marked_pages()[1] == {0}  # the yellow ribbon
     chat.save_answer(1)  # once only
-    assert len(notes.store.items("notes")) == 1
-    model = NotesModel(notes)
-    model.set_filter("notes")
-    assert model.index(0).data() == "1쪽 AI 메모: answer 1"
+    assert len(notes.store.items("notes")) == 1 and notes.page_note(0)["text"] == "굵게 핵심"
     notes.undo_group.undo()
-    assert not chat.answer_saved(chat.messages[1]) and notes.marked_pages() == (set(), set())  # no yellow ribbon
+    assert not chat.answer_saved(chat.messages[1]) and notes.page_note(0) is None
 
 
-def test_the_conversation_comes_back_when_the_file_is_reopened(qtbot, setup, text_pdf, tmp_path):
+def test_an_answer_is_added_under_a_note_already_there(qtbot, setup):
+    viewer, notes, chat = setup
+    notes.set_page_note(0, "내 메모")
+    ask(qtbot, chat, "질문")
+    chat.save_answer(1)
+    assert notes.page_note(0)["text"] == "내 메모\n\nanswer 1" and len(notes.store.items("notes")) == 1
+
+
+def test_the_conversation_is_not_saved(qtbot, setup, text_pdf, tmp_path):
     viewer, notes, chat = setup
     ask(qtbot, chat, "첫 질문")
     chat.save_answer(1)
     notes.flush()
+    assert notes.store.data["chat"] == []
+    path = viewer.document.path
+    viewer.close_tab()
+    viewer.open(Document(path))  # closed and opened again in the same run
+    assert chat.messages == []
     again, again_notes, again_chat = open_with_notes(text_pdf, tmp_path / "data", FakeBackend())
     try:
         qtbot.waitUntil(lambda: again_notes.store is not None)
-        assert [(m["role"], m["text"]) for m in again_chat.messages] == [("user", "첫 질문"), ("assistant", "answer 1")]
-        assert again_chat.answer_saved(again_chat.messages[1])
-        ask(qtbot, again_chat, "다음 질문")  # the restored turns are sent as history
-        assert [m["role"] for m in again_chat.backend.calls[0]] == ["user", "assistant", "user"]
+        assert again_chat.messages == [] and again_notes.page_note(0)["text"] == "answer 1"
     finally:
         again.renderer.shutdown()
-
-
-def test_clearing_forgets_the_saved_conversation_and_saving_can_be_off(qtbot, setup):
-    viewer, notes, chat = setup
-    ask(qtbot, chat, "질문")
-    assert len(notes.store.data["chat"]) == 2
-    chat.clear()
-    assert notes.store.data["chat"] == []
-    settings.save_llm_config({**settings.llm_config(), "save_chat": False})
-    ask(qtbot, chat, "질문")
-    assert notes.store.data["chat"] == []
 
 
 def test_ribbons_are_painted_at_the_page_top_after_a_page_turn(qtbot, text_pdf):
@@ -132,6 +127,37 @@ def test_chat_panel_save_link_and_copy(qtbot, text_pdf, tmp_path, monkeypatch):
         panel._render()
         assert "메모에 저장됨" in panel._log.toPlainText() and "메모로 저장" not in panel._log.toPlainText()
         window._actions["copy_notes"].trigger()
-        assert QApplication.clipboard().text().startswith("# text\n\n## 하이라이트·메모\n\n### p.1\n\n**AI** (질문: 질문)")
+        assert QApplication.clipboard().text().startswith("# text\n\n## 하이라이트·메모\n\n### p.1\n\n**메모**: answer 1")
     finally:
         window.state.renderer.shutdown()
+
+
+def test_ai_text_never_fetches_images(qtbot, tmp_path):
+    """file:/// and //host/share images in an answer, a note or a PDF's title are not loaded (a Windows UNC
+    fetch sends the login hash)."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QImage, QTextDocument
+    from app.models import notes_model
+    from app.widgets.chat_panel import ChatPanel
+    image = tmp_path / "x.png"
+    QImage(4, 4, QImage.Format.Format_RGB32).save(str(image))
+    url = QUrl.fromLocalFile(str(image))
+    from app.chat_state import ChatState
+    from app.viewer_state import ViewerState
+    viewer = ViewerState()
+    panel = ChatPanel(ChatState(viewer))
+    qtbot.addWidget(panel)
+    panel._log.setMarkdown(f"![x]({url.toString()})")
+    panel._log.show()
+    panel._log.grab()  # lays out and paints the image
+    assert panel._log.document().resource(QTextDocument.ResourceType.ImageResource, url).size().width() == 1
+    panel._open_link(QUrl("page:abc"))  # an answer's own odd link: ignored, no crash
+    viewer.renderer.shutdown()
+    plain = notes_model.TextOnly()
+    plain.setMarkdown(f"![x]({url.toString()})")
+    plain.size()  # lays it out
+    assert plain.resource(QTextDocument.ResourceType.ImageResource, url).size().width() == 1
+    unguarded = QTextDocument()
+    unguarded.setMarkdown(f"![x]({url.toString()})")
+    unguarded.size()
+    assert unguarded.resource(QTextDocument.ResourceType.ImageResource, url).size().width() == 4  # what Qt does unasked

@@ -8,15 +8,17 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, 
 
 from app import theme
 from app.chat_state import SCOPES
-from app.dialogs.llm_settings_dialog import llm_settings_dialog
+from app.core.llm.anthropic_api import MODELS
+from app.dialogs.llm_settings_dialog import EFFORTS, llm_settings_dialog
 from app.dialogs.quick_questions_dialog import quick_questions_dialog
 from app.icons import icon
+from app.models.notes_model import TextOnly
 
 RENDER_MS = 50  # an answer streams in many small pieces: redraw at most this often
 PAGE_REF = re.compile(r"(?<![\w\[/])p\.\s?(\d+)(?:\s?[–-]\s?\d+)?")  # p.12, p. 12, p.3–5 (links to the first page)
 
 HINTS = {  # what to do about each kind of error
-    "auth": "AI 설정의 API 키가 맞는지 확인하세요. 비워 뒀다면 ANTHROPIC_API_KEY 환경변수를 씁니다.",
+    "auth": "AI 설정의 API 키가 맞는지 확인하세요.",
     "rate_limit": "계속되면 제공자 콘솔에서 잔액과 사용 한도를 확인하세요.",
     "network": "인터넷 연결(Ollama 라면 서버가 켜져 있는지)과 AI 설정의 주소를 확인하고 다시 보내세요.",
     "context_too_long": "범위를 '현재 페이지'나 '선택한 부분'으로 줄이거나, 대화를 지우고 다시 물어보세요.",
@@ -78,11 +80,13 @@ class ChatPanel(QWidget):
         top.addWidget(self._info, 1)
         top.addWidget(self._button("clear_chat", "대화 지우기", self._clear))
         top.addWidget(self._button("settings", "AI 설정", self._open_settings))
+        top.addWidget(self._button("close", "AI 채팅 닫기", lambda: self._chat.set_panel(False)))
 
-        self._notice = QLabel('AI 채팅을 쓰려면 <a href="settings:">AI 설정</a>에서 API 키를 넣으세요 '
-                              "(또는 ANTHROPIC_API_KEY 환경변수).", objectName="chatNotice", wordWrap=True)
+        self._notice = QLabel('AI 채팅을 쓰려면 <a href="settings:">AI 설정</a>에서 API 키를 넣으세요.',
+                              objectName="chatNotice", wordWrap=True)
         self._notice.linkActivated.connect(self._open_settings)
         self._log = QTextBrowser(objectName="chatLog", openLinks=False)
+        self._log.setDocument(TextOnly(self._log))  # an answer's images are never fetched
         palette = self._log.palette()
         palette.setColor(QPalette.ColorRole.Link, theme.color("color.accent"))
         self._log.setPalette(palette)
@@ -117,15 +121,12 @@ class ChatPanel(QWidget):
             action.setData(key)  # not a Python attribute: Qt may hand back a fresh wrapper without it
             action.triggered.connect(lambda checked=False, key=key: self._choose_scope(key))
             self._scope.addAction(action)
-        self._scope_button = QPushButton(objectName="chatScope", toolTip="질문과 함께 보낼 부분")
-        self._scope_button.setMenu(menu)
-        self._scope_button.setIcon(icon("dropdown"))
-        caret = theme.token("spacing.xl")
-        self._scope_button.setIconSize(QSize(caret, caret))
-        self._scope_button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)  # text, then the caret
+        self._scope_button = self._menu_button("질문과 함께 보낼 부분", menu)
+        self._model_button = self._menu_button("AI 모델과 생각 정도", QMenu(self))
         self._send_button = self._button("send", "보내기 (Enter)", self._send_or_stop)
         controls = QHBoxLayout()
         controls.setSpacing(theme.token("spacing.sm"))
+        controls.addWidget(self._model_button)
         controls.addStretch(1)
         controls.addWidget(self._scope_button)
         controls.addWidget(self._send_button)
@@ -158,6 +159,15 @@ class ChatPanel(QWidget):
         self._apply_scope()
         self._apply_busy()
         self._render()
+
+    def _menu_button(self, tip, menu):
+        button = QPushButton(objectName="chatScope", toolTip=tip)
+        button.setMenu(menu)
+        button.setIcon(icon("dropdown"))
+        caret = theme.token("spacing.xl")
+        button.setIconSize(QSize(caret, caret))
+        button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)  # text, then the caret
+        return button
 
     def _button(self, name, tip, slot):
         button = QToolButton(objectName="chatButton", toolTip=tip, autoRaise=True)
@@ -199,21 +209,57 @@ class ChatPanel(QWidget):
         self._notice.setVisible(not self._available)
         self._input.setEnabled(self._available)
         self._apply_busy()
+        self._fill_model_menu()
+
+    def _fill_model_menu(self):
+        """Claude models, the OpenAI-compatible model from the settings, then 생각 정도 (Claude only)."""
+        config = self._chat.config
+        claude = config["backend"] == "anthropic"
+        menu = self._model_button.menu()
+        menu.clear()
+        menu.addAction("모델").setEnabled(False)  # a heading: Fusion draws addSection() as a bare line
+        models = dict(MODELS)
+        models.setdefault(config["anthropic_model"], config["anthropic_model"])  # one typed in the settings
+        for key, label in models.items():
+            self._menu_choice(menu, label, claude and key == config["anthropic_model"],
+                              lambda key=key: self._chat.update_config(backend="anthropic", anthropic_model=key))
+        if config["openai_model"]:
+            self._menu_choice(menu, config["openai_model"], not claude,
+                              lambda: self._chat.update_config(backend="openai_compat"))
+        menu.addSeparator()
+        menu.addAction("생각 정도 (Claude)").setEnabled(False)
+        for key, label in EFFORTS.items():
+            action = self._menu_choice(menu, label, key == config["anthropic_effort"],
+                                       lambda key=key: self._chat.update_config(anthropic_effort=key))
+            action.setEnabled(claude)  # the OpenAI-compatible backend sends no effort
+        menu.addSeparator()
+        menu.addAction("AI 설정…", self._open_settings)
+        name = MODELS.get(config["anthropic_model"], config["anthropic_model"]).split(" · ")[0] if claude \
+            else config["openai_model"]
+        text = f"{name} · {EFFORTS[config['anthropic_effort']].split(' (')[0]}" if claude else name
+        self._model_button.setText(text)
+        self._model_button.setAccessibleName(f"AI 모델: {text}")
+
+    @staticmethod
+    def _menu_choice(menu, label, checked, slot):
+        action = menu.addAction(label)
+        action.setCheckable(True)
+        action.setChecked(checked)
+        action.triggered.connect(lambda checked=False: slot())  # triggered(bool) would fill the slot's key
+        return action
 
     def _open_link(self, url):
         if url.scheme() == "settings":
             self._open_settings()
-        elif url.scheme() == "page":
-            self._chat.open_page(int(url.path()))
-        elif url.scheme() == "save":
-            self._chat.save_answer(int(url.path()))
+        elif url.scheme() in ("page", "save") and url.path().isdigit():  # an answer can write its own page:abc
+            (self._chat.open_page if url.scheme() == "page" else self._chat.save_answer)(int(url.path()))
         elif url.scheme() in ("http", "https"):
             QDesktopServices.openUrl(url)
 
     def _clear(self):
         """Asks first: the saved copy goes too."""
         if self._chat.messages and QMessageBox.question(
-                self, "대화 지우기", "이 문서의 AI 대화를 지울까요? 저장된 기록도 지워집니다.") == QMessageBox.StandardButton.Yes:
+                self, "대화 지우기", "이 문서의 AI 대화를 지울까요?") == QMessageBox.StandardButton.Yes:
             self._chat.clear()
 
     def _mark_composer(self, focused):
@@ -256,7 +302,7 @@ class ChatPanel(QWidget):
 
     def _show_info(self):
         info = self._chat.context_info()
-        self._info.setText(f"{info} · {self._chat.backend.model}" if info else self._chat.backend.model)
+        self._info.setText(info)  # the model is on the button under the question box
 
     @staticmethod
     def _tidy_answer(frame):

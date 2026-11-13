@@ -1,5 +1,4 @@
 import logging
-import os
 
 from app.core.llm.base import LLMBackend, LLMError, Usage
 
@@ -7,16 +6,19 @@ log = logging.getLogger(__name__)
 
 # Models that accept the server-side refusal fallback ("default" picks the substitute per refusal category).
 # Haiku has none, so other models are sent without it.
-FALLBACK_MODELS = ("claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1")
+FALLBACK_MODELS = ("claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1", "claude-fable-5-2")
+# the chat's quick model menu, cheapest first (input/output $ per million tokens)
+MODELS = {"claude-haiku-5-5": "Haiku 5.5 · $0.1/$0.5", "claude-sonnet-5-5": "Sonnet 5.5 · $2/$10",
+          "claude-opus-5-5": "Opus 5.5 · $4/$20", "claude-fable-5-2": "Fable 5.2 · $8/$40"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class AnthropicBackend(LLMBackend):
     name = "Anthropic"
 
-    def __init__(self, model, effort, max_tokens, api_key=None):
+    def __init__(self, model, effort, max_tokens, api_key=""):
         self.model, self.effort, self.max_tokens = model, effort, max_tokens
-        self._api_key = api_key if api_key is not None else os.environ.get("ANTHROPIC_API_KEY", "")
+        self._api_key = api_key  # only from the AI settings, never the environment (user decision)
         self._client = None
 
     def is_available(self):

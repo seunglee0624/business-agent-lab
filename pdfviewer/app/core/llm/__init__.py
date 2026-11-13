@@ -9,4 +9,4 @@ def make_backend(config):
         return OpenAICompatBackend(config["openai_base_url"], config["openai_key"], config["openai_model"],
                                    config["max_tokens"])
     return AnthropicBackend(config["anthropic_model"], config["anthropic_effort"], config["max_tokens"],
-                            api_key=config["anthropic_key"] or None)
+                            api_key=config["anthropic_key"])

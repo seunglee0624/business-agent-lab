@@ -247,7 +247,7 @@ settings.py            [models: 썸네일·목차·검색결과 데이터]  → 
 
 **10-0. 준비**
 - [ ] Anthropic Console 에서 API 키 발급, 소액 충전($5 정도), **월 지출 한도 설정**(예: $7 ≈ 1만 원)
-- [ ] 키 저장 위치: 1차는 환경변수 `ANTHROPIC_API_KEY`. 2차로 설정 UI 에서 입력 → `QSettings` 저장(평문. 로컬 개인용이라 허용, README 에 명시). 키를 **git 에 절대 커밋하지 않음**(`.gitignore`, `.env`)
+- [ ] 키 저장 위치: 설정 UI 에서만 입력(환경변수는 읽지 않음) → OS 암호 저장소(`keyring`, Windows 자격 증명 관리자). 저장소가 없으면(WSL) `QSettings` 파일, 권한 600. 키를 **git 에 절대 커밋하지 않음**(`.gitignore`, `.env`)
 - [ ] `anthropic` 패키지 `requirements.txt` 추가. 최신 `anthropic`(1.x)은 `httpx` 가 아니라 `httpx2` 기반 → 설치된 버전 확인 후, OpenAI 호환 백엔드도 같은 HTTP 라이브러리를 써서 의존성을 늘리지 않음
 - [ ] 모델 기본값: `llm.model = claude-sonnet-5-5` (품질, 입력 $2 / 출력 $10 per 1M), 가벼운 작업용 대안 `claude-haiku-5-5` ($0.10 / $0.50)
 - [ ] **effort 기본값 `low`** (`output_config={"effort": "low"}`): Sonnet 5.5 는 생각 단계(thinking)를 끌 수 없고 기본 effort 가 `high` 라 첫 글자까지 느리고 출력비가 늘어남. 설정에서 바꿀 수 있게
@@ -318,7 +318,7 @@ settings.py            [models: 썸네일·목차·검색결과 데이터]  → 
 1. PDF 열고 한 문단 드래그 → 우클릭 "AI에게 질문" → 패널이 열리고 답변이 **스트리밍**으로 표시
 2. 응답 중에 페이지 스크롤·줌이 평소처럼 부드러움 (워커 스레드 확인)
 3. 답변의 `p.N` 클릭 → 해당 페이지로 이동
-4. `ANTHROPIC_API_KEY` 를 빼고 실행 → 안내 카드가 뜨고 뷰어 나머지 기능 정상
+4. AI 설정의 키를 비우고 실행 → 안내 카드가 뜨고 뷰어 나머지 기능 정상
 5. 설정에서 `openai_compat` + Ollama(또는 무료 제공자) 로 바꿔도 같은 패널이 그대로 동작
 6. `grep -rn "anthropic\|httpx\|openai" app/widgets/ app/chat_state.py` 결과 없음 (위젯·상태가 백엔드를 직접 안 건드림)
 7. `git grep -i "sk-ant"` 결과 없음 (키 커밋 안 됨)
@@ -327,6 +327,14 @@ settings.py            [models: 썸네일·목차·검색결과 데이터]  → 
 ### Phase 11 — 기록·메모 (하이라이트 · 메모 · 북마크 · 대화 저장 · 내보내기)
 **목표**: PDF를 읽으면서 남긴 것(하이라이트, 메모, 북마크, AI 대화)을 **PDF 파일은 건드리지 않고** 뷰어 전용 sidecar 파일에 저장·복원. 시험 전에 마크다운으로 뽑아 정리본 재료로 쓸 수 있게.
 **원칙**: 읽기 전용 뷰어 유지 — PDF 원본은 절대 수정하지 않는다. 모든 기록은 앱 데이터 폴더의 별도 JSON.
+
+> **실제와 다른 점 (2026-11-13)**: 아래는 처음 계획이다. 만든 뒤 사용자 결정으로 바뀐 것 —
+> - 문서 노트(`doc_note`) 제거. 묶음 이름은 "메모" → "노트"(노트 탭), 항목 이름 "메모" 는 그대로.
+> - 내보내기 창·파일 내보내기(Ctrl+E)·`export_dialog.py` 없음. 파일 메뉴 "노트를 클립보드로 복사"(마크다운)만.
+> - AI 답변 "메모로 저장" 은 `source="ai"` 메모가 아니라 그 페이지의 일반 메모에 글자만 이어 붙임. 하이라이트 연결 없음.
+> - 대화 기록 저장·복원 없음(`save_chat`, 설정의 저장 여부 포함). 탭을 닫으면 대화도 버림.
+> - 예전 파일의 `doc_note`·`chat`·AI 메모 데이터는 지우지 않고 둔다(AI 메모는 목록에 보임).
+> - 자세한 기록은 README "진행 상황".
 
 **결정 (2026-11-09)**: 범위는 학습용 풀세트. 저장 위치는 앱 데이터 폴더의 `notes/<doc_id>.json` — 로그와 같은 `QStandardPaths.AppDataLocation` 기준(Windows 에서는 `%APPDATA%\pdfviewer\pdfviewer\notes\`, WSL 개발 중에는 `~/.local/share/...`). 손글씨·도형은 제외. 하이라이트는 **한 페이지 안에서만** (지금 선택이 한 페이지 단위라서).
 

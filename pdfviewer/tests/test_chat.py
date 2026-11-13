@@ -170,13 +170,12 @@ def test_anthropic_request(monkeypatch):
 
 
 def test_no_key_backend_is_unavailable(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env")  # the environment is never read
     assert not AnthropicBackend("claude-sonnet-5-5", "low", 4096).is_available()
 
 
 @pytest.fixture
 def window(qtbot, text_pdf, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     window = MainWindow()
     qtbot.addWidget(window)
     window.show()
@@ -202,7 +201,7 @@ def test_ctrl_shift_l_toggles_the_panel_and_esc_goes_back(qtbot, window):
 def test_without_a_key_the_panel_says_how_to_set_one(qtbot, window):
     window.chat.set_panel(True)
     panel = window._chat_panel
-    assert panel._notice.isVisible() and "ANTHROPIC_API_KEY" in panel._notice.text()
+    assert panel._notice.isVisible() and "AI 설정" in panel._notice.text()
     assert not panel._input.isEnabled()
 
 

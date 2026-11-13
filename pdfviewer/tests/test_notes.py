@@ -217,7 +217,7 @@ def test_click_a_highlight_then_comment_and_delete(qtbot, window):
     qtbot.keyClick(box, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
     assert notes.highlight(highlight_id)["comment"] == "Hi" and len(notes.highlights()) == 1
     view._update_cursor(view_point(view, mark).toPointF())
-    assert view.viewport().toolTip() == "Hi"
+    assert ">Hi<" in view.viewport().toolTip()  # as plain text, escaped
 
     qtbot.mouseClick(bar_buttons(window)["삭제"], Qt.MouseButton.LeftButton)
     assert notes.highlights() == [] and not view._bar.isVisible()
@@ -579,7 +579,7 @@ def test_m_key_writes_a_page_note_and_its_mark_reopens_it(qtbot, window):
     assert notes.page_note(0)["text"] == "Big idea" and not notes.is_bookmarked(0)
     assert not view._marker_paths()[1].isEmpty() and not box.isVisible()
     view._update_cursor(view.mapFromScene(mark.center()).toPointF())
-    assert view.viewport().toolTip() == "Big idea"
+    assert "Big\xa0idea" in view.viewport().toolTip()  # escaped plain text
     qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=view.mapFromScene(mark.center()))
     assert notes.editing_note == 0 and box.toPlainText() == "Big idea"
 

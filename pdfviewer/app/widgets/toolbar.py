@@ -1,3 +1,4 @@
+import shiboken6
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt
 from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QToolBar, QWidget
 
@@ -61,6 +62,8 @@ class Toolbar(QToolBar):
 
     def align_zoom(self, x):
         """Start the zoom group at x (toolbar coordinates); never closer than its usual place after the page group."""
+        if not shiboken6.isValid(self._lead_action):
+            return  # deleted before a queued call ran: the window is closing (an error dialog in the exe)
         button, gap = self.widgetForAction(self._zoom_out), self.layout().spacing()
         # the lead's left is where the button goes without it; read it, not button minus lead, because two calls
         # in a row (before the toolbar re-lays out) would otherwise count the lead twice

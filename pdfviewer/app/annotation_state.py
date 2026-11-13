@@ -120,13 +120,6 @@ class AnnotationState(QObject):
         after = [p for p in pages if p > here] if step > 0 else [p for p in reversed(pages) if p < here]
         self._viewer.go_to(after[0] if after else pages[0 if step > 0 else -1])
 
-    def has_note(self, note_id):
-        return self.store is not None and self.store.find("notes", note_id) is not None
-
-    def saved_chat(self):
-        """The current document's saved AI conversation (copies: the chat owns its live messages)."""
-        return [dict(message) for message in self.store.data["chat"]] if self.store else []
-
     def export_markdown(self):
         """The current document's notes as Markdown ("" while they are still loading)."""
         return to_markdown(self.store.data) if self.store else ""
@@ -219,22 +212,13 @@ class AnnotationState(QObject):
         line = [w[4] for w in words if words and w[5:7] == words[0][5:7]]  # same (block, line) as the first word
         return " ".join(line)[:LABEL_CHARS]
 
-    def add_ai_note(self, page, text, question):
-        """An AI answer kept as a note of the page it was asked on; returns its id."""
-        item = {"id": new_id(), "page": page, "text": text.strip(), "source": "ai", "question": question,
-                "created": now(), "updated": now()}
-        self._add("notes", item, "AI 답변 메모")
-        return item["id"]
+    def add_to_page_note(self, page, text):
+        """text at the end of the page's own note (made if there is none): how a chat answer is kept."""
+        note = self.page_note(page)
+        self.set_page_note(page, f"{note['text']}\n\n{text}" if note else text)
 
     def remove_note(self, note_id):
         self._remove("notes", note_id, "메모 지우기")
-
-    def save_chat(self, path, messages):
-        """Keep a file's AI conversation in its notes (no undo step: the chat has its own clear)."""
-        store = self._stores.get(self._ids.get(path))
-        if store is not None and messages != store.data["chat"]:
-            store.set("chat", messages)
-            self._changed(emit=False)
 
     def _add(self, kind, item, text, content_id=None):
         content_id = content_id or self._current_id()

@@ -3,6 +3,7 @@ Standard library only (urllib): one POST with a streamed (SSE) reply needs no HT
 import json
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from app.core.llm.base import LLMBackend, LLMError, Usage
@@ -21,6 +22,10 @@ class OpenAICompatBackend(LLMBackend):
         return bool(self.base_url and self.model)  # a key is optional: a local Ollama takes none
 
     def stream(self, system, messages):
+        address = urllib.parse.urlsplit(self.base_url)
+        if self.api_key and address.scheme != "https" and address.hostname not in ("localhost", "127.0.0.1", "::1"):
+            raise LLMError("API 키는 https:// 주소로만 보냅니다 (http 는 키가 그대로 보입니다). "
+                           "AI 설정의 주소를 https:// 로 바꾸세요.", "network")
         body = {"model": self.model, "stream": True, "max_tokens": self.max_tokens,
                 "messages": [{"role": "system", "content": system}, *messages]}
         headers = {"Content-Type": "application/json"}

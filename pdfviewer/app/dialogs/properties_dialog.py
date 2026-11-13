@@ -47,7 +47,7 @@ def show_properties(parent, doc):
     dialog = QDialog(parent, windowTitle=f"{Path(doc.path).name} 속성", objectName="propertiesDialog")
     form = QFormLayout()
     for label, text in rows(doc):
-        value = QLabel(text or "없음")
+        value = QLabel(text or "없음", textFormat=Qt.TextFormat.PlainText)  # the PDF's own title and author: never HTML
         value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         value.setWordWrap(True)
         form.addRow(QLabel(label, objectName="fieldName"), value)

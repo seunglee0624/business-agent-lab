@@ -1,3 +1,4 @@
+from PySide6 import QtGui
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QPainterPath, QPen, QPixmap, QPolygonF, QTransform
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem,
@@ -738,7 +739,7 @@ class PageView(QGraphicsView):
             tip = "북마크 (B 로 끄기)"
         else:
             tip = mark["comment"] if mark else ""  # the comment shows on hover
-        self.viewport().setToolTip(tip)
+        self.viewport().setToolTip(QtGui.Qt.convertFromPlainText(tip) if tip else "")  # a note's <img src=…> stays text
         if marker and marker[0] == "note" or page is not None and self._link_at(page, point):
             shape = Qt.CursorShape.PointingHandCursor
         elif self._state.tool == "hand":

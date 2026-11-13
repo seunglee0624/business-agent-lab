@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 
+import shiboken6
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QStackedWidget, QVBoxLayout,
@@ -433,6 +434,8 @@ class MainWindow(QMainWindow):
 
     def _align_toolbar(self):
         """The zoom group starts above the first document tab, not over the sidebar."""
+        if not all(map(shiboken6.isValid, (self._toolbar, self._tab_bar))):
+            return  # queued while the window was being taken apart (closing)
         tabs = self._tab_bar
         left = tabs.mapTo(self, QPoint(tabs.tabRect(0).left() if tabs.count() else 0, 0))
         self._toolbar.align_zoom(self._toolbar.mapFrom(self, left).x())

@@ -1,7 +1,7 @@
 from functools import lru_cache
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt
-from PySide6.QtGui import QTextDocument
+from PySide6.QtGui import QImage, QTextDocument
 
 from app.core import settings
 
@@ -19,12 +19,26 @@ def text(kind, item):
     """A row's words: a saved AI answer without its markdown marks ("**", "```", "|")."""
     if kind == "bookmarks":
         return item.get("label", "")
-    return _plain(item["text"]) if item.get("source") == "ai" else item.get("text", "")
+    return plain_text(item["text"]) if item.get("source") == "ai" else item.get("text", "")  # "ai": saved before answers went into page notes
+
+
+class TextOnly(QTextDocument):
+    """Markdown from an AI answer without its images: file:///… would read this PC's files and
+    //host/share/… would make Windows send its login hash to that host. (A QTextBrowser's own
+    loadResource does not stop it, and an empty answer makes Qt's image code load the path itself:
+    hence a blank 1x1 image.)"""
+
+    def loadResource(self, kind, url):
+        if kind != QTextDocument.ResourceType.ImageResource:
+            return None
+        blank = QImage(1, 1, QImage.Format.Format_ARGB32)
+        blank.fill(0)
+        return blank
 
 
 @lru_cache(maxsize=512)  # the list repaints often; an answer's text never changes
-def _plain(markdown):
-    document = QTextDocument()
+def plain_text(markdown):
+    document = TextOnly()
     document.setMarkdown(markdown)
     return document.toPlainText()
 

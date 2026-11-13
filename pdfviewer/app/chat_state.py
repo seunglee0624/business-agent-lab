@@ -3,9 +3,9 @@ from PySide6.QtCore import QObject, Signal
 from app.core import settings
 from app.core.llm import make_backend, prompts
 from app.core.llm.worker import LLMWorker
+from app.models.notes_model import plain_text
 
 SCOPES = {"selection": "선택한 부분", "page": "현재 페이지", "document": "문서 전체"}
-SAVED_KEYS = ("role", "text", "where", "sent", "page", "usage", "note_id")  # what a saved conversation keeps
 MAX_TURNS = 10  # question+answer pairs sent back as history; older ones are dropped
 
 
@@ -44,8 +44,7 @@ class ChatState(QObject):
         renderer.text_ready.connect(self._on_text)
         renderer.document_text_ready.connect(self._on_text)
         viewer.document_changed.connect(self._on_document)
-        if notes:
-            notes.changed.connect(self._restore)  # also when a document's notes finish loading
+        viewer.tabs_changed.connect(self._forget_closed)
         for signal in (renderer.text_ready, renderer.document_text_ready, viewer.page_changed, viewer.selection_changed,
                        viewer.document_changed, self.scope_changed, self.panel_changed):
             signal.connect(self.context_changed)
@@ -97,6 +96,10 @@ class ChatState(QObject):
         self.document_limit = config["document_limit"]
         self.backend_changed.emit()
         self.context_changed.emit()
+
+    def update_config(self, **changes):
+        """One or two settings from the chat's model menu."""
+        self.apply_config({**self.config, **changes})
 
     def ask_quick(self, question):
         """A quick-question button: its own scope if it has one, else the current one."""
@@ -168,28 +171,26 @@ class ChatState(QObject):
             self._fail("cancelled", "보내기 전에 중지했습니다.")
 
     def clear(self):
-        """Forget this file's conversation (and the document it carried), the saved copy too."""
+        """Forget this file's conversation (and the document it carried). Conversations are never saved:
+        an answer worth keeping goes into the page's note (save_answer)."""
         self.cancel()
         self.messages.clear()
         if self._viewer.document:
             self._documents.pop(self._viewer.document.path, None)
-            if self._notes:  # even with saving off: a cleared conversation must not come back
-                self._notes.save_chat(self._viewer.document.path, [])
         self.changed.emit()
 
-    # ---- saving: the conversation and answers kept as notes
+    # ---- answers kept in page notes
 
     def save_answer(self, index):
-        """Keep the answer at messages[index] as a note of the page its question was asked on."""
+        """Add the answer at messages[index], as plain text, to the note of the page its question was asked on."""
         messages = self.messages
         answer = messages[index] if 0 <= index < len(messages) else None
         if not (self.can_save_answers and answer and answer["role"] == "assistant" and answer["text"]
                 and not answer.get("streaming") and not self.answer_saved(answer)):
             return
         question = next((m for m in reversed(messages[:index]) if m["role"] == "user"), {})
-        page = question.get("page", self._viewer.current_page)  # conversations saved before 11c have none
-        answer["note_id"] = self._notes.add_ai_note(page, answer["text"], question.get("text", ""))
-        self._save(messages)
+        answer["note_page"] = question.get("page", self._viewer.current_page)
+        self._notes.add_to_page_note(answer["note_page"], plain_text(answer["text"]).strip())
         self.changed.emit()
 
     @property
@@ -198,27 +199,9 @@ class ChatState(QObject):
         return self._notes is not None and self._notes.store is not None
 
     def answer_saved(self, message):
-        """Whether an answer is kept as a note (not if that note was deleted or undone since)."""
-        return bool(self._notes and message.get("note_id") and self._notes.has_note(message["note_id"]))
-
-    def _save(self, chat):
-        """Save a conversation into its file's notes: finished turns only, no errors or notes."""
-        path = next((path for path, messages in self._chats.items() if messages is chat), None)
-        if not (self._notes and path and self.config["save_chat"]):
-            return
-        kept = [{key: m[key] for key in SAVED_KEYS if key in m} for m in chat
-                if m["role"] in ("user", "assistant") and not m.get("failed") and not m.get("streaming")]
-        self._notes.save_chat(path, kept)
-
-    def _restore(self):
-        """A file whose notes just loaded gets its saved conversation back, unless one was started already."""
-        doc = self._viewer.document
-        if not (self._notes and doc and not self._chats.get(doc.path) and self.config["save_chat"]):
-            return
-        saved = self._notes.saved_chat()
-        if saved:
-            self._chats[doc.path] = saved
-            self.changed.emit()
+        """Whether the answer is in its page's note (not once that text was undone, edited or deleted)."""
+        note = self._notes.page_note(message["note_page"]) if self._notes and "note_page" in message else None
+        return bool(note) and plain_text(message["text"]).strip() in note["text"]
 
     def _page_text(self, page, request):
         """The page's text, or None while it is still being extracted (asked for if request)."""
@@ -301,12 +284,11 @@ class ChatState(QObject):
             worker.deleteLater()
         if worker is not self._worker:
             return
-        chat, _, answer = self._turn
+        _, _, answer = self._turn
         answer.pop("streaming")
         if usage:
             answer["usage"] = usage
         self._turn = self._worker = None
-        self._save(chat)
         self.busy_changed.emit()
         self.changed.emit()
 
@@ -329,6 +311,13 @@ class ChatState(QObject):
     def _on_text(self, *_):
         if self._turn and self._worker is None:
             self._try_ask()
+
+    def _forget_closed(self):
+        """A closed file's conversation goes with it: opening the file again starts a new one."""
+        open_paths = {tab.document.path for tab in self._viewer.tabs}
+        for kept in (self._chats, self._documents):
+            for path in set(kept) - open_paths:
+                del kept[path]
 
     def _on_document(self):
         if self._turn and self._worker is None:  # set_document dropped the other file's text job

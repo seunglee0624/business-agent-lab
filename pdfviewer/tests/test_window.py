@@ -88,3 +88,24 @@ def test_chat_card_starts_level_with_the_page(qtbot, pdf100):
     qtbot.waitUntil(lambda: top(window._chat_panel) == top(window._stack))  # no tabs yet: both at the top
     window.open_file(pdf100)
     qtbot.waitUntil(lambda: top(window._chat_panel) == top(window._view) > top(window._tab_bar))
+    from PySide6.QtWidgets import QToolButton
+    close = next(b for b in window._chat_panel.findChildren(QToolButton) if b.accessibleName() == "AI 채팅 닫기")
+    close.click()
+    assert not window.chat.panel and not window._chat_panel.isVisible()
+
+
+def test_a_queued_toolbar_alignment_after_its_parts_are_gone(qtbot, pdf100):
+    """The exe showed an error dialog: a queued _align_toolbar ran after the toolbar was deleted (on closing)."""
+    import shiboken6
+    from PySide6.QtCore import QEvent
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show()
+    window.open_file(pdf100)
+    window.eventFilter(window._toolbar, QEvent(QEvent.Type.LayoutRequest))  # queues an alignment
+    shiboken6.delete(window._toolbar._lead_action)  # what the exe's log showed gone
+    qtbot.wait(20)  # an exception in the queued call fails the test
+    window.removeToolBar(window._toolbar)
+    shiboken6.delete(window._toolbar)
+    window._align_toolbar()
+    window.state.renderer.shutdown()

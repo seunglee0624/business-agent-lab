@@ -1,7 +1,9 @@
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QButtonGroup, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QRadioButton, QSpinBox, QVBoxLayout)
 
 from app import theme
+from app.core import settings
 from app.core.llm import make_backend
 from app.core.llm.worker import LLMWorker
 
@@ -40,7 +42,7 @@ def llm_settings_dialog(parent, config):
     backend, backend_row = _choices(dialog, BACKENDS, config["backend"])
 
     anthropic = QGroupBox("Anthropic")
-    anthropic_key = _secret(config["anthropic_key"], "비워 두면 ANTHROPIC_API_KEY 환경변수")
+    anthropic_key = _secret(config["anthropic_key"], "sk-ant-…")
     anthropic_model = QLineEdit(config["anthropic_model"], placeholderText="claude-sonnet-5-5")
     effort, effort_row = _choices(dialog, EFFORTS, config["anthropic_effort"])
     form = QFormLayout(anthropic)
@@ -77,15 +79,13 @@ def llm_settings_dialog(parent, config):
     common = QGroupBox("공통")
     limits = QFormLayout(common)
     limits.addRow("문서 전체 상한", limit)
-    save_chat = QCheckBox("문서마다 대화 기록 저장 (다시 열면 복원)", checked=config["save_chat"])
-    limits.addRow("", save_chat)
 
     def current():
         return {**config, "backend": backend.checkedButton().key,
                 "anthropic_key": anthropic_key.text().strip(), "anthropic_model": anthropic_model.text().strip(),
                 "anthropic_effort": effort.checkedButton().key, "openai_base_url": base_url.text().strip(),
                 "openai_key": compat_key.text().strip(), "openai_model": compat_model.text().strip(),
-                "document_limit": limit.value(), "save_chat": save_chat.isChecked()}
+                "document_limit": limit.value()}
 
     def show_backend():
         chosen = backend.checkedButton().key
@@ -95,7 +95,7 @@ def llm_settings_dialog(parent, config):
     backend.buttonClicked.connect(show_backend)
     show_backend()
 
-    result = QLabel(objectName="fieldName", wordWrap=True)
+    result = QLabel(objectName="fieldName", wordWrap=True, textFormat=Qt.TextFormat.PlainText)  # shows the AI's reply
     test = QPushButton("연결 테스트")
     workers = []  # the test in progress, kept alive until it reports
 
@@ -135,6 +135,8 @@ def llm_settings_dialog(parent, config):
     layout.addWidget(compat)
     layout.addWidget(common)
     layout.addLayout(test_row)
-    layout.addWidget(QLabel("API 키는 이 컴퓨터의 앱 설정에 암호화 없이 저장됩니다.", objectName="fieldName", wordWrap=True))
+    where = ("API 키는 운영체제의 암호 저장소(Windows 자격 증명 관리자)에 저장됩니다." if settings.keys_protected() else
+             "이 컴퓨터에는 암호 저장소가 없어 API 키를 앱 설정 파일에 그대로 저장합니다 (이 사용자만 읽을 수 있게).")
+    layout.addWidget(QLabel(where, objectName="fieldName", wordWrap=True))
     layout.addWidget(buttons)
     return current() if dialog.exec() == QDialog.DialogCode.Accepted else None

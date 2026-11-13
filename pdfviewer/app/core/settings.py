@@ -1,8 +1,12 @@
-"""Everything the app keeps between runs, in QSettings. Lists and dicts are stored as JSON strings:
+"""Everything the app keeps between runs, in QSettings (API keys: the OS password store, see llm_config). Lists and dicts are stored as JSON strings:
 QSettings' own list handling differs between backends (a one-item list comes back as a str in INI)."""
 import json
+import logging
+import os
 
 from PySide6.QtCore import QSettings
+
+log = logging.getLogger(__name__)
 
 MAX_RECENT = 10
 MAX_FILE_VIEWS = 200  # shortcut: the oldest files are forgotten beyond this; raise it if users complain
@@ -106,26 +110,82 @@ LLM_DEFAULTS = {
     "backend": "anthropic",  # or "openai_compat"
     "anthropic_model": "claude-sonnet-5-5",
     "anthropic_effort": "low",  # quick replies for a reading aid (the model defaults to high)
-    "anthropic_key": "",  # empty: the ANTHROPIC_API_KEY environment variable
+    "anthropic_key": "",
     "openai_base_url": "",
     "openai_model": "",
     "openai_key": "",  # some servers (Ollama) need none
     "max_tokens": 4096,  # covers thinking too, so well above a typical answer
     "document_limit": 60000,  # characters of a whole document sent at most
-    "save_chat": True,  # keep each file's AI conversation in its notes
 }
 
 
+SECRETS = ("anthropic_key", "openai_key")
+VAULT_SERVICE = "pdfviewer"
+
+
+def _vault():
+    """The OS password store (Windows Credential Manager, macOS Keychain) through keyring, or None:
+    WSL and bare Linux desktops have none, and then the keys stay in the settings file."""
+    try:
+        import keyring
+        from keyring.backends.fail import Keyring as NoVault
+    except ImportError:
+        return None
+    return None if isinstance(keyring.get_keyring(), NoVault) else keyring
+
+
+def keys_protected():
+    """Whether API keys go to the OS password store (the settings dialog says where they are)."""
+    return _vault() is not None
+
+
+def _store_secret(vault, key, value):
+    """True once the vault holds value (or, for "", holds nothing). False: keep it in the settings file."""
+    try:
+        if value:
+            vault.set_password(VAULT_SERVICE, key, value)
+        elif vault.get_password(VAULT_SERVICE, key) is not None:
+            vault.delete_password(VAULT_SERVICE, key)
+        return True
+    except Exception:  # a locked or broken store must not lose the key
+        log.exception("API 키를 암호 저장소에 넣지 못했습니다")
+        return False
+
+
 def llm_config():
-    """The AI backend and how it answers. API keys are stored in plain text (a local, personal app; see README)."""
+    """The AI backend and how it answers. API keys come from the OS password store when there is one;
+    a key an older version left in the settings file moves there on the first read."""
     s = QSettings()
-    return {key: s.value(f"llm/{key}", default, type=type(default)) for key, default in LLM_DEFAULTS.items()}
+    config = {key: s.value(f"llm/{key}", default, type=type(default)) for key, default in LLM_DEFAULTS.items()}
+    _owner_only(s)  # also a file an older version wrote readable for all
+    vault = _vault()
+    for key in SECRETS if vault else ():
+        if config[key]:
+            if _store_secret(vault, key, config[key]):
+                s.remove(f"llm/{key}")
+        else:
+            try:
+                config[key] = vault.get_password(VAULT_SERVICE, key) or ""
+            except Exception:
+                log.exception("API 키를 암호 저장소에서 읽지 못했습니다")
+    return config
 
 
 def save_llm_config(config):
     s = QSettings()
+    vault = _vault()
     for key in LLM_DEFAULTS:
-        s.setValue(f"llm/{key}", config[key])
+        if key in SECRETS and vault and _store_secret(vault, key, config[key]):
+            s.remove(f"llm/{key}")
+        else:
+            s.setValue(f"llm/{key}", config[key])
+    s.sync()
+    _owner_only(s)
+
+
+def _owner_only(s):
+    if os.name == "posix" and os.path.isfile(s.fileName()):
+        os.chmod(s.fileName(), 0o600)  # keys may be in it (no password store): other users must not read it
 
 
 def chat_panel():

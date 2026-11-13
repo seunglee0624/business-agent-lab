@@ -41,7 +41,7 @@ QToolBar#searchBar {
 /* the dock resize handles: the page's ground, so the panes stand apart without a bar between,
    as wide as the gap at the window's edges */
 QMainWindow::separator {
-    background: {{color.bg_base}};
+    background: {{color.bg_panel}}; /* the window's frame colour, like the tab row: no dark gaps between panes */
     width: {{spacing.md}}px;
 }
 
@@ -516,7 +516,7 @@ QLineEdit[conflict="true"] {
 /* the chat is a rounded card on the page's dark ground, like a window of its own */
 QWidget#chatInset,
 QWidget#central {
-    background: {{color.bg_base}};
+    background: {{color.bg_panel}};
 }
 
 QWidget#chatPanel {

@@ -54,11 +54,11 @@ def server():
 
 
 def test_settings_round_trip_and_backend_choice(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env")  # ignored: keys come only from the AI settings
     config = settings.llm_config()
     assert config["backend"] == "anthropic" and config["document_limit"] == 60000
     assert isinstance(make_backend(config), AnthropicBackend) and not make_backend(config).is_available()
-    config.update(anthropic_key="sk-test")  # a key saved in the settings works without the environment variable
+    config.update(anthropic_key="sk-test")
     assert make_backend(config).is_available()
     config.update(backend="openai_compat", openai_base_url="http://x/v1/", openai_model="m", document_limit=5000)
     settings.save_llm_config(config)
@@ -97,6 +97,14 @@ def test_openai_compatible_no_server():
     assert error.value.kind == "network"
 
 
+def test_a_key_never_goes_over_plain_http(monkeypatch):
+    sent = []
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kw: sent.append(args))
+    with pytest.raises(LLMError, match="https"):
+        list(OpenAICompatBackend("http://example.com/v1", "key", "m", 100).stream("s", []))
+    assert not sent
+
+
 def test_settings_dialog_and_connection_test(qtbot, server):
     def fill():
         dialog = QApplication.activeModalWidget()
@@ -123,7 +131,6 @@ def test_settings_dialog_and_connection_test(qtbot, server):
 
 def test_saved_settings_unlock_the_panel(qtbot, text_pdf, monkeypatch, server):
     from app.main_window import MainWindow
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     window = MainWindow()
     qtbot.addWidget(window)
     window.show()
@@ -133,8 +140,66 @@ def test_saved_settings_unlock_the_panel(qtbot, text_pdf, monkeypatch, server):
     assert panel._notice.isVisible() and not panel._input.isEnabled()
     window.chat.apply_config({**settings.llm_config(), "backend": "openai_compat", "openai_base_url": server.url,
                               "openai_model": "gemini-x"})
-    assert not panel._notice.isVisible() and panel._input.isEnabled() and "gemini-x" in panel._info.text()
+    assert not panel._notice.isVisible() and panel._input.isEnabled() and panel._model_button.text() == "gemini-x"
     window.chat.send("요약해줘")
     qtbot.waitUntil(lambda: not window.chat.busy)
     assert window.chat.messages[-1] == {"role": "assistant", "text": "안녕", "usage": Usage(12, 0, 3)}
     window.state.renderer.shutdown()
+
+
+def test_model_menu_switches_model_and_effort(qtbot, monkeypatch):
+    from app.chat_state import ChatState
+    from app.viewer_state import ViewerState
+    from app.widgets.chat_panel import ChatPanel
+    viewer = ViewerState()
+    chat = ChatState(viewer)
+    panel = ChatPanel(chat)
+    qtbot.addWidget(panel)
+    chat.update_config(backend="anthropic", anthropic_model="claude-sonnet-5-5", anthropic_effort="low",
+                       openai_model="gemini-x")
+    assert panel._model_button.text() == "Sonnet 5.5 · 낮음"
+    pick = lambda text: next(a for a in panel._model_button.menu().actions() if a.text().startswith(text)).trigger()
+    pick("Haiku 5.5")
+    pick("높음")
+    assert (settings.llm_config()["anthropic_model"], chat.backend.model, chat.backend.effort) == \
+        ("claude-haiku-5-5", "claude-haiku-5-5", "high")
+    assert panel._model_button.text() == "Haiku 5.5 · 높음"
+    pick("gemini-x")
+    assert chat.config["backend"] == "openai_compat" and panel._model_button.text() == "gemini-x"
+    assert not next(a for a in panel._model_button.menu().actions() if a.text() == "보통").isEnabled()
+    viewer.renderer.shutdown()
+
+
+def test_api_keys_live_in_the_os_password_store(monkeypatch):
+    from PySide6.QtCore import QSettings
+
+    class Vault:
+        stored = {}
+        get_password = staticmethod(lambda service, key: Vault.stored.get((service, key)))
+        delete_password = staticmethod(lambda service, key: Vault.stored.pop((service, key)))
+
+        @staticmethod
+        def set_password(service, key, value):
+            Vault.stored[service, key] = value
+
+    QSettings().setValue("llm/anthropic_key", "old-plain")  # left by an older version
+    monkeypatch.setattr(settings, "_vault", lambda: Vault)
+    assert settings.llm_config()["anthropic_key"] == "old-plain"
+    assert Vault.stored == {("pdfviewer", "anthropic_key"): "old-plain"} and not QSettings().contains("llm/anthropic_key")
+    settings.save_llm_config({**settings.llm_config(), "anthropic_key": "", "openai_key": "g"})
+    assert Vault.stored == {("pdfviewer", "openai_key"): "g"} and not QSettings().contains("llm/openai_key")
+    assert settings.llm_config()["openai_key"] == "g"
+
+    def broken(*args):
+        raise RuntimeError("locked")
+    Vault.set_password = staticmethod(broken)
+    settings.save_llm_config({**settings.llm_config(), "openai_key": "new"})
+    assert QSettings().value("llm/openai_key") == "new"  # kept, not lost
+
+
+def test_without_a_password_store_only_the_user_reads_the_settings_file():
+    import os
+    import stat
+    from PySide6.QtCore import QSettings
+    settings.save_llm_config({**settings.llm_config(), "openai_key": "k"})
+    assert stat.S_IMODE(os.stat(QSettings().fileName()).st_mode) == 0o600

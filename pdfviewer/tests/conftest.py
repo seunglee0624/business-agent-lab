@@ -15,7 +15,8 @@ QCoreApplication.setApplicationName("pdfviewer-tests")
 
 
 @pytest.fixture(autouse=True)
-def fresh_settings():
+def fresh_settings(monkeypatch):
+    monkeypatch.setattr("app.core.settings._vault", lambda: None)  # never the real Windows Credential Manager
     QSettings().clear()
     yield
     QSettings().clear()
