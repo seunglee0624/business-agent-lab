@@ -12,7 +12,13 @@ description: How the business-agent-lab folders fit together and the rules every
 |---|---|---|
 | `week-05/` | Python programs that call a model through OpenRouter and run tools | [week-05/README.md](../week-05/README.md) |
 | `week-06/` | Campaign review method, prompts, synthetic data, reports | [week-06/README.md](../week-06/README.md) |
+| `week-07/` | RAG program and the knowledge-bundle exercise | [week-07/README.md](../week-07/README.md) |
+| `pdfviewer/` | PDF viewer app with its own `.venv` and rules | [pdfviewer.md](pdfviewer.md) |
+| `home-diary/` | Next.js + Supabase web service | [home-diary.md](home-diary.md) |
+| `Club building/` | Browser football management game | [club-building.md](club-building.md) |
+| `knowledge/` | These pages | [index.md](index.md) |
 | `.claude/skills/` | Project skills; `campaign-review` is saved here in week 06 | [week-06/README.md](../week-06/README.md), [SKILL.md](../.claude/skills/campaign-review/SKILL.md) |
+| `.claude/hooks/` | Hooks that keep `knowledge/` current (below) | [settings.json](../.claude/settings.json) |
 | `.env` | API key file at the lab root (never commit, never read it) | [week-05/README.md](../week-05/README.md) |
 | `.venv/` | Python environment at the lab root | [week-05/README.md](../week-05/README.md) |
 
@@ -20,9 +26,19 @@ description: How the business-agent-lab folders fit together and the rules every
 
 - **Work from the lab root.** Commands and Claude Code sessions start in `business-agent-lab/`, not inside a week folder ([week-05/README.md](../week-05/README.md), [week-06/prompts.md](../week-06/prompts.md)).
 - **One `.env` at the root.** Week 05 code loads `.env` from one folder above the script, so it works from any current directory ([week-05/model_api.py](../week-05/model_api.py), `ENV_FILE`). The key name is `OPENROUTER_API_KEY` ([week-05/env.example](../week-05/env.example)). Code never prints the key.
-- **Keep secrets and environments out of Git.** The root [.gitignore](../.gitignore) ignores `.env`, `.venv` and `__pycache__/`. Week 05's setup asks you to confirm this with `git check-ignore .env`.
+- **Keep secrets and environments out of Git.** The root [.gitignore](../.gitignore) ignores `.env`, `.venv`, `__pycache__/` and `.claude/state/`. Week 05's setup asks you to confirm this with `git check-ignore .env`.
 - **Activate the environment in each new terminal:** `source .venv/bin/activate` ([week-05/README.md](../week-05/README.md)).
 - **Data files are read-only.** The week 06 method says to report data problems and never edit the data file ([week-06/analysis-method.md](../week-06/analysis-method.md)).
 - **Check results yourself.** Both weeks ask the student to check output against a hand calculation: amount × rate in week 05, cost per purchase in week 06 ([week-05/README.md](../week-05/README.md), [week-06/README.md](../week-06/README.md)).
+- **Projects keep their own environments.** `pdfviewer/` uses `pdfviewer/.venv`; `home-diary/` and `Club building/` use Node from nvm. `Club building/` has its own `.env` for its press AI.
 
 Setup steps are in [week-05/README.md](../week-05/README.md) (Setup section); this page does not repeat them.
+
+## Knowledge upkeep hook
+
+[.claude/settings.json](../.claude/settings.json) runs two scripts with `python3`:
+
+- [track_edits.py](../.claude/hooks/track_edits.py) (after Write, Edit, NotebookEdit) appends the edited path to `.claude/state/edits-<session>.txt` (ignored by Git).
+- [check_knowledge.py](../.claude/hooks/check_knowledge.py) (on Stop) blocks the agent once if code files changed but nothing under `knowledge/` did, and asks it to update the related page or say in one line why none is needed. The second stop always passes.
+
+It only sees files the agent edited in that turn, not edits made in an editor. The checked extensions and ignored paths are set at the top of `check_knowledge.py`. Markdown is not checked, so README-only changes don't trigger it.
