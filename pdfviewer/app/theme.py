@@ -3,7 +3,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from PySide6.QtGui import QColor, QFontDatabase, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 STYLES = Path(__file__).resolve().parent.parent / "styles"
 FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
@@ -65,6 +65,10 @@ def palette():
 def apply(app):
     for font in sorted(FONTS.glob("*.otf")):  # Pretendard ships with the app: most PCs do not have it
         QFontDatabase.addApplicationFont(str(font))
+    font = app.font()  # Windows ClearType + hinting snaps Pretendard strokes to 1px and the Hangul looks broken
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    font.setStyleStrategy(QFont.StyleStrategy.NoSubpixelAntialias)
+    app.setFont(font)
     app.setStyle("Fusion")  # the native Windows styles ignore most of the palette
     app.setPalette(palette())
     app.setStyleSheet(stylesheet())
